@@ -1,0 +1,19 @@
+# Editor configuration, see https://editorconfig.org
+root = true
+
+# apply for all files
+[*]
+charset = utf-8                         # Set the charset
+trim_trailing_whitespace = true         # Ignore whitespaces at the end of the line
+end_of_line = lf                        # Unix-style newlines with a newline ending every file
+insert_final_newline = true             # Ensure files have a trailing newline
+indent_style = space                    # Set indent style to spaces
+indent_size = 4                         # Set indent size to 4 spaces
+
+# golang and Makefile
+[{go.mod,go.sum,*.go,Makefile}]
+indent_style = tab
+
+# yml
+[{*yml,*yaml}]
+indent_size = 2
