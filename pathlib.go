@@ -8,20 +8,13 @@ import (
 )
 
 const (
-
-	/*
-		pathCheckNoExist indicates that the checked Path does not exist.
-	*/
+	// pathCheckNoExist indicates that the checked Path does not exist.
 	pathCheckNoExist = iota
 
-	/*
-		pathCheckFile indicates that the checked Path is a file.
-	*/
+	// pathCheckFile indicates that the checked Path is a file.
 	pathCheckFile
 
-	/*
-		pathCheckDir indicates that the checked Path is a directory.
-	*/
+	// pathCheckDir indicates that the checked Path is a directory.
 	pathCheckDir
 )
 
