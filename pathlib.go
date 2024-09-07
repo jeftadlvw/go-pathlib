@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -17,6 +18,9 @@ const (
 	// pathCheckDir indicates that the checked Path is a directory.
 	pathCheckDir
 )
+
+// pathSeparator is the string representation of filepath.Separator
+const pathSeparator = string(filepath.Separator)
 
 /*
 Path is a struct that represents a filesystem path.
@@ -38,10 +42,7 @@ NewPath is the constructor function for a new Path struct instance.
 The passed path string is automatically cleaned and ready for further use.
 */
 func NewPath(path string) *Path {
-	p := &Path{path: path}
-	p.clean()
-
-	return p
+	return &Path{path: cleanPathString(path)}
 }
 
 /*
@@ -114,15 +115,22 @@ Parts returns all single parts of the Path.
 It uses filepath.Separator to split the path string.
 */
 func (p *Path) Parts() []string {
-	return strings.Split(p.path, string(filepath.Separator))
+	separator := pathSeparator
+
+	toSplit := strings.Trim(p.path, separator)
+	if toSplit == "" {
+		return []string{}
+	}
+
+	return strings.Split(toSplit, separator)
 }
 
 /*
-Split splits this Path into a directory and final part component.
+Split splits this Path into its parent and base.
 */
-func (p *Path) Split() (*Path, *Path) {
+func (p *Path) Split() (*Path, string) {
 	dir, file := filepath.Split(p.path)
-	return NewPath(dir), NewPath(file)
+	return NewPath(dir), file
 }
 
 /*
@@ -137,11 +145,19 @@ func (p *Path) Base() string {
 /*
 Extension returns the last filename extension of this Path.
 The prefixed dot is included.
-
-This function utilizes filepath.Ext.
 */
 func (p *Path) Extension() string {
-	return filepath.Ext(p.path)
+
+	base := p.Base()
+
+	if base == "." || base == ".." || base == pathSeparator {
+		return ""
+	}
+
+	base = strings.TrimLeft(base, ".")
+	extension := filepath.Ext(base)
+
+	return extension
 }
 
 /*
@@ -152,7 +168,16 @@ If the file starts with a '.' (which is a common on unix
 based operating systems), the first part is ignored.
 */
 func (p *Path) Extensions() []string {
-	extensions := strings.Split(p.Base(), ".")
+
+	base := p.Base()
+	base = strings.Trim(base, ".")
+	base = strings.Trim(base, pathSeparator)
+
+	extensions := strings.Split(base, ".")
+	if len(extensions) > 0 {
+		extensions = extensions[1:]
+	}
+
 	for ext := range extensions {
 		extensions[ext] = "." + extensions[ext]
 	}
@@ -164,24 +189,47 @@ func (p *Path) Extensions() []string {
 Stem returns the last element of this Path without the extension.
 */
 func (p *Path) Stem() string {
-	return strings.TrimSuffix(p.Base(), p.Extension())
+	base := p.Base()
+
+	// stem definitions
+	if base == "." || base == pathSeparator {
+		return ""
+	}
+
+	if base == ".." {
+		return ".."
+	}
+
+	// in case stem has
+
+	return base[:len(base)-len(p.Extension())]
 }
 
 /*
 MinimalStem returns the last element of this Path without all extensions.
 */
 func (p *Path) MinimalStem() string {
-	return strings.SplitN(p.Base(), string(filepath.Separator), 2)[0]
+	base := p.Base()
+
+	if base == "." || base == pathSeparator {
+		return ""
+	}
+
+	return base[:len(base)-len(strings.Join(p.Extensions(), ""))]
 }
 
 /*
 Root returns the first part of the path.
 On absolute paths this is the filesystem root, on relative paths all parts
-up to the first non-'..' part are included
+up to the first non-'..' part are included.
+
+On Unix-based operating systems, the Windows path root (e.g. 'C:\')
+is not considered a filepath root. However, it will be returned as a root
+because 'C:\' or 'C:/' is seen as the root of a relative path.
 */
 func (p *Path) Root() string {
 
-	if p.IsAbsolute() {
+	if p.IsRelative() {
 		parts := p.Parts()
 		var rootParts []string
 
@@ -195,16 +243,50 @@ func (p *Path) Root() string {
 		return filepath.Join(rootParts...)
 	}
 
-	return strings.SplitN(p.String(), string(filepath.Separator), 2)[0]
+	pathStr := p.path
+
+	if pathStr == pathSeparator {
+		return pathStr
+	}
+
+	root := strings.SplitN(p.path, pathSeparator, 2)[0]
+
+	if root == "" {
+		return pathSeparator
+	}
+
+	return root
 }
 
 /*
-RelativeTo returns the relative path from another Path to this Path.
+IsAbsolute returns whether this Path is absolute.
+
+On non-Windows operating systems, the Windows path root (e.g. 'C:\')
+is not considered a file root but as a regular (relative) path element.
+Thus, this function would return false.
+
+This function utilizes filepath.IsAbs.
+*/
+func (p *Path) IsAbsolute() bool {
+	return filepath.IsAbs(p.path)
+}
+
+/*
+IsRelative returns whether this Path is relative.
+
+This function returns the inverse of IsAbsolute.
+*/
+func (p *Path) IsRelative() bool {
+	return !p.IsAbsolute()
+}
+
+/*
+RelativeTo returns this Path relative to another.
 
 This function utilizes filepath.Rel.
 */
-func (p *Path) RelativeTo(o Path) (*Path, error) {
-	rp, err := filepath.Rel(p.path, o.path)
+func (p *Path) RelativeTo(o *Path) (*Path, error) {
+	rp, err := filepath.Rel(o.path, p.path)
 	return NewPath(rp), err
 }
 
@@ -220,42 +302,45 @@ func (p *Path) Absolute() (*Path, error) {
 }
 
 /*
-AbsoluteTo returns an absolute representation of this Path.
-If the Path is relative, it will be joined with the provided Path.
+AbsoluteTo returns an absolute representation of this Path towards another.
+If the Path is relative, it will be joined with the provided Path, else this Path is returned.
 
-This function utilizes filepath.Abs.
+Requires the other Path to be absolute.
 */
-func (p *Path) AbsoluteTo(o *Path) *Path {
+func (p *Path) AbsoluteTo(o *Path) (*Path, error) {
 
 	// if path is already absolute, ignore it
 	if p.IsAbsolute() {
-		return p
+		return p, nil
 	}
 
-	return o.Join(p)
+	if o.IsRelative() {
+		return nil, errors.New("other path must be absolute")
+	}
+
+	return o.Join(p), nil
 }
 
 /*
-IsAbsolute returns whether this Path is absolute.
+Resolve resolves all symbolic links. If this Path is relative,
+the result will be relative to the current directory, unless
+one of the components is an absolute symbolic link.
 
-This function utilizes filepath.IsAbs.
-*/
-func (p *Path) IsAbsolute() bool {
-	return filepath.IsAbs(p.path)
-}
-
-/*
-Resolve resolves all symbolic links.
+Resolve requires this Path to exist.
 
 This function utilizes filepath.EvalSymlinks.
 */
-func (p *Path) Resolve(o *Path) (*Path, error) {
-	rp, err := filepath.EvalSymlinks(o.path)
+func (p *Path) Resolve() (*Path, error) {
+	if !p.Exists() {
+		return nil, errors.New("this path does not exist")
+	}
+
+	ep, err := filepath.EvalSymlinks(p.path)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewPath(rp), nil
+	return NewPath(ep), nil
 }
 
 /*
@@ -283,17 +368,31 @@ func (p *Path) JoinStrings(paths ...string) *Path {
 }
 
 /*
+Glob returns all paths matching the given pattern within this Path's directory.
+
+This function utilizes filepath.Glob. It ignores IO errors.
+*/
+func (p *Path) Glob(pattern string) ([]*Path, error) {
+	matches, err := nativeGlob(p, pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	paths := make([]*Path, len(matches))
+	for idx, match := range matches {
+		paths[idx] = NewPath(match)
+	}
+
+	return paths, nil
+}
+
+/*
 Contains returns whether the passed pattern exist within this Path's directory.
 
 This function utilizes filepath.Glob.
 */
 func (p *Path) Contains(pattern string) (bool, error) {
-
-	if !p.IsDir() {
-		return false, errors.New("path does not exist or is not a directory")
-	}
-
-	matches, err := filepath.Glob(filepath.Join(p.path, pattern))
+	matches, err := nativeGlob(p, pattern)
 	if err != nil {
 		return false, err
 	}
@@ -312,12 +411,22 @@ func (p *Path) BContains(pattern string) bool {
 
 /*
 IsCaseSensitiveFs returns whether a given path is on a case-sensitive filesystem.
+
+Currently, this function checks the sensitivity based on the path's base.
 */
 func IsCaseSensitiveFs(p *Path) (bool, error) {
+	// IMPORTANT:
+	// It would make sense to check if this Path actually exists before
+	// continuing the check. But this does not make sense in the context
+	// of this function's goal.
+
+	// TODO Check sensitivity of parent parts --> underlying fs may have mounted
+	// 	multiple filesystems that are switching sensitivity.
+
 	alt := p.Parent()
 	alt = alt.JoinStrings(flipCase(p.Base()))
 
-	// get file stat for passed file
+	// get file stat for passed file (required for later comparison in os.SameFile)
 	pathInfo, err := os.Stat(p.path)
 	if err != nil {
 		return false, err
@@ -334,20 +443,51 @@ func IsCaseSensitiveFs(p *Path) (bool, error) {
 	}
 
 	// if both file exist, check if they are the same
+	// if they are equal, then the filesystem is case-insensitive,
+	// else the filesystem is case-sensitive
 	return !os.SameFile(pathInfo, altInfo), nil
 }
 
 /*
-Equals returns whether this and another Path are the same.
-The evaluation also considers filesystem case sensitivity.
+Equals returns whether this and another Path are structurally the same.
+It respects case sensitivity.
 */
 func (p *Path) Equals(other *Path) bool {
-	// lowercase the strings and compare them
-	thisLowerCase := strings.ToLower(p.path)
-	otherLowerCase := strings.ToLower(other.path)
+	return p.path == other.path
+}
 
-	// if not equal in lowercase, then they are not the same path
-	if thisLowerCase != otherLowerCase {
+/*
+EqualsString returns whether the passed string matches this Path.
+
+This function converts the passed string to a Path object and calls Equals.
+*/
+func (p *Path) EqualsString(other string) bool {
+	return p.path == cleanPathString(other)
+}
+
+/*
+EqualsCi returns whether this and another Path are structurally the same.
+It ignores case sensitivity.
+*/
+func (p *Path) EqualsCi(other *Path) bool {
+	return equalsStringCaseInsensitive(p.String(), other.String())
+}
+
+/*
+EqualsStringCi returns whether the passed string matches this Path.
+it ignores case sensitivity.
+*/
+func (p *Path) EqualsStringCi(other string) bool {
+	return equalsStringCaseInsensitive(p.String(), other)
+}
+
+/*
+EqualsFS returns whether this and another Path are the same on the filesystem.
+The evaluation also considers filesystem case sensitivity.
+*/
+func (p *Path) EqualsFS(other *Path) bool {
+	structurallyIdentical := equalsStringCaseInsensitive(p.String(), other.String())
+	if !structurallyIdentical {
 		return false
 	}
 
@@ -369,19 +509,10 @@ func (p *Path) Equals(other *Path) bool {
 }
 
 /*
-EqualsString returns whether the passed string matches this Path.
-
-This function converts the passed string to a Path object and calls Equals.
-*/
-func (p *Path) EqualsString(other string) bool {
-	return p.Equals(NewPath(other))
-}
-
-/*
 ToPosix returns a string representation with forward slashes.
 */
 func (p *Path) ToPosix() string {
-	return filepath.ToSlash(p.path)
+	return filepath.ToSlash(p.String())
 }
 
 /*
@@ -392,10 +523,26 @@ func (p *Path) WithName(name string) *Path {
 }
 
 /*
+Copy creates a copy of this Path.
+
+Fresh out of the oven, just for you.
+*/
+func (p *Path) Copy() *Path {
+	return NewPath(p.path)
+}
+
+/*
 String returns this Path as a string.
 */
 func (p *Path) String() string {
-	return p.path
+	pathStr := p.path
+
+	// re-add removed whitespace escape characters
+	if runtime.GOOS != "windows" {
+		pathStr = strings.ReplaceAll(pathStr, " ", "\\ ")
+	}
+
+	return pathStr
 }
 
 /*
@@ -408,7 +555,7 @@ func (p *Path) UnmarshalText(text []byte) error {
 }
 
 /*
-MarshalText marshalls this Path into a byte array.
+MarshalText marshals this Path into a byte array.
 Implements the encoding.TextMarshaler interface.
 */
 func (p *Path) MarshalText() (text []byte, err error) {
@@ -420,8 +567,21 @@ clean cleans up this Path.
 
 This function utilizes filepath.Clean.
 */
-func (p *Path) clean() {
-	p.path = filepath.Clean(p.path)
+func cleanPathString(p string) string {
+
+	dirty := strings.TrimSpace(p)
+
+	// on non-windows operating systems
+	if runtime.GOOS != "windows" {
+		// remove whitespace escape characters during internal representation
+		dirty = strings.ReplaceAll(dirty, "\\ ", " ")
+
+		// replace all other '\\' characters with separator
+		dirty = strings.ReplaceAll(dirty, "\\", pathSeparator)
+	}
+
+	cleanPath := filepath.Clean(dirty)
+	return cleanPath
 }
 
 /*
@@ -462,4 +622,43 @@ func flipCase(s string) string {
 		return strings.ToUpper(firstChar) + s[1:]
 	}
 	return strings.ToLower(firstChar) + s[1:]
+}
+
+/*
+nativeGlob is a wrapper function for Go's filepath.Glob.
+It checks if the passed Path exists and returns the raw matches or errors.
+
+Returns an error if pattern is an empty string.
+
+filepath.Glob ignores IO errors.
+*/
+func nativeGlob(p *Path, pattern string) ([]string, error) {
+	if strings.TrimSpace(pattern) == "" {
+		return nil, errors.New("pattern must not be empty")
+	}
+
+	if !p.Exists() {
+		return nil, errors.New("this Path does not exist")
+	}
+
+	if !p.IsDir() {
+		return nil, errors.New("this path is not a directory")
+	}
+
+	matches, err := filepath.Glob(filepath.Join(p.path, pattern))
+	if err != nil {
+		return nil, err
+	}
+
+	return matches, nil
+}
+
+func equalsStringCaseInsensitive(first string, second string) bool {
+	// lowercase the strings and compare them
+	thisLowerCase := strings.ToLower(cleanPathString(first))
+	otherLowerCase := strings.ToLower(cleanPathString(second))
+
+	// if not equal in lowercase, then they are not the same path
+	// this tests if the actual path strings are equal
+	return thisLowerCase == otherLowerCase
 }
