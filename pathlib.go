@@ -171,7 +171,7 @@ func (p *Path) Extensions() []string {
 Stem returns the last element of this Path without the extension.
 */
 func (p *Path) Stem() string {
-	strings.TrimSuffix(p.Base(), p.Extension())
+	return strings.TrimSuffix(p.Base(), p.Extension())
 }
 
 /*
