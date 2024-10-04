@@ -1,8 +1,8 @@
 <div align="center">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/artwork/logo-white.png">
-      <source media="(prefers-color-scheme: light)" srcset="assets/artwork/logo-dark.png">
-      <img alt="Artwork for go-pathlib." src="assets/artwork/logo-white.png">
+      <source media="(prefers-color-scheme: dark)" srcset="assets/artwork/logo-dark_mode.png">
+      <source media="(prefers-color-scheme: light)" srcset="assets/artwork/logo-light_mode.png">
+      <img alt="Artwork for go-pathlib." src="assets/artwork/logo-light_mode.png">
     </picture>
 </div>
 
