@@ -1,3 +1,11 @@
+<div align="center">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/artwork/logo-white.png">
+      <source media="(prefers-color-scheme: light)" srcset="assets/artwork/logo-dark.png">
+      <img alt="Artwork for go-pathlib." src="assets/artwork/logo-white.png">
+    </picture>
+</div>
+
 # go-pathlib
 
 A simple one-file library for handling filesystem paths. Utilizing Golang's [path/filepath](https://pkg.go.dev/path/filepath), API-inspired by Python's [pathlib](https://docs.python.org/3/library/pathlib.html). Meant to abstract and extend the standard library and create a struct that contains a source of truth.
@@ -47,3 +55,6 @@ The following features would improve the integration into other ecosystems and a
 - [ ] tested Windows support
 
 This is a non-exhaustive list. Feel free to suggest other features and integrations!
+
+## Attributions
+The displayed Gopher in the artwork is under the [_Creative Commons 4.0 Attribution License_](https://creativecommons.org/licenses/by/4.0/) as per https://go.dev/brand#logo (last seen: 30-09-2024). This project's logo falls under the same licence.
