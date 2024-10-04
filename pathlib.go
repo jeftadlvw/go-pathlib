@@ -1,3 +1,6 @@
+// Package pathlib contains every functionality for go-pathlib.
+// It's a one-file library that can be used in other projects by using Go's package system
+// or by placing the source code file itself into the source tree.
 package pathlib
 
 import (
@@ -24,10 +27,9 @@ const pathSeparator = string(filepath.Separator)
 
 /*
 Path is a struct that represents a filesystem path.
-Enables stability in filepath handling.
 
-Create a new instance using NewPath.
-Other constructor functions are available too and are prefixed with 'New'.
+Create a new instance using NewPath().
+Other constructor functions are prefixed with 'New'.
 */
 type Path struct {
 
@@ -412,7 +414,7 @@ func (p *Path) BContains(pattern string) bool {
 /*
 IsCaseSensitiveFs returns whether a given path is on a case-sensitive filesystem.
 
-Currently, this function checks the sensitivity based on the path's base.
+Currently, this function checks the sensitivity using the path's base.
 */
 func IsCaseSensitiveFs(p *Path) (bool, error) {
 	// IMPORTANT:
