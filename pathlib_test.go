@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -85,7 +86,7 @@ func TestPathConversions(t *testing.T) {
 			assert.Equal(t, expect.path, inputPath.String())
 		})
 
-		t.Run("unmarshalling", func(t *testing.T) {
+		t.Run("text unmarshalling", func(t *testing.T) {
 			var emptyPath = &Path{}
 
 			err := emptyPath.UnmarshalText([]byte(input))
@@ -94,11 +95,29 @@ func TestPathConversions(t *testing.T) {
 			assert.Equal(t, *expect, *emptyPath)
 		})
 
-		t.Run("marshalling", func(t *testing.T) {
+		t.Run("text marshalling", func(t *testing.T) {
 			marshaled, err := inputPath.MarshalText()
 			assert.NoError(t, err)
 
 			assert.Equal(t, expect.String(), string(marshaled))
+		})
+
+		t.Run("json unmarshalling", func(t *testing.T) {
+			var emptyPaths []*Path
+			input := fmt.Sprintf(`["%s"]`, inputPath.String())
+
+			err := json.Unmarshal([]byte(input), &emptyPaths)
+			assert.NoError(t, err)
+
+			assert.Len(t, emptyPaths, 1)
+			assert.Equal(t, *expect, *emptyPaths[0])
+		})
+
+		t.Run("json marshalling", func(t *testing.T) {
+			marshaled, err := json.Marshal([]*Path{inputPath})
+			assert.NoError(t, err)
+
+			assert.Equal(t, fmt.Sprintf(`["%s"]`, expect.String()), string(marshaled))
 		})
 	})
 }
