@@ -412,54 +412,14 @@ func (p *Path) BContains(pattern string) bool {
 }
 
 /*
-IsCaseSensitiveFs returns whether a given path is on a case-sensitive filesystem.
-
-Currently, this function checks the sensitivity using the path's base.
-*/
-func IsCaseSensitiveFs(p *Path) (bool, error) {
-	// IMPORTANT:
-	// It would make sense to check if this Path actually exists before
-	// continuing the check. But this does not make sense in the context
-	// of this function's goal.
-
-	// TODO Check sensitivity of parent parts --> underlying fs may have mounted
-	// 	multiple filesystems that are switching sensitivity.
-
-	alt := p.Parent()
-	alt = alt.JoinStrings(flipCase(p.Base()))
-
-	// get file stat for passed file (required for later comparison in os.SameFile)
-	pathInfo, err := os.Stat(p.path)
-	if err != nil {
-		return false, err
-	}
-
-	// if file does not exist, assume to be on case-sensitive filesystem
-	altInfo, err := os.Stat(alt.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
-		}
-
-		return false, err
-	}
-
-	// if both file exist, check if they are the same
-	// if they are equal, then the filesystem is case-insensitive,
-	// else the filesystem is case-sensitive
-	return !os.SameFile(pathInfo, altInfo), nil
-}
-
-/*
-Equals returns whether this and another Path are structurally the same.
-It respects case sensitivity.
+Equals returns whether this and another Path match lexically.
 */
 func (p *Path) Equals(other *Path) bool {
 	return p.path == other.path
 }
 
 /*
-EqualsString returns whether the passed string matches this Path.
+EqualsString returns whether this and the passed string match lexically.
 
 This function converts the passed string to a Path object and calls Equals.
 */
@@ -468,46 +428,19 @@ func (p *Path) EqualsString(other string) bool {
 }
 
 /*
-EqualsCi returns whether this and another Path are structurally the same.
-It ignores case sensitivity.
+EqualsFlat returns whether this and another Path are structurally equal
+by ignoring case sensitivity.
 */
-func (p *Path) EqualsCi(other *Path) bool {
+func (p *Path) EqualsFlat(other *Path) bool {
 	return equalsStringCaseInsensitive(p.String(), other.String())
 }
 
 /*
-EqualsStringCi returns whether the passed string matches this Path.
-it ignores case sensitivity.
+EqualsStringFlat returns whether the passed string matches this Path
+by ignoring case sensitivity.
 */
-func (p *Path) EqualsStringCi(other string) bool {
-	return equalsStringCaseInsensitive(p.String(), other)
-}
-
-/*
-EqualsFS returns whether this and another Path are the same on the filesystem.
-The evaluation also considers filesystem case sensitivity.
-*/
-func (p *Path) EqualsFS(other *Path) bool {
-	structurallyIdentical := equalsStringCaseInsensitive(p.String(), other.String())
-	if !structurallyIdentical {
-		return false
-	}
-
-	// if equal in lowercase, proceed to check if path is on a
-	// case-sensitive filesystem or not
-	caseSensitive, err := IsCaseSensitiveFs(p)
-	if err != nil {
-		// return false in case of an error
-		return false
-	}
-
-	// if case-sensitive, compare both original strings
-	if caseSensitive {
-		return p.path == other.path
-	}
-
-	// if case-insensitive, return true
-	return true
+func (p *Path) EqualsStringFlat(other string) bool {
+	return equalsStringCaseInsensitive(p.String(), cleanPathString(other))
 }
 
 /*
