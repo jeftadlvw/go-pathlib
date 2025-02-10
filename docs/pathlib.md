@@ -17,7 +17,6 @@ Package pathlib contains every functionality for go\-pathlib. It's a one\-file l
 
 ## Index
 
-- [func IsCaseSensitiveFs\(p \*Path\) \(bool, error\)](<#IsCaseSensitiveFs>)
 - [type Path](<#Path>)
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
   - [func NewHome\(\) \(\*Path, error\)](<#NewHome>)
@@ -30,14 +29,15 @@ Package pathlib contains every functionality for go\-pathlib. It's a one\-file l
   - [func \(p \*Path\) Contains\(pattern string\) \(bool, error\)](<#Path.Contains>)
   - [func \(p \*Path\) Copy\(\) \*Path](<#Path.Copy>)
   - [func \(p \*Path\) Equals\(other \*Path\) bool](<#Path.Equals>)
-  - [func \(p \*Path\) EqualsCi\(other \*Path\) bool](<#Path.EqualsCi>)
-  - [func \(p \*Path\) EqualsFS\(other \*Path\) bool](<#Path.EqualsFS>)
+  - [func \(p \*Path\) EqualsFlat\(other \*Path\) bool](<#Path.EqualsFlat>)
   - [func \(p \*Path\) EqualsString\(other string\) bool](<#Path.EqualsString>)
-  - [func \(p \*Path\) EqualsStringCi\(other string\) bool](<#Path.EqualsStringCi>)
+  - [func \(p \*Path\) EqualsStringFlat\(other string\) bool](<#Path.EqualsStringFlat>)
   - [func \(p \*Path\) Exists\(\) bool](<#Path.Exists>)
   - [func \(p \*Path\) Extension\(\) string](<#Path.Extension>)
-  - [func \(p \*Path\) Extensions\(\) \[\]string](<#Path.Extensions>)
+  - [func \(p \*Path\) ExtensionCount\(\) int](<#Path.ExtensionCount>)
+  - [func \(p \*Path\) ExtensionParts\(\) \[\]string](<#Path.ExtensionParts>)
   - [func \(p \*Path\) Glob\(pattern string\) \(\[\]\*Path, error\)](<#Path.Glob>)
+  - [func \(p \*Path\) HasExtensions\(\) bool](<#Path.HasExtensions>)
   - [func \(p \*Path\) IsAbsolute\(\) bool](<#Path.IsAbsolute>)
   - [func \(p \*Path\) IsDir\(\) bool](<#Path.IsDir>)
   - [func \(p \*Path\) IsFile\(\) bool](<#Path.IsFile>)
@@ -45,7 +45,6 @@ Package pathlib contains every functionality for go\-pathlib. It's a one\-file l
   - [func \(p \*Path\) Join\(paths ...\*Path\) \*Path](<#Path.Join>)
   - [func \(p \*Path\) JoinStrings\(paths ...string\) \*Path](<#Path.JoinStrings>)
   - [func \(p \*Path\) MarshalText\(\) \(text \[\]byte, err error\)](<#Path.MarshalText>)
-  - [func \(p \*Path\) MinimalStem\(\) string](<#Path.MinimalStem>)
   - [func \(p \*Path\) Parent\(\) \*Path](<#Path.Parent>)
   - [func \(p \*Path\) Parts\(\) \[\]string](<#Path.Parts>)
   - [func \(p \*Path\) RelativeTo\(o \*Path\) \(\*Path, error\)](<#Path.RelativeTo>)
@@ -58,17 +57,6 @@ Package pathlib contains every functionality for go\-pathlib. It's a one\-file l
   - [func \(p \*Path\) UnmarshalText\(text \[\]byte\) error](<#Path.UnmarshalText>)
   - [func \(p \*Path\) WithName\(name string\) \*Path](<#Path.WithName>)
 
-
-<a name="IsCaseSensitiveFs"></a>
-## func IsCaseSensitiveFs
-
-```go
-func IsCaseSensitiveFs(p *Path) (bool, error)
-```
-
-IsCaseSensitiveFs returns whether a given path is on a case\-sensitive filesystem.
-
-Currently, this function checks the sensitivity using the path's base.
 
 <a name="Path"></a>
 ## type Path
@@ -194,25 +182,16 @@ Fresh out of the oven, just for you.
 func (p *Path) Equals(other *Path) bool
 ```
 
-Equals returns whether this and another Path are structurally the same. It respects case sensitivity.
+Equals returns whether this and another Path match lexically.
 
-<a name="Path.EqualsCi"></a>
-### func \(\*Path\) EqualsCi
-
-```go
-func (p *Path) EqualsCi(other *Path) bool
-```
-
-EqualsCi returns whether this and another Path are structurally the same. It ignores case sensitivity.
-
-<a name="Path.EqualsFS"></a>
-### func \(\*Path\) EqualsFS
+<a name="Path.EqualsFlat"></a>
+### func \(\*Path\) EqualsFlat
 
 ```go
-func (p *Path) EqualsFS(other *Path) bool
+func (p *Path) EqualsFlat(other *Path) bool
 ```
 
-EqualsFS returns whether this and another Path are the same on the filesystem. The evaluation also considers filesystem case sensitivity.
+EqualsFlat returns whether this and another Path are structurally equal by ignoring case sensitivity.
 
 <a name="Path.EqualsString"></a>
 ### func \(\*Path\) EqualsString
@@ -221,18 +200,18 @@ EqualsFS returns whether this and another Path are the same on the filesystem. T
 func (p *Path) EqualsString(other string) bool
 ```
 
-EqualsString returns whether the passed string matches this Path.
+EqualsString returns whether this and the passed string match lexically.
 
 This function converts the passed string to a Path object and calls Equals.
 
-<a name="Path.EqualsStringCi"></a>
-### func \(\*Path\) EqualsStringCi
+<a name="Path.EqualsStringFlat"></a>
+### func \(\*Path\) EqualsStringFlat
 
 ```go
-func (p *Path) EqualsStringCi(other string) bool
+func (p *Path) EqualsStringFlat(other string) bool
 ```
 
-EqualsStringCi returns whether the passed string matches this Path. it ignores case sensitivity.
+EqualsStringFlat returns whether the passed string matches this Path by ignoring case sensitivity.
 
 <a name="Path.Exists"></a>
 ### func \(\*Path\) Exists
@@ -250,18 +229,27 @@ Exists returns whether this Path exists.
 func (p *Path) Extension() string
 ```
 
-Extension returns the last filename extension of this Path. The prefixed dot is included.
+Extension returns the complete extension of this Path. Any prefixed dots are included.
 
-<a name="Path.Extensions"></a>
-### func \(\*Path\) Extensions
+Everything starting from the first non\-leading dot in this Path's Stem\(\) is considered to be an extension.
+
+<a name="Path.ExtensionCount"></a>
+### func \(\*Path\) ExtensionCount
 
 ```go
-func (p *Path) Extensions() []string
+func (p *Path) ExtensionCount() int
 ```
 
-Extensions returns all the Path's extensions. Prefixed dots are included.
+ExtensionCount returns the amount of extensions this Path has.
 
-If the file starts with a '.' \(which is a common on unix based operating systems\), the first part is ignored.
+<a name="Path.ExtensionParts"></a>
+### func \(\*Path\) ExtensionParts
+
+```go
+func (p *Path) ExtensionParts() []string
+```
+
+ExtensionParts returns all this Path's extensions as an array without the leading dots.
 
 <a name="Path.Glob"></a>
 ### func \(\*Path\) Glob
@@ -273,6 +261,15 @@ func (p *Path) Glob(pattern string) ([]*Path, error)
 Glob returns all paths matching the given pattern within this Path's directory.
 
 This function utilizes filepath.Glob. It ignores IO errors.
+
+<a name="Path.HasExtensions"></a>
+### func \(\*Path\) HasExtensions
+
+```go
+func (p *Path) HasExtensions() bool
+```
+
+HasExtensions returns whether this Path has file extensions.
 
 <a name="Path.IsAbsolute"></a>
 ### func \(\*Path\) IsAbsolute
@@ -347,15 +344,6 @@ func (p *Path) MarshalText() (text []byte, err error)
 
 MarshalText marshals this Path into a byte array. Implements the encoding.TextMarshaler interface.
 
-<a name="Path.MinimalStem"></a>
-### func \(\*Path\) MinimalStem
-
-```go
-func (p *Path) MinimalStem() string
-```
-
-MinimalStem returns the last element of this Path without all extensions.
-
 <a name="Path.Parent"></a>
 ### func \(\*Path\) Parent
 
@@ -427,7 +415,7 @@ Split splits this Path into its parent and base.
 func (p *Path) Stem() string
 ```
 
-Stem returns the last element of this Path without the extension.
+Stem returns the base of this Path without all extensions.
 
 <a name="Path.String"></a>
 ### func \(\*Path\) String
