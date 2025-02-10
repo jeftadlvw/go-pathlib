@@ -145,79 +145,69 @@ func (p *Path) Base() string {
 }
 
 /*
-Extension returns the last filename extension of this Path.
-The prefixed dot is included.
-*/
-func (p *Path) Extension() string {
-
-	base := p.Base()
-
-	if base == "." || base == ".." || base == pathSeparator {
-		return ""
-	}
-
-	base = strings.TrimLeft(base, ".")
-	extension := filepath.Ext(base)
-
-	return extension
-}
-
-/*
-Extensions returns all the Path's extensions.
-Prefixed dots are included.
-
-If the file starts with a '.' (which is a common on unix
-based operating systems), the first part is ignored.
-*/
-func (p *Path) Extensions() []string {
-
-	base := p.Base()
-	base = strings.Trim(base, ".")
-	base = strings.Trim(base, pathSeparator)
-
-	extensions := strings.Split(base, ".")
-	if len(extensions) > 0 {
-		extensions = extensions[1:]
-	}
-
-	for ext := range extensions {
-		extensions[ext] = "." + extensions[ext]
-	}
-
-	return extensions
-}
-
-/*
-Stem returns the last element of this Path without the extension.
+Stem returns the base of this Path without all extensions.
 */
 func (p *Path) Stem() string {
-	base := p.Base()
-
-	// stem definitions
-	if base == "." || base == pathSeparator {
-		return ""
+	ok, stem := getStem(p)
+	if ok {
+		return stem
 	}
 
-	if base == ".." {
-		return ".."
-	}
-
-	// in case stem has
-
-	return base[:len(base)-len(p.Extension())]
+	return ""
 }
 
 /*
-MinimalStem returns the last element of this Path without all extensions.
+HasExtensions returns whether this Path has file extensions.
 */
-func (p *Path) MinimalStem() string {
-	base := p.Base()
+func (p *Path) HasExtensions() bool {
+	ok, base := createExtensionEvaluationBase(p)
+	if !ok {
+		return false
+	}
 
-	if base == "." || base == pathSeparator {
+	return hasDots(base)
+}
+
+/*
+ExtensionCount returns the amount of extensions this Path has.
+*/
+func (p *Path) ExtensionCount() int {
+	ok, base := createExtensionEvaluationBase(p)
+	if !ok {
+		return 0
+	}
+
+	return dotCount(base)
+}
+
+/*
+Extension returns the complete extension of this Path.
+Any prefixed dots are included.
+
+Everything starting from the first non-leading dot in this Path's Stem()
+is considered to be an extension.
+*/
+func (p *Path) Extension() string {
+	stem := p.Stem()
+
+	// if no stem exists, then there also are no extensions
+	if len(stem) == 0 {
 		return ""
 	}
 
-	return base[:len(base)-len(strings.Join(p.Extensions(), ""))]
+	return p.Base()[len(stem):]
+}
+
+/*
+ExtensionParts returns all this Path's extensions as an array without the leading dots.
+*/
+func (p *Path) ExtensionParts() []string {
+	ok, base := createExtensionEvaluationBase(p)
+	if !ok {
+		return []string{}
+	}
+
+	return strings.Split(base, ".")[1:]
 }
 
 /*
@@ -503,7 +493,6 @@ clean cleans up this Path.
 This function utilizes filepath.Clean.
 */
 func cleanPathString(p string) string {
-
 	dirty := strings.TrimSpace(p)
 
 	// on non-windows operating systems
@@ -517,6 +506,93 @@ func cleanPathString(p string) string {
 
 	cleanPath := filepath.Clean(dirty)
 	return cleanPath
+}
+
+func createExtensionEvaluationBase(p *Path) (bool, string) {
+	base := p.Base()
+
+	// define edge cases
+	if base == "." || base == ".." || base == pathSeparator {
+		return false, ""
+	}
+
+	// ignore leading dots
+	base = strings.TrimLeft(base, ".")
+
+	return true, base
+}
+
+func getStem(p *Path) (bool, string) {
+	base := p.Base()
+	ok, baseNoLeadingDots := createExtensionEvaluationBase(p)
+
+	// handle stem-specific edge case
+	if base == ".." {
+		return true, ".."
+	}
+
+	if !ok {
+		return false, ""
+	}
+
+	// check for any existing trailing dot
+	firstDotIdx := strings.IndexAny(baseNoLeadingDots, ".")
+
+	// if no dot found, return complete base
+	if firstDotIdx == -1 {
+		return true, base
+	}
+
+	// else return base without extensions
+	baseNoDots := baseNoLeadingDots[:firstDotIdx]
+	return true, base[:len(base)-len(baseNoLeadingDots)] + baseNoDots
+}
+
+/*
+hasDots is a simple helper function that returns whether the given
+string contains a '.' character.
+
+It does not use strings.Contains for overhead reasons.
+*/
+func hasDots(s string) bool {
+	switch len(s) {
+	case 0:
+		return false
+	case 1:
+		return s[0] == '.'
+	}
+
+	dotAscii := '.'
+	for _, v := range s {
+		if v == dotAscii {
+			return true
+		}
+	}
+
+	return false
+}
+
+func dotCount(s string) int {
+	switch len(s) {
+	case 0:
+		return 0
+	case 1:
+		if s[0] == '.' {
+			return 1
+		}
+		return 0
+	}
+
+	dotAscii := '.'
+	count := 0
+
+	for _, v := range s {
+		if v == dotAscii {
+			count += 1
+		}
+	}
+
+	return count
 }
 
 /*
@@ -543,10 +619,10 @@ func pathCheck(p *Path) int {
 }
 
 /*
-flipCase is a utility function that takes the first character
-and flips it's case. The leftover characters are appended.
-This results in a string which is different from the original which can be used for
-e.g. case sensitivity (in)variance.
+flipCase is a utility function that takes the first character and flips it's case.
+The leftover characters are appended.
+This results in a string which is different from the original which can be used
+for e.g. case sensitivity (in)variance checks.
 */
 func flipCase(s string) string {
 	if s == "" {
@@ -590,8 +666,8 @@ func nativeGlob(p *Path, pattern string) ([]string, error) {
 
 func equalsStringCaseInsensitive(first string, second string) bool {
 	// lowercase the strings and compare them
-	thisLowerCase := strings.ToLower(cleanPathString(first))
-	otherLowerCase := strings.ToLower(cleanPathString(second))
+	thisLowerCase := strings.ToLower(first)
+	otherLowerCase := strings.ToLower(second)
 
 	// if not equal in lowercase, then they are not the same path
 	// this tests if the actual path strings are equal
