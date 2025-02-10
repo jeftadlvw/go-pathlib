@@ -284,6 +284,8 @@ func TestPath_Base(t *testing.T) {
 		{Input: NewPath("/foo/bar.js"), Expect: "bar.js"},
 		{Input: NewPath("bar.js"), Expect: "bar.js"},
 		{Input: NewPath("../bar.js"), Expect: "bar.js"},
+		{Input: NewPath(".bar.js"), Expect: ".bar.js"},
+		{Input: NewPath("..bar.js"), Expect: "..bar.js"},
 	}
 
 	for i, testCase := range cases {
@@ -321,6 +323,75 @@ func TestPath_Split(t *testing.T) {
 	})
 }
 
+func TestPath_Stem(t *testing.T) {
+	cases := []TestCase[*Path, string]{
+		{Input: NewPath("."), Expect: ""},
+		{Input: NewPath(".."), Expect: ".."},
+		{Input: NewPath("/"), Expect: ""},
+		{Input: NewPath("foo/bar"), Expect: "bar"},
+		{Input: NewPath("foo/bar.js"), Expect: "bar"},
+		{Input: NewPath("/foo/bar.js"), Expect: "bar"},
+		{Input: NewPath("/foo/baz.kf/bar.js"), Expect: "bar"},
+		{Input: NewPath("bar.js"), Expect: "bar"},
+		{Input: NewPath("bar.js.foo"), Expect: "bar"},
+		{Input: NewPath("bar.js..foo"), Expect: "bar"},
+		{Input: NewPath("../bar.js"), Expect: "bar"},
+		{Input: NewPath("../bar.js.foo"), Expect: "bar"},
+		{Input: NewPath(".bar.js"), Expect: ".bar"},
+		{Input: NewPath("..bar.js"), Expect: "..bar"},
+		{Input: NewPath("..bar.js."), Expect: "..bar"},
+		{Input: NewPath("..bar.js.foo"), Expect: "..bar"},
+		{Input: NewPath("..bar.js.."), Expect: "..bar"},
+		{Input: NewPath("..bar.js..a"), Expect: "..bar"},
+		{Input: NewPath("..bar.js..a.b"), Expect: "..bar"},
+		{Input: NewPath("..bar"), Expect: "..bar"},
+		{Input: NewPath("...bar."), Expect: "...bar"},
+		{Input: NewPath("...bar."), Expect: "...bar"},
+		{Input: NewPath("...bar"), Expect: "...bar"},
+		{Input: NewPath("...bar.."), Expect: "...bar"},
+		{Input: NewPath("...bar..a"), Expect: "...bar"},
+		{Input: NewPath("...bar..a.b"), Expect: "...bar"},
+	}
+
+	for i, testCase := range cases {
+		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
+	}
+
+	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		assert.Equal(t, expect, input.Stem())
+	})
+}
+
+func TestPath_HasExtensions(t *testing.T) {
+	cases := []TestCase[*Path, bool]{
+		{Input: NewPath("."), Expect: false},
+		{Input: NewPath(".."), Expect: false},
+		{Input: NewPath("/"), Expect: false},
+		{Input: NewPath("foo/bar"), Expect: false},
+		{Input: NewPath("foo/bar.js"), Expect: true},
+		{Input: NewPath("/foo/bar.js"), Expect: true},
+		{Input: NewPath("bar.js"), Expect: true},
+		{Input: NewPath("../bar.js"), Expect: true},
+		{Input: NewPath("../bar.js.foo"), Expect: true},
+		{Input: NewPath(".bar.js"), Expect: true},
+		{Input: NewPath("..bar.js"), Expect: true},
+		{Input: NewPath("..bar.js."), Expect: true},
+		{Input: NewPath("..bar.js.."), Expect: true},
+		{Input: NewPath("..bar.js..a"), Expect: true},
+		{Input: NewPath("..bar.js..a.b"), Expect: true},
+		{Input: NewPath("..bar"), Expect: false},
+		{Input: NewPath("...bar"), Expect: false},
+	}
+
+	for i, testCase := range cases {
+		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
+	}
+
+	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		assert.Equal(t, expect, input.HasExtensions())
+	})
+}
+
 func TestPath_Extension(t *testing.T) {
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: ""},
@@ -331,9 +402,13 @@ func TestPath_Extension(t *testing.T) {
 		{Input: NewPath("/foo/bar.js"), Expect: ".js"},
 		{Input: NewPath("bar.js"), Expect: ".js"},
 		{Input: NewPath("../bar.js"), Expect: ".js"},
-		{Input: NewPath("../bar.js.foo"), Expect: ".foo"},
+		{Input: NewPath("../bar.js.foo"), Expect: ".js.foo"},
 		{Input: NewPath(".bar.js"), Expect: ".js"},
 		{Input: NewPath("..bar.js"), Expect: ".js"},
+		{Input: NewPath("..bar.js."), Expect: ".js."},
+		{Input: NewPath("..bar.js.."), Expect: ".js.."},
+		{Input: NewPath("..bar.js..a"), Expect: ".js..a"},
+		{Input: NewPath("..bar.js..a.b"), Expect: ".js..a.b"},
 		{Input: NewPath("..bar"), Expect: ""},
 		{Input: NewPath("...bar"), Expect: ""},
 	}
@@ -347,19 +422,23 @@ func TestPath_Extension(t *testing.T) {
 	})
 }
 
-func TestPath_Extensions(t *testing.T) {
+func TestPath_ExtensionParts(t *testing.T) {
 	cases := []TestCase[*Path, []string]{
 		{Input: NewPath("."), Expect: []string{}},
 		{Input: NewPath(".."), Expect: []string{}},
 		{Input: NewPath("/"), Expect: []string{}},
 		{Input: NewPath("foo/bar"), Expect: []string{}},
-		{Input: NewPath("foo/bar.js"), Expect: []string{".js"}},
-		{Input: NewPath("/foo/bar.js"), Expect: []string{".js"}},
-		{Input: NewPath("bar.js"), Expect: []string{".js"}},
-		{Input: NewPath("../bar.js"), Expect: []string{".js"}},
-		{Input: NewPath("../bar.js.foo"), Expect: []string{".js", ".foo"}},
-		{Input: NewPath(".bar.js"), Expect: []string{".js"}},
-		{Input: NewPath("..bar.js"), Expect: []string{".js"}},
+		{Input: NewPath("foo/bar.js"), Expect: []string{"js"}},
+		{Input: NewPath("/foo/bar.js"), Expect: []string{"js"}},
+		{Input: NewPath("bar.js"), Expect: []string{"js"}},
+		{Input: NewPath("../bar.js"), Expect: []string{"js"}},
+		{Input: NewPath("../bar.js.foo"), Expect: []string{"js", "foo"}},
+		{Input: NewPath("../bar.js.foo."), Expect: []string{"js", "foo", ""}},
+		{Input: NewPath("../bar.js.foo.."), Expect: []string{"js", "foo", "", ""}},
+		{Input: NewPath("../bar.js.foo..a"), Expect: []string{"js", "foo", "", "a"}},
+		{Input: NewPath("../bar.js.foo..a.b"), Expect: []string{"js", "foo", "", "a", "b"}},
+		{Input: NewPath(".bar.js"), Expect: []string{"js"}},
+		{Input: NewPath("..bar.js"), Expect: []string{"js"}},
 		{Input: NewPath("..bar"), Expect: []string{}},
 		{Input: NewPath("...bar"), Expect: []string{}},
 	}
@@ -369,58 +448,10 @@ func TestPath_Extensions(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect []string) {
-		assert.Equal(t, expect, input.Extensions())
-	})
-}
+		assert.Equal(t, expect, input.ExtensionParts())
 
-func TestPath_Stem(t *testing.T) {
-	cases := []TestCase[*Path, string]{
-		{Input: NewPath("."), Expect: ""},
-		{Input: NewPath(".."), Expect: ".."},
-		{Input: NewPath("/"), Expect: ""},
-		{Input: NewPath("foo/bar"), Expect: "bar"},
-		{Input: NewPath("foo/bar.js"), Expect: "bar"},
-		{Input: NewPath("/foo/bar.js"), Expect: "bar"},
-		{Input: NewPath("bar.js"), Expect: "bar"},
-		{Input: NewPath("../bar.js"), Expect: "bar"},
-		{Input: NewPath("../bar.js.foo"), Expect: "bar.js"},
-		{Input: NewPath(".bar.js"), Expect: ".bar"},
-		{Input: NewPath("..bar.js"), Expect: "..bar"},
-		{Input: NewPath("..bar"), Expect: "..bar"},
-		{Input: NewPath("...bar"), Expect: "...bar"},
-	}
-
-	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
-	}
-
-	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
-		assert.Equal(t, expect, input.Stem())
-	})
-}
-
-func TestPath_MinimalStem(t *testing.T) {
-	cases := []TestCase[*Path, string]{
-		{Input: NewPath("."), Expect: ""},
-		{Input: NewPath(".."), Expect: ".."},
-		{Input: NewPath("/"), Expect: ""},
-		{Input: NewPath("foo/bar"), Expect: "bar"},
-		{Input: NewPath("foo/bar.js"), Expect: "bar"},
-		{Input: NewPath("/foo/bar.js"), Expect: "bar"},
-		{Input: NewPath("bar.js"), Expect: "bar"},
-		{Input: NewPath("../bar.js"), Expect: "bar"},
-		{Input: NewPath("../bar.js.foo"), Expect: "bar"},
-		{Input: NewPath(".bar.js"), Expect: ".bar"},
-		{Input: NewPath("..bar.js"), Expect: "..bar"},
-		{Input: NewPath("..bar"), Expect: "..bar"},
-	}
-
-	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
-	}
-
-	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
-		assert.Equal(t, expect, input.MinimalStem())
+		// if the expected parts match, ExtensionCount should also be correct.
+		assert.Equal(t, len(expect), input.ExtensionCount())
 	})
 }
 
@@ -721,16 +752,6 @@ func TestPath_GlobContains(t *testing.T) {
 	})
 }
 
-func TestPath_CaseSensitivity(t *testing.T) {
-	// NOTICE:
-	// This function is difficult to test, as this is dependent on the underlying file system.
-	// This also means we cannot test os-dependent, because Linux-based operating systems
-	// support multiple file systems.
-
-	// This stability of this function will result by using and testing it.
-	// (which is very dirty)
-}
-
 func TestPath_Equals(t *testing.T) {
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
@@ -762,7 +783,7 @@ func TestPath_Equals(t *testing.T) {
 	})
 }
 
-func TestPath_EqualsCi(t *testing.T) {
+func TestPath_EqualsFlat(t *testing.T) {
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
 		{Input: []string{"", "a"}, Expect: false},
@@ -785,17 +806,12 @@ func TestPath_EqualsCi(t *testing.T) {
 		assert.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
-		pathEquals := basePath.EqualsCi(NewPath(input[1]))
-		stringEquals := basePath.EqualsStringCi(input[1])
+		pathEquals := basePath.EqualsFlat(NewPath(input[1]))
+		stringEquals := basePath.EqualsStringFlat(input[1])
 
 		assert.Equal(t, expect, pathEquals)
 		assert.Equal(t, expect, stringEquals)
 	})
-}
-
-func TestPath_EqualsFS(t *testing.T) {
-	// NOTICE:
-	// This is difficult to test, as it is depending on IsCaseSensitiveFs()
 }
 
 func TestPath_ToPosix(t *testing.T) {
@@ -806,9 +822,14 @@ func TestPath_ToPosix(t *testing.T) {
 		{Input: NewPath("\\\\foo"), Expect: "/foo"},
 		{Input: NewPath("\\\\foo\\bar"), Expect: "/foo/bar"},
 		{Input: NewPath("\\\\foo\\\\bar"), Expect: "/foo/bar"},
+		{Input: NewPath("/foo/bar"), Expect: "/foo/bar"},
+		{Input: NewPath("//foo/bar"), Expect: "/foo/bar"},
+		{Input: NewPath("//foo//bar"), Expect: "/foo/bar"},
 		{Input: NewPath("/foo/with\\ whitespace"), Expect: "/foo/with\\ whitespace"},
 		{Input: NewPath("\\foo\\with\\ whitespace"), Expect: "/foo/with\\ whitespace"},
 		{Input: NewPath("\\\\foo\\\\with\\ whitespace"), Expect: "/foo/with\\ whitespace"},
+		{Input: NewPath("C:\\foo\\with\\ whitespace"), Expect: "C:/foo/with\\ whitespace"},
+		{Input: NewPath("C:/foo/with\\ whitespace"), Expect: "C:/foo/with\\ whitespace"},
 	}
 
 	for i, testCase := range cases {
@@ -872,6 +893,29 @@ func TestPath_Copy(t *testing.T) {
 
 		// ensure copied path has same contents as original
 		assert.Equal(t, input, copiedPath)
+	})
+}
+
+/*
+ * TestPath_flipCase tests the underlying function for case-sensitivity checks.
+ */
+func TestPath_flipCase(t *testing.T) {
+	cases := []TestCase[string, string]{
+		{Input: "", Expect: ""},
+		{Input: "/", Expect: "/"},
+		{Input: "Aaa", Expect: "aaa"},
+		{Input: "AAA", Expect: "aAA"},
+		{Input: "aAA", Expect: "AAA"},
+		{Input: "aaa", Expect: "Aaa"},
+		{Input: "aaa ads", Expect: "Aaa ads"},
+	}
+
+	for i, testCase := range cases {
+		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
+	}
+
+	runForResults(t, cases, func(t *testing.T, input string, expect string) {
+		assert.Equal(t, expect, flipCase(input))
 	})
 }
 
