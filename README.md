@@ -44,19 +44,19 @@ The file is updated regularly and gives a good general overview on the API. Up-t
 ## Roadmap 📋
 Although the core API exists, I'd like to test the look and feel of this library in some other projects before committing to a major release.
 
-Current version: **0.0.1**
+🔖Current version: **0.0.2**
 
 The following features are planned and fixed on the roadmap. They extend the API and improve the integration into other ecosystems. Because _go-pathlib_ should stay a single-file library, new features are categorized into optional extensions.
 
-**0.0.2**
+**0.0.3**
 - [ ] integration into [go-validator](https://github.com/go-playground/validator) (custom field types and validators)
 
-**0.0.3**
+**0.0.4**
 - [ ] filesystem operations (create, move, delete or rename files and directories)
 - [ ] APIs for temporary files and directories
 - [ ] abstractions: read/write to files, get path stats
 
-**0.0.4**
+**0.0.5**
 - [ ] filesystem case sensitivity: compare paths on filesystem level, check if path is case-sensitive
 
 **Future**
