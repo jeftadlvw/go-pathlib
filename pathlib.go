@@ -86,21 +86,21 @@ func PathFromParts(parts ...string) *Path {
 IsFile returns whether this Path is an existing file.
 */
 func (p *Path) IsFile() bool {
-	return pathCheck(*p) == pathCheckFile
+	return pathCheck(p) == pathCheckFile
 }
 
 /*
 IsDir returns whether this Path is an existing directory.
 */
 func (p *Path) IsDir() bool {
-	return pathCheck(*p) == pathCheckDir
+	return pathCheck(p) == pathCheckDir
 }
 
 /*
 Exists returns whether this Path exists.
 */
 func (p *Path) Exists() bool {
-	return pathCheck(*p) != pathCheckNoExist
+	return pathCheck(p) != pathCheckNoExist
 }
 
 /*
@@ -590,7 +590,7 @@ func cleanPathString(p string) string {
 pathCheck is a lower level Path existence checker.
 It returns 0 if the path does not exist, 2 if it's a file and 2 if it's a directory.
 */
-func pathCheck(p Path) int {
+func pathCheck(p *Path) int {
 	fileInfo, err := os.Stat(p.path)
 	if err != nil {
 		if os.IsNotExist(err) {
