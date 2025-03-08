@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -27,12 +28,28 @@ type TestCase[I any, E any] struct {
 	Error  bool
 }
 
+func TestPathInterfaceImplementations(t *testing.T) {
+	path := NewPath("foo")
+
+	t.Run("TextMarshaler", func(t *testing.T) {
+		_, ok := interface{}(path).(encoding.TextMarshaler)
+		assert.True(t, ok)
+	})
+
+	t.Run("TextUnMarshaler", func(t *testing.T) {
+		_, ok := interface{}(path).(encoding.TextUnmarshaler)
+		assert.True(t, ok)
+	})
+}
+
 func TestPathConversions(t *testing.T) {
 	cases := []TestCase[string, *Path]{
+		{Input: "", Expect: NewPath(".")},
 		{Input: ".", Expect: NewPath(".")},
 		{Input: "..", Expect: NewPath("../")},
 		{Input: "/", Expect: NewPath("/")},
 		{Input: "//", Expect: NewPath("/")},
+		{Input: "./", Expect: NewPath("./")},
 		{Input: "./", Expect: NewPath(".")},
 		{Input: ".//", Expect: NewPath(".")},
 		{Input: "../", Expect: NewPath("..")},
