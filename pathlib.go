@@ -1,6 +1,9 @@
-// Package pathlib contains every functionality for go-pathlib.
-// It's a one-file library that can be used in other projects by using Go's package system
-// or by placing the source code file itself into the source tree.
+/*
+Package pathlib contains every functionality for go-pathlib.
+
+It's a one-file library that can be used in other projects by using Go's package system
+or by placing the source code file itself into the source tree.
+*/
 package pathlib
 
 import (

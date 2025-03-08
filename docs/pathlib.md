@@ -13,15 +13,19 @@ See https://github.com/princjef/gomarkdoc for more.
 import "github.com/jeftadlvw/go-pathlib"
 ```
 
-Package pathlib contains every functionality for go\-pathlib. It's a one\-file library that can be used in other projects by using Go's package system or by placing the source code file itself into the source tree.
+Package pathlib contains every functionality for go\-pathlib.
+
+It's a one\-file library that can be used in other projects by using Go's package system or by placing the source code file itself into the source tree.
 
 ## Index
 
+- [type Disposable](<#Disposable>)
 - [type Path](<#Path>)
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
   - [func NewHome\(\) \(\*Path, error\)](<#NewHome>)
   - [func NewPath\(path string\) \*Path](<#NewPath>)
   - [func PathFromParts\(parts ...string\) \*Path](<#PathFromParts>)
+  - [func TempBaseDir\(\) \*Path](<#TempBaseDir>)
   - [func \(p \*Path\) Absolute\(\) \(\*Path, error\)](<#Path.Absolute>)
   - [func \(p \*Path\) AbsoluteTo\(o \*Path\) \(\*Path, error\)](<#Path.AbsoluteTo>)
   - [func \(p \*Path\) BContains\(pattern string\) bool](<#Path.BContains>)
@@ -56,7 +60,26 @@ Package pathlib contains every functionality for go\-pathlib. It's a one\-file l
   - [func \(p \*Path\) ToPosix\(\) string](<#Path.ToPosix>)
   - [func \(p \*Path\) UnmarshalText\(text \[\]byte\) error](<#Path.UnmarshalText>)
   - [func \(p \*Path\) WithName\(name string\) \*Path](<#Path.WithName>)
+- [type TempPath](<#TempPath>)
+  - [func CreateTempDir\(\) \(\*TempPath, error\)](<#CreateTempDir>)
+  - [func CreateTempDirWithOptions\(options \*TempPathOptions\) \(\*TempPath, error\)](<#CreateTempDirWithOptions>)
+  - [func CreateTempFile\(\) \(\*TempPath, error\)](<#CreateTempFile>)
+  - [func CreateTempFileWithOptions\(options \*TempPathOptions\) \(\*TempPath, error\)](<#CreateTempFileWithOptions>)
+  - [func \(p \*TempPath\) Dispose\(\) error](<#TempPath.Dispose>)
+- [type TempPathOptions](<#TempPathOptions>)
 
+
+<a name="Disposable"></a>
+## type Disposable
+
+Disposable interface shows that a struct has resources that must be disposed manually.
+
+```go
+type Disposable interface {
+    // Dispose cleans up struct resources.
+    Dispose()
+}
+```
 
 <a name="Path"></a>
 ## type Path
@@ -110,6 +133,15 @@ func PathFromParts(parts ...string) *Path
 ```
 
 PathFromParts combines passed parts into a new Path.
+
+<a name="TempBaseDir"></a>
+### func TempBaseDir
+
+```go
+func TempBaseDir() *Path
+```
+
+
 
 <a name="Path.Absolute"></a>
 ### func \(\*Path\) Absolute
@@ -452,6 +484,143 @@ func (p *Path) WithName(name string) *Path
 ```
 
 WithName returns this Path but with another base.
+
+<a name="TempPath"></a>
+## type TempPath
+
+TempPath is a container for a temporary path.
+
+```go
+type TempPath struct {
+    Path
+    // contains filtered or unexported fields
+}
+```
+
+<a name="CreateTempDir"></a>
+### func CreateTempDir
+
+```go
+func CreateTempDir() (*TempPath, error)
+```
+
+CreateTempDir creates a new temporary directory. It's the callers responsibility to call TempPath.Dispose\(\).
+
+Example:
+
+```
+tempDir, err := CreateTempDir()
+if err != nil {
+	fmt.Printf("Could not create temporary directory")
+}
+
+defer tempDir.Dispose()
+```
+
+<a name="CreateTempDirWithOptions"></a>
+### func CreateTempDirWithOptions
+
+```go
+func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error)
+```
+
+CreateTempDirWithOptions creates a temporary directory with further options.
+
+It's the callers responsibility to call TempPath.Dispose\(\).
+
+Example:
+
+```
+options := &TempPathOptions{
+	BaseDir: NewPath("TEMP"),
+	Prefix: "foo"
+}
+
+tempDir, err := CreateTempDirWithOptions()
+if err != nil {
+	fmt.Printf("Could not create temporary directory")
+}
+
+defer tempDir.Dispose()
+```
+
+<a name="CreateTempFile"></a>
+### func CreateTempFile
+
+```go
+func CreateTempFile() (*TempPath, error)
+```
+
+CreateTempFile creates a new temporary file.
+
+It's the callers responsibility to call TempPath.Dispose\(\).
+
+Example:
+
+```
+tempFile, err := CreateTempFile()
+if err != nil {
+	fmt.Printf("Could not create temporary file")
+}
+
+defer tempFile.Dispose()
+```
+
+<a name="CreateTempFileWithOptions"></a>
+### func CreateTempFileWithOptions
+
+```go
+func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error)
+```
+
+CreateTempFileWithOptions creates a temporary file with further options.
+
+It's the callers responsibility to call TempPath.Dispose\(\).
+
+Example:
+
+```
+options := &TempPathOptions{
+	BaseDir: NewPath("TEMP"),
+	Prefix: "foo"
+}
+
+tempFile, err := CreateTempFileWithOptions(options)
+if err != nil {
+	fmt.Printf("Could not create temporary file")
+}
+
+defer tempFile.Dispose()
+```
+
+<a name="TempPath.Dispose"></a>
+### func \(\*TempPath\) Dispose
+
+```go
+func (p *TempPath) Dispose() error
+```
+
+
+
+<a name="TempPathOptions"></a>
+## type TempPathOptions
+
+TempPathOptions is a struct that contains options for more control over the creation of a temporary path.
+
+```go
+type TempPathOptions struct {
+    /*
+    	BaseDir is the base directory for the temporary path.
+
+    	If set to NewPath(""), the current working directory is used.
+    	Keep nil for default os temp directory.
+    */
+    BaseDir *Path
+
+    // Prefix is the prefix added to the temporary path element.
+    Prefix string
+}
+```
 
 Generated by [gomarkdoc](<https://github.com/princjef/gomarkdoc>)
 
