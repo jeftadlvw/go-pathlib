@@ -44,7 +44,7 @@ The file is updated regularly and gives a good general overview on the API. Up-t
 ## Roadmap 📋
 Although the core API exists, I'd like to test the look and feel of this library in some other projects before committing to a major release.
 
-🔖Current version: **0.0.2**
+🔖 Current version: **0.0.2**
 
 The following features are planned and fixed on the roadmap. They extend the API and improve the integration into other ecosystems. Because _go-pathlib_ should stay a single-file library, new features are categorized into optional extensions.
 
@@ -70,9 +70,9 @@ This is a non-exhaustive list. Feel free to suggest other features and integrati
 
 ## Recommendations 🌚
 ### Persisting file paths
-When persisting file paths in e.g. configuration files or a database, use the **posix representation** for maximum portability. Also persist a path **relative to some base path**, and resolve the absolute path at runtime.
+When persisting file paths in e.g. configuration files or a database, use **lowercase paths** and use the **posix representation** for maximum portability. Also persist a path **relative to some base path**, and resolve the absolute path at runtime.
 
-Enforce that the start and end of a path are clearly defined to escape whitespace usage. If you store paths in a database, then the path is naturally constrained by the database field. But when persisted in a configuration file, enclose the path with e.g. quotation marks: `"path/to/foo.bar"`.
+Enforce that the start and end of a path are clearly defined to escape whitespace usage. If you store paths in a database, then the path is naturally constrained by the database field. But when persisted in e.g. a configuration file, enclose the path with e.g. quotation marks: `"path/to/foo.bar"`.
 
 ### Path equality and case sensitivity
 Don't assume the underlying filesystem is case-insensitive. This is the case for Windows and MacOS, but not for e.g. Linux.
@@ -87,10 +87,10 @@ Although we recommend handling paths in a case-insensitive manner, we respect st
 ## Gotcha's ‼️
 On Unix-based operating systems, Windows path roots (e.g. `C:\` or `D:\`) are not considered as filepath roots. Instead, they are seen as relative path elements. With this in mind, `Path.Root()` might still "correctly" return e.g. `C:` for `C:/foo.bar` on Unix-based operating systems.
 
-This is also it's recommended to persist relative paths, as you won't fall into these types of implementation detail traps.
+This is also why it's recommended to persist relative paths, so you won't fall into these implementation detail traps.
 
 ## Contributing 👥
-Feel free to open issues and merge requests. Any help or feedback is highly appreciated!
+Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
 
 ## Attributions 🖊️
 This project makes use of the following third-party dependencies. Their licenses can be found at [third_party](third_party).
