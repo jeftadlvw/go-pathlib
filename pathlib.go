@@ -8,6 +8,7 @@ package pathlib
 
 import (
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -678,4 +679,29 @@ func equalsStringCaseInsensitive(first string, second string) bool {
 	// if not equal in lowercase, then they are not the same path
 	// this tests if the actual path strings are equal
 	return thisLowerCase == otherLowerCase
+}
+
+/*
+charset contains all numbers from 0 to 9 and all letters of the latin alphabet in lower and upper case.
+*/
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+/*
+generateRandomString generates a random string with a random length.
+
+This is a utility function used by tests and extensions.
+*/
+func generateRandomString(minLength, maxLength int) string {
+	// Generate a random length between minLength and maxLength
+	length := rand.Intn(maxLength-minLength+1) + minLength
+
+	// Create a byte slice to store the random string
+	result := make([]byte, length)
+
+	// Fill the byte slice with random characters from the charset
+	for i := 0; i < length; i++ {
+		result[i] = charset[rand.Intn(len(charset))]
+	}
+
+	return string(result)
 }

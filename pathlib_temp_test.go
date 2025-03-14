@@ -3,7 +3,6 @@ package pathlib
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -146,21 +145,4 @@ func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOption
 
 	assert.True(t, p.Parent().Equals(expectedBaseDir))
 	assert.True(t, strings.HasPrefix(p.Base(), expectedPrefix))
-}
-
-const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-func generateRandomString(minLength, maxLength int) string {
-	// Generate a random length between minLength and maxLength
-	length := rand.Intn(maxLength-minLength+1) + minLength
-
-	// Create a byte slice to store the random string
-	result := make([]byte, length)
-
-	// Fill the byte slice with random characters from the charset
-	for i := 0; i < length; i++ {
-		result[i] = charset[rand.Intn(len(charset))]
-	}
-
-	return string(result)
 }
