@@ -288,10 +288,13 @@ func (p *Path) RelativeTo(o *Path) (*Path, error) {
 /*
 Absolute returns an absolute representation of this Path.
 If the Path is relative, it will be joined with the current working directory.
+If the Path is already absolute, a copy of the Path is returned.
 
 This function utilizes filepath.Abs.
 */
 func (p *Path) Absolute() (*Path, error) {
+	// if filepath.Abs receives an already absolute path representation,
+	// it just returns the same representation.
 	ap, err := filepath.Abs(p.path)
 	return NewPath(ap), err
 }
