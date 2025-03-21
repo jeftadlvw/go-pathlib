@@ -12,6 +12,8 @@ A simple one-file library for handling filesystem paths. Utilizing Golang's [pat
 
 This library is developed and tested on Unix-based operating systems. Windows should work (in theory), please open an issue if you face any problems.
 
+Minimum tested Go version: `1.18`
+
 ## Getting started 🚀
 ```shell
 go get github.com/jeftadlvw/go-pathlib@latest
