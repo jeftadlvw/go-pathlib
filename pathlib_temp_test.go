@@ -2,7 +2,7 @@ package pathlib
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
@@ -11,13 +11,13 @@ import (
 func TestTempBaseDir(t *testing.T) {
 	tempBaseDir := TempBaseDir()
 
-	assert.True(t, tempBaseDir.Equals(NewPath(os.TempDir())))
-	assert.True(t, tempBaseDir.IsDir())
+	require.True(t, tempBaseDir.Equals(NewPath(os.TempDir())))
+	require.True(t, tempBaseDir.IsDir())
 }
 
 func TestCreateTempFile(t *testing.T) {
 	tempFile, err := CreateTempFile()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defaultTempFileTests(t, tempFile)
 }
 
@@ -27,7 +27,7 @@ func TestCreateTempFileWithOptions(t *testing.T) {
 
 func TestCreateTempDir(t *testing.T) {
 	tempDir, err := CreateTempDir()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defaultTempDirTests(t, tempDir)
 }
 
@@ -40,16 +40,16 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 
 	t.Run("nil", func(t *testing.T) {
 		tempFile, err := creationFunc(nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		defaultTests(t, tempFile)
 	})
 
 	t.Run("empty", func(t *testing.T) {
 		tempFile, err := creationFunc(&TempPathOptions{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		defaultTests(t, tempFile)
 
-		assert.True(t, tempFile.Parent().Equals(TempBaseDir()))
+		require.True(t, tempFile.Parent().Equals(TempBaseDir()))
 	})
 
 	baseDirCases := []*Path{
@@ -74,7 +74,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 			}
 
 			tempFile, err := creationFunc(options)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defaultTests(t, tempFile)
 
 			defaultTempPathOptionsTests(t, tempFile, options)
@@ -88,7 +88,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 				}
 
 				tempFile, err := creationFunc(options)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				defaultTests(t, tempFile)
 
 				defaultTempPathOptionsTests(t, tempFile, options)
@@ -103,7 +103,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 			}
 
 			tempFile, err := creationFunc(options)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defaultTests(t, tempFile)
 
 			defaultTempPathOptionsTests(t, tempFile, options)
@@ -112,27 +112,27 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 }
 
 func defaultTempFileTests(t *testing.T, p *TempPath) {
-	assert.True(t, p.IsFile())
-	assert.False(t, p.IsDir())
+	require.True(t, p.IsFile())
+	require.False(t, p.IsDir())
 
 	err := p.Dispose()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	assert.False(t, p.IsFile())
-	assert.False(t, p.IsDir())
-	assert.False(t, p.Exists())
+	require.False(t, p.IsFile())
+	require.False(t, p.IsDir())
+	require.False(t, p.Exists())
 }
 
 func defaultTempDirTests(t *testing.T, p *TempPath) {
-	assert.True(t, p.IsDir())
-	assert.False(t, p.IsFile())
+	require.True(t, p.IsDir())
+	require.False(t, p.IsFile())
 
 	err := p.Dispose()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	assert.False(t, p.IsDir())
-	assert.False(t, p.IsFile())
-	assert.False(t, p.Exists())
+	require.False(t, p.IsDir())
+	require.False(t, p.IsFile())
+	require.False(t, p.Exists())
 }
 
 func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOptions) {
@@ -143,6 +143,6 @@ func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOption
 
 	expectedPrefix := opts.Prefix
 
-	assert.True(t, p.Parent().Equals(expectedBaseDir))
-	assert.True(t, strings.HasPrefix(p.Base(), expectedPrefix))
+	require.True(t, p.Parent().Equals(expectedBaseDir))
+	require.True(t, strings.HasPrefix(p.Base(), expectedPrefix))
 }
