@@ -94,14 +94,6 @@ This is also why it's recommended to persist relative paths, so you won't fall i
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
 
 ## Attributions 🖊️
-This project makes use of the following third-party dependencies. Their licenses can be found at [third_party](third_party).
-
-1. `testify` @ https://github.com/stretchr/testify
-    - License: MIT License
-    - Copyright (c) 2012-2020 Mat Ryer, Tyler Bunnell and contributors.
-
-2. `gomarkdoc` @ https://github.com/princjef/gomarkdoc
-    - License: MIT License
-    - Copyright (c) 2019 Jeff Principe
+See [NOTICES.md](NOTICES.md) for a complete list of used third party projects and source code.
 
 The displayed Gopher in the artwork is licensed under the [_Creative Commons 4.0 Attribution License_](https://creativecommons.org/licenses/by/4.0/) as per https://go.dev/brand#logo (last seen: 30-09-2024). This project's artwork falls under the same licence.
