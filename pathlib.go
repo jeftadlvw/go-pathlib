@@ -87,27 +87,6 @@ func PathFromParts(parts ...string) *Path {
 }
 
 /*
-IsFile returns whether this Path is an existing file.
-*/
-func (p *Path) IsFile() bool {
-	return pathCheck(p) == pathCheckFile
-}
-
-/*
-IsDir returns whether this Path is an existing directory.
-*/
-func (p *Path) IsDir() bool {
-	return pathCheck(p) == pathCheckDir
-}
-
-/*
-Exists returns whether this Path exists.
-*/
-func (p *Path) Exists() bool {
-	return pathCheck(p) != pathCheckNoExist
-}
-
-/*
 Parent returns a copy of this Path in the parent directory.
 
 This function utilizes filepath.Dir.
@@ -321,28 +300,6 @@ func (p *Path) AbsoluteTo(o *Path) (*Path, error) {
 }
 
 /*
-Resolve resolves all symbolic links. If this Path is relative,
-the result will be relative to the current directory, unless
-one of the components is an absolute symbolic link.
-
-Resolve requires this Path to exist.
-
-This function utilizes filepath.EvalSymlinks.
-*/
-func (p *Path) Resolve() (*Path, error) {
-	if !p.Exists() {
-		return nil, errors.New("this path does not exist")
-	}
-
-	ep, err := filepath.EvalSymlinks(p.path)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewPath(ep), nil
-}
-
-/*
 Join returns a new Path with all passed Path structs joined together.
 Use JoinStrings to join strings with this Path.
 
@@ -364,48 +321,6 @@ This function utilizes filepath.Join.
 */
 func (p *Path) JoinStrings(paths ...string) *Path {
 	return NewPath(filepath.Join(append([]string{p.path}, paths...)...))
-}
-
-/*
-Glob returns all paths matching the given pattern within this Path's directory.
-
-This function utilizes filepath.Glob. It ignores IO errors.
-*/
-func (p *Path) Glob(pattern string) ([]*Path, error) {
-	matches, err := nativeGlob(p, pattern)
-	if err != nil {
-		return nil, err
-	}
-
-	paths := make([]*Path, len(matches))
-	for idx, match := range matches {
-		paths[idx] = NewPath(match)
-	}
-
-	return paths, nil
-}
-
-/*
-Contains returns whether the passed pattern exist within this Path's directory.
-
-This function utilizes filepath.Glob.
-*/
-func (p *Path) Contains(pattern string) (bool, error) {
-	matches, err := nativeGlob(p, pattern)
-	if err != nil {
-		return false, err
-	}
-
-	return len(matches) != 0, nil
-}
-
-/*
-BContains returns whether the passed pattern exists within this Path's directory.
-It wraps Contains and returns the boolean success value.
-*/
-func (p *Path) BContains(pattern string) bool {
-	contains, _ := p.Contains(pattern)
-	return contains
 }
 
 /*
@@ -603,29 +518,6 @@ func dotCount(s string) int {
 }
 
 /*
-pathCheck is a lower level Path existence checker.
-It returns 0 if the path does not exist, 2 if it's a file and 2 if it's a directory.
-*/
-func pathCheck(p *Path) int {
-	fileInfo, err := os.Stat(p.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return pathCheckNoExist
-		}
-	}
-
-	if fileInfo == nil {
-		return pathCheckNoExist
-	}
-
-	if fileInfo.IsDir() {
-		return pathCheckDir
-	}
-
-	return pathCheckFile
-}
-
-/*
 flipCase is a utility function that takes the first character and flips it's case.
 The leftover characters are appended.
 This results in a string which is different from the original which can be used
@@ -640,35 +532,6 @@ func flipCase(s string) string {
 		return strings.ToUpper(firstChar) + s[1:]
 	}
 	return strings.ToLower(firstChar) + s[1:]
-}
-
-/*
-nativeGlob is a wrapper function for Go's filepath.Glob.
-It checks if the passed Path exists and returns the raw matches or errors.
-
-Returns an error if pattern is an empty string.
-
-filepath.Glob ignores IO errors.
-*/
-func nativeGlob(p *Path, pattern string) ([]string, error) {
-	if strings.TrimSpace(pattern) == "" {
-		return nil, errors.New("pattern must not be empty")
-	}
-
-	if !p.Exists() {
-		return nil, errors.New("this Path does not exist")
-	}
-
-	if !p.IsDir() {
-		return nil, errors.New("this path is not a directory")
-	}
-
-	matches, err := filepath.Glob(filepath.Join(p.path, pattern))
-	if err != nil {
-		return nil, err
-	}
-
-	return matches, nil
 }
 
 func equalsStringCaseInsensitive(first string, second string) bool {
