@@ -19,7 +19,37 @@ It's a one\-file library that can be used in other projects by using Go's packag
 
 ## Index
 
+- [func AppendBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#AppendBytes>)
+- [func AppendString\(path \*Path, data string\) \(int, error\)](<#AppendString>)
+- [func CopyDir\(src, dst \*Path\) error](<#CopyDir>)
+- [func CopyFile\(src, dst \*Path\) error](<#CopyFile>)
+- [func CreateDir\(path \*Path\) error](<#CreateDir>)
+- [func CreateDirAll\(path \*Path\) error](<#CreateDirAll>)
+- [func CreateDirAllWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateDirAllWithOptions>)
+- [func CreateDirWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateDirWithOptions>)
+- [func CreateFile\(path \*Path\) error](<#CreateFile>)
+- [func CreateFileWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateFileWithOptions>)
+- [func CreateSymlink\(src, target \*Path\) error](<#CreateSymlink>)
+- [func CreateSymlinkWithOptions\(src, target \*Path, options FileOptions\) \(bool, error\)](<#CreateSymlinkWithOptions>)
+- [func DeleteDir\(path \*Path\) error](<#DeleteDir>)
+- [func DeleteFile\(path \*Path\) error](<#DeleteFile>)
+- [func DeleteTree\(path \*Path\) error](<#DeleteTree>)
+- [func EqualsFs\(p1, p2 \*Path\) \(bool, error\)](<#EqualsFs>)
+- [func IsCaseSensitive\(p \*Path\) \(bool, error\)](<#IsCaseSensitive>)
+- [func MoveDir\(src, dst \*Path\) error](<#MoveDir>)
+- [func MoveFile\(src, dst \*Path\) error](<#MoveFile>)
+- [func OpenFile\(path \*Path\) \(\*os.File, error\)](<#OpenFile>)
+- [func OpenFileWithOptions\(path \*Path, opts OpenOptions\) \(\*os.File, error\)](<#OpenFileWithOptions>)
+- [func ReadFile\(path \*Path\) \(\[\]byte, error\)](<#ReadFile>)
+- [func ReadFileToString\(path \*Path\) \(string, error\)](<#ReadFileToString>)
+- [func RenameDir\(src, dst \*Path\) error](<#RenameDir>)
+- [func RenameFile\(src, dst \*Path\) error](<#RenameFile>)
+- [func SetPerm\(path \*Path, mode fs.FileMode\) error](<#SetPerm>)
+- [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
+- [func WriteString\(path \*Path, data string\) \(int, error\)](<#WriteString>)
 - [type Disposable](<#Disposable>)
+- [type FileOptions](<#FileOptions>)
+- [type OpenOptions](<#OpenOptions>)
 - [type Path](<#Path>)
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
   - [func NewHome\(\) \(\*Path, error\)](<#NewHome>)
@@ -34,6 +64,7 @@ It's a one\-file library that can be used in other projects by using Go's packag
   - [func \(p \*Path\) Copy\(\) \*Path](<#Path.Copy>)
   - [func \(p \*Path\) Equals\(other \*Path\) bool](<#Path.Equals>)
   - [func \(p \*Path\) EqualsFlat\(other \*Path\) bool](<#Path.EqualsFlat>)
+  - [func \(p \*Path\) EqualsFs\(other \*Path\) bool](<#Path.EqualsFs>)
   - [func \(p \*Path\) EqualsString\(other string\) bool](<#Path.EqualsString>)
   - [func \(p \*Path\) EqualsStringFlat\(other string\) bool](<#Path.EqualsStringFlat>)
   - [func \(p \*Path\) Exists\(\) bool](<#Path.Exists>)
@@ -43,11 +74,18 @@ It's a one\-file library that can be used in other projects by using Go's packag
   - [func \(p \*Path\) Glob\(pattern string\) \(\[\]\*Path, error\)](<#Path.Glob>)
   - [func \(p \*Path\) HasExtensions\(\) bool](<#Path.HasExtensions>)
   - [func \(p \*Path\) IsAbsolute\(\) bool](<#Path.IsAbsolute>)
+  - [func \(p \*Path\) IsBlockDevice\(\) bool](<#Path.IsBlockDevice>)
+  - [func \(p \*Path\) IsCaseSensitive\(\) bool](<#Path.IsCaseSensitive>)
+  - [func \(p \*Path\) IsCharDevice\(\) bool](<#Path.IsCharDevice>)
   - [func \(p \*Path\) IsDir\(\) bool](<#Path.IsDir>)
+  - [func \(p \*Path\) IsFiFoPipe\(\) bool](<#Path.IsFiFoPipe>)
   - [func \(p \*Path\) IsFile\(\) bool](<#Path.IsFile>)
   - [func \(p \*Path\) IsRelative\(\) bool](<#Path.IsRelative>)
+  - [func \(p \*Path\) IsSocket\(\) bool](<#Path.IsSocket>)
+  - [func \(p \*Path\) IsSymlink\(\) bool](<#Path.IsSymlink>)
   - [func \(p \*Path\) Join\(paths ...\*Path\) \*Path](<#Path.Join>)
   - [func \(p \*Path\) JoinStrings\(paths ...string\) \*Path](<#Path.JoinStrings>)
+  - [func \(p \*Path\) Lstat\(\) \(os.FileInfo, error\)](<#Path.Lstat>)
   - [func \(p \*Path\) MarshalText\(\) \(text \[\]byte, err error\)](<#Path.MarshalText>)
   - [func \(p \*Path\) Parent\(\) \*Path](<#Path.Parent>)
   - [func \(p \*Path\) Parts\(\) \[\]string](<#Path.Parts>)
@@ -55,6 +93,7 @@ It's a one\-file library that can be used in other projects by using Go's packag
   - [func \(p \*Path\) Resolve\(\) \(\*Path, error\)](<#Path.Resolve>)
   - [func \(p \*Path\) Root\(\) string](<#Path.Root>)
   - [func \(p \*Path\) Split\(\) \(\*Path, string\)](<#Path.Split>)
+  - [func \(p \*Path\) Stat\(\) \(os.FileInfo, error\)](<#Path.Stat>)
   - [func \(p \*Path\) Stem\(\) string](<#Path.Stem>)
   - [func \(p \*Path\) String\(\) string](<#Path.String>)
   - [func \(p \*Path\) ToPosix\(\) string](<#Path.ToPosix>)
@@ -69,6 +108,278 @@ It's a one\-file library that can be used in other projects by using Go's packag
 - [type TempPathOptions](<#TempPathOptions>)
 
 
+<a name="AppendBytes"></a>
+## func AppendBytes
+
+```go
+func AppendBytes(path *Path, data []byte) (int, error)
+```
+
+AppendBytes appends byte data to the defined file.
+
+The file is not created.
+
+<a name="AppendString"></a>
+## func AppendString
+
+```go
+func AppendString(path *Path, data string) (int, error)
+```
+
+AppendString appends a string to the defined file.
+
+The file is not created.
+
+<a name="CopyDir"></a>
+## func CopyDir
+
+```go
+func CopyDir(src, dst *Path) error
+```
+
+CopyDir copies the directory at the source path to the destination path, recursively copying all contents. Destination parent directories must exist.
+
+<a name="CopyFile"></a>
+## func CopyFile
+
+```go
+func CopyFile(src, dst *Path) error
+```
+
+CopyFile copies the file at the source path to the destination path. Destination parent directories must exist.
+
+<a name="CreateDir"></a>
+## func CreateDir
+
+```go
+func CreateDir(path *Path) error
+```
+
+CreateDir creates the directory at the defined path with mode 0755. Parent directories must exist.
+
+<a name="CreateDirAll"></a>
+## func CreateDirAll
+
+```go
+func CreateDirAll(path *Path) error
+```
+
+CreateDirAll creates the directory at the defined path with mode 0755, creating all necessary parent directories with the same mode.
+
+<a name="CreateDirAllWithOptions"></a>
+## func CreateDirAllWithOptions
+
+```go
+func CreateDirAllWithOptions(path *Path, options FileOptions) (bool, error)
+```
+
+CreateDirAllWithOptions creates the directory at the defined path with given options, creating all necessary parent directories with the same mode. If ExistOk is true and the directory already exists, no action is taken. Returns true if directories were created, false otherwise.
+
+<a name="CreateDirWithOptions"></a>
+## func CreateDirWithOptions
+
+```go
+func CreateDirWithOptions(path *Path, options FileOptions) (bool, error)
+```
+
+CreateDirWithOptions creates the directory at the defined path with given options. If ExistOk is true and the directory already exists, no action is taken. Parent directories must exist. Returns true if a new directory was created, false otherwise.
+
+<a name="CreateFile"></a>
+## func CreateFile
+
+```go
+func CreateFile(path *Path) error
+```
+
+CreateFile creates the file at the defined path with mode 0644. If the file already exists, it will be truncated. Parent directories must exist.
+
+<a name="CreateFileWithOptions"></a>
+## func CreateFileWithOptions
+
+```go
+func CreateFileWithOptions(path *Path, options FileOptions) (bool, error)
+```
+
+CreateFileWithOptions creates the file at the defined path with given options.
+
+If FileOptions.ExistOk is true and the file already exists, no action is taken. Parent directories must exist.
+
+Returns true if a new file was created, false otherwise.
+
+<a name="CreateSymlink"></a>
+## func CreateSymlink
+
+```go
+func CreateSymlink(src, target *Path) error
+```
+
+CreateSymlink creates a symbolic link at the source path pointing to the target path.
+
+<a name="CreateSymlinkWithOptions"></a>
+## func CreateSymlinkWithOptions
+
+```go
+func CreateSymlinkWithOptions(src, target *Path, options FileOptions) (bool, error)
+```
+
+CreateSymlinkWithOptions creates a symbolic link at the source path pointing to the target path. If ExistOk is true and the source path already exists, no action is taken. Returns true if a new symlink was created, false otherwise.
+
+<a name="DeleteDir"></a>
+## func DeleteDir
+
+```go
+func DeleteDir(path *Path) error
+```
+
+DeleteDir removes the directory at the specified path. Returns an error if the directory is not empty.
+
+<a name="DeleteFile"></a>
+## func DeleteFile
+
+```go
+func DeleteFile(path *Path) error
+```
+
+DeleteFile removes the file at the specified path. Returns an error if the path is a directory.
+
+<a name="DeleteTree"></a>
+## func DeleteTree
+
+```go
+func DeleteTree(path *Path) error
+```
+
+DeleteTree removes the directory at the specified path and all its contents.
+
+<a name="EqualsFs"></a>
+## func EqualsFs
+
+```go
+func EqualsFs(p1, p2 *Path) (bool, error)
+```
+
+EqualsFs returns whether the two paths point to the same file system object. This comparison is performed using file stats, not string comparison.
+
+<a name="IsCaseSensitive"></a>
+## func IsCaseSensitive
+
+```go
+func IsCaseSensitive(p *Path) (bool, error)
+```
+
+IsCaseSensitive checks if the filesystem at the specified path is case\-sensitive. It creates a temporary file, then checks if the same path with different case can be accessed.
+
+<a name="MoveDir"></a>
+## func MoveDir
+
+```go
+func MoveDir(src, dst *Path) error
+```
+
+MoveDir moves the directory at the source path to the destination path. If the destination is on the same filesystem, this is equivalent to a rename operation. Destination parent directories must exist.
+
+<a name="MoveFile"></a>
+## func MoveFile
+
+```go
+func MoveFile(src, dst *Path) error
+```
+
+MoveFile moves the file at the source path to the destination path. If the destination is on the same filesystem, this is equivalent to a rename operation. Destination parent directories must exist.
+
+<a name="OpenFile"></a>
+## func OpenFile
+
+```go
+func OpenFile(path *Path) (*os.File, error)
+```
+
+OpenFile opens a file for reading and writing. If the file does not exist, it is created with 0644 permissions. If the file already exists, it is truncated.
+
+It's the callers responsibility to close the os.File.
+
+<a name="OpenFileWithOptions"></a>
+## func OpenFileWithOptions
+
+```go
+func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error)
+```
+
+OpenFileWithOptions opens a file with passed extended configuration.
+
+If OpenOptions.Permission is 0, the value defaults to 0644. If OpenOptions.Mode is an empty string, it defaults to "rw"
+
+The order for OpenOptions.Mode is enforced as follows: "r" \(read\), "w" \(write\), "a" \(append\) must be used in exactly this order. "a" can only be used if "w" is used.
+
+It's the callers responsibility to close the os.File.
+
+<a name="ReadFile"></a>
+## func ReadFile
+
+```go
+func ReadFile(path *Path) ([]byte, error)
+```
+
+ReadFile reads the passed file and returns read bytes.
+
+<a name="ReadFileToString"></a>
+## func ReadFileToString
+
+```go
+func ReadFileToString(path *Path) (string, error)
+```
+
+ReadFileToString reads the passed file and returns its content as a string.
+
+<a name="RenameDir"></a>
+## func RenameDir
+
+```go
+func RenameDir(src, dst *Path) error
+```
+
+RenameDir renames the directory at the source path to the destination path. This is a wrapper for MoveDir.
+
+<a name="RenameFile"></a>
+## func RenameFile
+
+```go
+func RenameFile(src, dst *Path) error
+```
+
+RenameFile renames the file at the source path to the destination path. This is a wrapper for MoveFile.
+
+<a name="SetPerm"></a>
+## func SetPerm
+
+```go
+func SetPerm(path *Path, mode fs.FileMode) error
+```
+
+SetPerm sets the permission mode for the specified path.
+
+<a name="WriteBytes"></a>
+## func WriteBytes
+
+```go
+func WriteBytes(path *Path, data []byte) (int, error)
+```
+
+WriteBytes writes raw byte data to the defined file.
+
+The file is not created. Preexisting content is truncated.
+
+<a name="WriteString"></a>
+## func WriteString
+
+```go
+func WriteString(path *Path, data string) (int, error)
+```
+
+WriteString writes a string data to the defined file.
+
+The file is not created. Preexisting content is truncated.
+
 <a name="Disposable"></a>
 ## type Disposable
 
@@ -78,6 +389,39 @@ Disposable interface shows that a struct has resources that must be disposed man
 type Disposable interface {
     // Dispose cleans up struct resources.
     Dispose()
+}
+```
+
+<a name="FileOptions"></a>
+## type FileOptions
+
+FileOptions contains options for file and directory creation and deletion operations
+
+```go
+type FileOptions struct {
+    // ExistOk specifies whether it's acceptable if the file/directory already exists
+    ExistOk bool
+    // Mode specifies the file/directory permission mode
+    Mode fs.FileMode
+}
+```
+
+<a name="OpenOptions"></a>
+## type OpenOptions
+
+OpenOptions is a configuration struct for opening files.
+
+```go
+type OpenOptions struct {
+    // Create the file if it does not exist.
+    CreateIfNotExists bool
+
+    // Permissions for file creation.
+    Permission os.FileMode
+
+    // Open mode. Loosely defined as a string that may only contain "r" (read), "w" (write) and "a" (append).
+    // Enforced by functions that receive this struct.
+    Mode string
 }
 ```
 
@@ -150,7 +494,7 @@ func TempBaseDir() *Path
 func (p *Path) Absolute() (*Path, error)
 ```
 
-Absolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory.
+Absolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
 
 This function utilizes filepath.Abs.
 
@@ -224,6 +568,15 @@ func (p *Path) EqualsFlat(other *Path) bool
 ```
 
 EqualsFlat returns whether this and another Path are structurally equal by ignoring case sensitivity.
+
+<a name="Path.EqualsFs"></a>
+### func \(\*Path\) EqualsFs
+
+```go
+func (p *Path) EqualsFs(other *Path) bool
+```
+
+EqualsFs returns whether this Path and another Path point to the same file system object. This comparison is performed using file stats, not string comparison.
 
 <a name="Path.EqualsString"></a>
 ### func \(\*Path\) EqualsString
@@ -316,6 +669,33 @@ On non\-Windows operating systems, the Windows path root \(e.g. 'C:\\'\) is not 
 
 This function utilizes filepath.IsAbs.
 
+<a name="Path.IsBlockDevice"></a>
+### func \(\*Path\) IsBlockDevice
+
+```go
+func (p *Path) IsBlockDevice() bool
+```
+
+IsBlockDevice returns whether this Path is a block device.
+
+<a name="Path.IsCaseSensitive"></a>
+### func \(\*Path\) IsCaseSensitive
+
+```go
+func (p *Path) IsCaseSensitive() bool
+```
+
+IsCaseSensitive returns whether this Path is on a case\-sensitive filesystem.
+
+<a name="Path.IsCharDevice"></a>
+### func \(\*Path\) IsCharDevice
+
+```go
+func (p *Path) IsCharDevice() bool
+```
+
+IsCharDevice returns whether this Path is a character device.
+
 <a name="Path.IsDir"></a>
 ### func \(\*Path\) IsDir
 
@@ -324,6 +704,15 @@ func (p *Path) IsDir() bool
 ```
 
 IsDir returns whether this Path is an existing directory.
+
+<a name="Path.IsFiFoPipe"></a>
+### func \(\*Path\) IsFiFoPipe
+
+```go
+func (p *Path) IsFiFoPipe() bool
+```
+
+IsFiFoPipe returns whether this Path is a FIFO/pipe.
 
 <a name="Path.IsFile"></a>
 ### func \(\*Path\) IsFile
@@ -344,6 +733,24 @@ func (p *Path) IsRelative() bool
 IsRelative returns whether this Path is relative.
 
 This function returns the inverse of IsAbsolute.
+
+<a name="Path.IsSocket"></a>
+### func \(\*Path\) IsSocket
+
+```go
+func (p *Path) IsSocket() bool
+```
+
+IsSocket returns whether this Path is a socket.
+
+<a name="Path.IsSymlink"></a>
+### func \(\*Path\) IsSymlink
+
+```go
+func (p *Path) IsSymlink() bool
+```
+
+IsSymlink returns whether this Path is a symbolic link.
 
 <a name="Path.Join"></a>
 ### func \(\*Path\) Join
@@ -366,6 +773,17 @@ func (p *Path) JoinStrings(paths ...string) *Path
 JoinStrings returns a new Path with all passed strings joined together.
 
 This function utilizes filepath.Join.
+
+<a name="Path.Lstat"></a>
+### func \(\*Path\) Lstat
+
+```go
+func (p *Path) Lstat() (os.FileInfo, error)
+```
+
+Lstat returns file info for this Path, not following symbolic links.
+
+This function utilizes os.Lstat.
 
 <a name="Path.MarshalText"></a>
 ### func \(\*Path\) MarshalText
@@ -414,9 +832,7 @@ This function utilizes filepath.Rel.
 func (p *Path) Resolve() (*Path, error)
 ```
 
-Resolve resolves all symbolic links. If this Path is relative, the result will be relative to the current directory, unless one of the components is an absolute symbolic link.
-
-Resolve requires this Path to exist.
+Resolve resolves all symbolic links and ensures an absolute path representation.
 
 This function utilizes filepath.EvalSymlinks.
 
@@ -439,6 +855,17 @@ func (p *Path) Split() (*Path, string)
 ```
 
 Split splits this Path into its parent and base.
+
+<a name="Path.Stat"></a>
+### func \(\*Path\) Stat
+
+```go
+func (p *Path) Stat() (os.FileInfo, error)
+```
+
+Stat returns file info for this Path.
+
+This function utilizes os.Stat.
 
 <a name="Path.Stem"></a>
 ### func \(\*Path\) Stem
@@ -612,12 +1039,14 @@ type TempPathOptions struct {
     /*
     	BaseDir is the base directory for the temporary path.
 
-    	If set to NewPath(""), the current working directory is used.
+    	If set to NewPath(""), the current working directory is used, because NewPath("") translates to NewPath(".").
     	Keep nil for default os temp directory.
     */
     BaseDir *Path
 
-    // Prefix is the prefix added to the temporary path element.
+    /*
+    	Prefix is the prefix added to the temporary path element.
+    */
     Prefix string
 }
 ```
