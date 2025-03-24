@@ -112,27 +112,29 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 }
 
 func defaultTempFileTests(t *testing.T, p *TempPath) {
-	require.True(t, p.IsFile())
-	require.False(t, p.IsDir())
+	preDisposeStat, err := os.Stat(p.String())
+	require.NoError(t, err)
+	require.False(t, preDisposeStat.IsDir())
 
-	err := p.Dispose()
+	err = p.Dispose()
 	require.NoError(t, err)
 
-	require.False(t, p.IsFile())
-	require.False(t, p.IsDir())
-	require.False(t, p.Exists())
+	postDisposeStat, err := os.Stat(p.String())
+	require.Error(t, err)
+	require.Nil(t, postDisposeStat)
 }
 
 func defaultTempDirTests(t *testing.T, p *TempPath) {
-	require.True(t, p.IsDir())
-	require.False(t, p.IsFile())
+	preDisposeStat, err := os.Stat(p.String())
+	require.NoError(t, err)
+	require.True(t, preDisposeStat.IsDir())
 
-	err := p.Dispose()
+	err = p.Dispose()
 	require.NoError(t, err)
 
-	require.False(t, p.IsDir())
-	require.False(t, p.IsFile())
-	require.False(t, p.Exists())
+	postDisposeStat, err := os.Stat(p.String())
+	require.Error(t, err)
+	require.Nil(t, postDisposeStat)
 }
 
 func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOptions) {
