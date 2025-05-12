@@ -13,12 +13,17 @@ See https://github.com/princjef/gomarkdoc for more.
 import "github.com/jeftadlvw/go-pathlib"
 ```
 
-Package pathlib contains every functionality for go\-pathlib.
+Package pathlib contains source code for go\-pathlib.
 
 It's a one\-file library that can be used in other projects by using Go's package system or by placing the source code file itself into the source tree.
 
+pathlib.go contains lexigraphically based functions and does not interoperate with the file system. Case sensitivity is defined explicitly. Filesystem\-specific functionality is outsourced to pathlib\_fs.go.
+
+Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability.
+
 ## Index
 
+- [Variables](<#variables>)
 - [func AppendBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#AppendBytes>)
 - [func AppendString\(path \*Path, data string\) \(int, error\)](<#AppendString>)
 - [func CopyDir\(src, dst \*Path\) error](<#CopyDir>)
@@ -35,7 +40,7 @@ It's a one\-file library that can be used in other projects by using Go's packag
 - [func DeleteFile\(path \*Path\) error](<#DeleteFile>)
 - [func DeleteTree\(path \*Path\) error](<#DeleteTree>)
 - [func EqualsFs\(p1, p2 \*Path\) \(bool, error\)](<#EqualsFs>)
-- [func IsCaseSensitive\(p \*Path\) \(bool, error\)](<#IsCaseSensitive>)
+- [func IsCaseSensitiveFs\(p \*Path\) \(bool, error\)](<#IsCaseSensitiveFs>)
 - [func MoveDir\(src, dst \*Path\) error](<#MoveDir>)
 - [func MoveFile\(src, dst \*Path\) error](<#MoveFile>)
 - [func OpenFile\(path \*Path\) \(\*os.File, error\)](<#OpenFile>)
@@ -43,7 +48,7 @@ It's a one\-file library that can be used in other projects by using Go's packag
 - [func ReadFile\(path \*Path\) \(\[\]byte, error\)](<#ReadFile>)
 - [func ReadFileToString\(path \*Path\) \(string, error\)](<#ReadFileToString>)
 - [func RenameDir\(src, dst \*Path\) error](<#RenameDir>)
-- [func RenameFile\(src, dst \*Path\) error](<#RenameFile>)
+- [func RenameFile\(src \*Path, name string\) error](<#RenameFile>)
 - [func SetPerm\(path \*Path, mode fs.FileMode\) error](<#SetPerm>)
 - [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
 - [func WriteString\(path \*Path, data string\) \(int, error\)](<#WriteString>)
@@ -54,28 +59,29 @@ It's a one\-file library that can be used in other projects by using Go's packag
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
   - [func NewHome\(\) \(\*Path, error\)](<#NewHome>)
   - [func NewPath\(path string\) \*Path](<#NewPath>)
+  - [func NewPathFromOs\(path string\) \*Path](<#NewPathFromOs>)
+  - [func NewPathFromWindows\(path string\) \*Path](<#NewPathFromWindows>)
   - [func PathFromParts\(parts ...string\) \*Path](<#PathFromParts>)
   - [func TempBaseDir\(\) \*Path](<#TempBaseDir>)
   - [func \(p \*Path\) Absolute\(\) \(\*Path, error\)](<#Path.Absolute>)
   - [func \(p \*Path\) AbsoluteTo\(o \*Path\) \(\*Path, error\)](<#Path.AbsoluteTo>)
-  - [func \(p \*Path\) BContains\(pattern string\) bool](<#Path.BContains>)
+  - [func \(p \*Path\) Anchor\(\) string](<#Path.Anchor>)
   - [func \(p \*Path\) Base\(\) string](<#Path.Base>)
-  - [func \(p \*Path\) Contains\(pattern string\) \(bool, error\)](<#Path.Contains>)
   - [func \(p \*Path\) Copy\(\) \*Path](<#Path.Copy>)
-  - [func \(p \*Path\) Equals\(other \*Path\) bool](<#Path.Equals>)
-  - [func \(p \*Path\) EqualsFlat\(other \*Path\) bool](<#Path.EqualsFlat>)
+  - [func \(p \*Path\) Equals\(other \*Path, caseSensitive bool\) bool](<#Path.Equals>)
   - [func \(p \*Path\) EqualsFs\(other \*Path\) bool](<#Path.EqualsFs>)
-  - [func \(p \*Path\) EqualsString\(other string\) bool](<#Path.EqualsString>)
-  - [func \(p \*Path\) EqualsStringFlat\(other string\) bool](<#Path.EqualsStringFlat>)
+  - [func \(p \*Path\) EqualsString\(other string, caseSensitive bool\) bool](<#Path.EqualsString>)
   - [func \(p \*Path\) Exists\(\) bool](<#Path.Exists>)
   - [func \(p \*Path\) Extension\(\) string](<#Path.Extension>)
   - [func \(p \*Path\) ExtensionCount\(\) int](<#Path.ExtensionCount>)
   - [func \(p \*Path\) ExtensionParts\(\) \[\]string](<#Path.ExtensionParts>)
   - [func \(p \*Path\) Glob\(pattern string\) \(\[\]\*Path, error\)](<#Path.Glob>)
   - [func \(p \*Path\) HasExtensions\(\) bool](<#Path.HasExtensions>)
+  - [func \(p \*Path\) HasGlobMatch\(pattern string\) bool](<#Path.HasGlobMatch>)
+  - [func \(p \*Path\) HasGlobMatchE\(pattern string\) \(bool, error\)](<#Path.HasGlobMatchE>)
   - [func \(p \*Path\) IsAbsolute\(\) bool](<#Path.IsAbsolute>)
   - [func \(p \*Path\) IsBlockDevice\(\) bool](<#Path.IsBlockDevice>)
-  - [func \(p \*Path\) IsCaseSensitive\(\) bool](<#Path.IsCaseSensitive>)
+  - [func \(p \*Path\) IsCaseSensitiveFs\(\) bool](<#Path.IsCaseSensitiveFs>)
   - [func \(p \*Path\) IsCharDevice\(\) bool](<#Path.IsCharDevice>)
   - [func \(p \*Path\) IsDir\(\) bool](<#Path.IsDir>)
   - [func \(p \*Path\) IsFiFoPipe\(\) bool](<#Path.IsFiFoPipe>)
@@ -87,11 +93,14 @@ It's a one\-file library that can be used in other projects by using Go's packag
   - [func \(p \*Path\) JoinStrings\(paths ...string\) \*Path](<#Path.JoinStrings>)
   - [func \(p \*Path\) Lstat\(\) \(os.FileInfo, error\)](<#Path.Lstat>)
   - [func \(p \*Path\) MarshalText\(\) \(text \[\]byte, err error\)](<#Path.MarshalText>)
+  - [func \(p \*Path\) MatchesPattern\(pattern string, caseSensitive bool\) bool](<#Path.MatchesPattern>)
+  - [func \(p \*Path\) MatchesPatternE\(pattern string, caseSensitive bool\) \(bool, error\)](<#Path.MatchesPatternE>)
+  - [func \(p \*Path\) MatchesPatternFsCasing\(pattern string\) bool](<#Path.MatchesPatternFsCasing>)
+  - [func \(p \*Path\) MatchesPatternFsCasingE\(pattern string\) \(bool, error\)](<#Path.MatchesPatternFsCasingE>)
   - [func \(p \*Path\) Parent\(\) \*Path](<#Path.Parent>)
   - [func \(p \*Path\) Parts\(\) \[\]string](<#Path.Parts>)
   - [func \(p \*Path\) RelativeTo\(o \*Path\) \(\*Path, error\)](<#Path.RelativeTo>)
   - [func \(p \*Path\) Resolve\(\) \(\*Path, error\)](<#Path.Resolve>)
-  - [func \(p \*Path\) Root\(\) string](<#Path.Root>)
   - [func \(p \*Path\) Split\(\) \(\*Path, string\)](<#Path.Split>)
   - [func \(p \*Path\) Stat\(\) \(os.FileInfo, error\)](<#Path.Stat>)
   - [func \(p \*Path\) Stem\(\) string](<#Path.Stem>)
@@ -107,6 +116,14 @@ It's a one\-file library that can be used in other projects by using Go's packag
   - [func \(p \*TempPath\) Dispose\(\) error](<#TempPath.Dispose>)
 - [type TempPathOptions](<#TempPathOptions>)
 
+
+## Variables
+
+<a name="PrintBackslashWarningOnPosix"></a>PrintBackslashWarningOnPosix is a toggle for printing a warning on Posix if a path string contains a backslash.
+
+```go
+var PrintBackslashWarningOnPosix = true
+```
 
 <a name="AppendBytes"></a>
 ## func AppendBytes
@@ -260,14 +277,20 @@ func EqualsFs(p1, p2 *Path) (bool, error)
 
 EqualsFs returns whether the two paths point to the same file system object. This comparison is performed using file stats, not string comparison.
 
-<a name="IsCaseSensitive"></a>
-## func IsCaseSensitive
+<a name="IsCaseSensitiveFs"></a>
+## func IsCaseSensitiveFs
 
 ```go
-func IsCaseSensitive(p *Path) (bool, error)
+func IsCaseSensitiveFs(p *Path) (bool, error)
 ```
 
-IsCaseSensitive checks if the filesystem at the specified path is case\-sensitive. It creates a temporary file, then checks if the same path with different case can be accessed.
+IsCaseSensitiveFs checks if the filesystem at the specified path is case\-sensitive.
+
+It first tries to check for the given path, toggling the casing of the first encountered letter in the path's base, checking if the file exists and if both file descriptors point to the same file.
+
+If no letter exists within the path's base, a temporary file is created in the same directory with which the upper procedure is repeated.
+
+If both attempts don't result a valid state, an error is returned.
 
 <a name="MoveDir"></a>
 ## func MoveDir
@@ -296,7 +319,7 @@ func OpenFile(path *Path) (*os.File, error)
 
 OpenFile opens a file for reading and writing. If the file does not exist, it is created with 0644 permissions. If the file already exists, it is truncated.
 
-It's the callers responsibility to close the os.File.
+It's the caller's responsibility to close the returned os.File.
 
 <a name="OpenFileWithOptions"></a>
 ## func OpenFileWithOptions
@@ -311,7 +334,7 @@ If OpenOptions.Permission is 0, the value defaults to 0644. If OpenOptions.Mode 
 
 The order for OpenOptions.Mode is enforced as follows: "r" \(read\), "w" \(write\), "a" \(append\) must be used in exactly this order. "a" can only be used if "w" is used.
 
-It's the callers responsibility to close the os.File.
+It's the caller's responsibility to close the returned os.File.
 
 <a name="ReadFile"></a>
 ## func ReadFile
@@ -344,7 +367,7 @@ RenameDir renames the directory at the source path to the destination path. This
 ## func RenameFile
 
 ```go
-func RenameFile(src, dst *Path) error
+func RenameFile(src *Path, name string) error
 ```
 
 RenameFile renames the file at the source path to the destination path. This is a wrapper for MoveFile.
@@ -376,7 +399,7 @@ The file is not created. Preexisting content is truncated.
 func WriteString(path *Path, data string) (int, error)
 ```
 
-WriteString writes a string data to the defined file.
+WriteString writes a string to the defined file.
 
 The file is not created. Preexisting content is truncated.
 
@@ -447,7 +470,7 @@ func NewCwd() (*Path, error)
 
 NewCwd returns a new Path instance pointing to the application's current working directory.
 
-This function utilizes os.Getwd.
+This function uses os.Getwd.
 
 <a name="NewHome"></a>
 ### func NewHome
@@ -458,7 +481,7 @@ func NewHome() (*Path, error)
 
 NewHome returns a new Path instance pointing to the user's home directory.
 
-This function utilizes os.UserHomeDir.
+This function uses os.UserHomeDir.
 
 <a name="NewPath"></a>
 ### func NewPath
@@ -468,6 +491,26 @@ func NewPath(path string) *Path
 ```
 
 NewPath is the constructor function for a new Path struct instance. The passed path string is automatically cleaned and ready for further use.
+
+<a name="NewPathFromOs"></a>
+### func NewPathFromOs
+
+```go
+func NewPathFromOs(path string) *Path
+```
+
+NewPathFromOs ensure correct internal state and behavior depending on the current operating system.
+
+It is meant to be used when handling file paths received by the operating system by system calls or subprocesses.
+
+<a name="NewPathFromWindows"></a>
+### func NewPathFromWindows
+
+```go
+func NewPathFromWindows(path string) *Path
+```
+
+NewPathFromWindows applies preprocessing to the passed path string to ensure a correct internal state and behavior for Windows\-styled path strings.
 
 <a name="PathFromParts"></a>
 ### func PathFromParts
@@ -496,7 +539,7 @@ func (p *Path) Absolute() (*Path, error)
 
 Absolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
 
-This function utilizes filepath.Abs.
+This function uses filepath.Abs.
 
 <a name="Path.AbsoluteTo"></a>
 ### func \(\*Path\) AbsoluteTo
@@ -505,18 +548,26 @@ This function utilizes filepath.Abs.
 func (p *Path) AbsoluteTo(o *Path) (*Path, error)
 ```
 
-AbsoluteTo returns an absolute representation of this Path towards another. If the Path is relative, it will be joined with the provided Path, else this Path is returned.
+AbsoluteTo returns an absolute representation of this Path towards another.
+
+If the Path is relative, it will be joined with the provided Path, else a copy of this Path is returned.
+
+The other path must be absolute.
 
 Requires the other Path to be absolute.
 
-<a name="Path.BContains"></a>
-### func \(\*Path\) BContains
+<a name="Path.Anchor"></a>
+### func \(\*Path\) Anchor
 
 ```go
-func (p *Path) BContains(pattern string) bool
+func (p *Path) Anchor() string
 ```
 
-BContains returns whether the passed pattern exists within this Path's directory. It wraps Contains and returns the boolean success value.
+Anchor returns the first part of the path.
+
+On absolute paths this is the filesystem root \("/"\). For Windows paths the raw volume name is returned \(e.g. "C:" or "//host/share"\)
+
+Relative paths don't have a defined anchor, "" is returned.
 
 <a name="Path.Base"></a>
 ### func \(\*Path\) Base
@@ -527,18 +578,7 @@ func (p *Path) Base() string
 
 Base returns the last element of this Path.
 
-This function utilizes filepath.Base.
-
-<a name="Path.Contains"></a>
-### func \(\*Path\) Contains
-
-```go
-func (p *Path) Contains(pattern string) (bool, error)
-```
-
-Contains returns whether the passed pattern exist within this Path's directory.
-
-This function utilizes filepath.Glob.
+This function uses filepath.Base.
 
 <a name="Path.Copy"></a>
 ### func \(\*Path\) Copy
@@ -549,25 +589,14 @@ func (p *Path) Copy() *Path
 
 Copy creates a copy of this Path.
 
-Fresh out of the oven, just for you.
-
 <a name="Path.Equals"></a>
 ### func \(\*Path\) Equals
 
 ```go
-func (p *Path) Equals(other *Path) bool
+func (p *Path) Equals(other *Path, caseSensitive bool) bool
 ```
 
 Equals returns whether this and another Path match lexically.
-
-<a name="Path.EqualsFlat"></a>
-### func \(\*Path\) EqualsFlat
-
-```go
-func (p *Path) EqualsFlat(other *Path) bool
-```
-
-EqualsFlat returns whether this and another Path are structurally equal by ignoring case sensitivity.
 
 <a name="Path.EqualsFs"></a>
 ### func \(\*Path\) EqualsFs
@@ -582,21 +611,10 @@ EqualsFs returns whether this Path and another Path point to the same file syste
 ### func \(\*Path\) EqualsString
 
 ```go
-func (p *Path) EqualsString(other string) bool
+func (p *Path) EqualsString(other string, caseSensitive bool) bool
 ```
 
 EqualsString returns whether this and the passed string match lexically.
-
-This function converts the passed string to a Path object and calls Equals.
-
-<a name="Path.EqualsStringFlat"></a>
-### func \(\*Path\) EqualsStringFlat
-
-```go
-func (p *Path) EqualsStringFlat(other string) bool
-```
-
-EqualsStringFlat returns whether the passed string matches this Path by ignoring case sensitivity.
 
 <a name="Path.Exists"></a>
 ### func \(\*Path\) Exists
@@ -625,7 +643,7 @@ Everything starting from the first non\-leading dot in this Path's Stem\(\) is c
 func (p *Path) ExtensionCount() int
 ```
 
-ExtensionCount returns the amount of extensions this Path has.
+ExtensionCount returns the number of extensions this Path has.
 
 <a name="Path.ExtensionParts"></a>
 ### func \(\*Path\) ExtensionParts
@@ -634,7 +652,9 @@ ExtensionCount returns the amount of extensions this Path has.
 func (p *Path) ExtensionParts() []string
 ```
 
-ExtensionParts returns all this Path's extensions as an array without the leading dots.
+ExtensionParts returns all this Path's extensions.
+
+See Extension for what is considered an extension.
 
 <a name="Path.Glob"></a>
 ### func \(\*Path\) Glob
@@ -656,6 +676,26 @@ func (p *Path) HasExtensions() bool
 
 HasExtensions returns whether this Path has file extensions.
 
+<a name="Path.HasGlobMatch"></a>
+### func \(\*Path\) HasGlobMatch
+
+```go
+func (p *Path) HasGlobMatch(pattern string) bool
+```
+
+HasGlobMatch returns whether the passed pattern exists within this Path's directory. It wraps HasGlobMatchE and returns the boolean success value or false in case of an error.
+
+<a name="Path.HasGlobMatchE"></a>
+### func \(\*Path\) HasGlobMatchE
+
+```go
+func (p *Path) HasGlobMatchE(pattern string) (bool, error)
+```
+
+HasGlobMatchE returns whether the passed pattern exist within this Path's directory.
+
+This function utilizes filepath.Glob.
+
 <a name="Path.IsAbsolute"></a>
 ### func \(\*Path\) IsAbsolute
 
@@ -665,9 +705,7 @@ func (p *Path) IsAbsolute() bool
 
 IsAbsolute returns whether this Path is absolute.
 
-On non\-Windows operating systems, the Windows path root \(e.g. 'C:\\'\) is not considered a file root but as a regular \(relative\) path element. Thus, this function would return false.
-
-This function utilizes filepath.IsAbs.
+This function uses filepath.IsAbs.
 
 <a name="Path.IsBlockDevice"></a>
 ### func \(\*Path\) IsBlockDevice
@@ -678,14 +716,14 @@ func (p *Path) IsBlockDevice() bool
 
 IsBlockDevice returns whether this Path is a block device.
 
-<a name="Path.IsCaseSensitive"></a>
-### func \(\*Path\) IsCaseSensitive
+<a name="Path.IsCaseSensitiveFs"></a>
+### func \(\*Path\) IsCaseSensitiveFs
 
 ```go
-func (p *Path) IsCaseSensitive() bool
+func (p *Path) IsCaseSensitiveFs() bool
 ```
 
-IsCaseSensitive returns whether this Path is on a case\-sensitive filesystem.
+IsCaseSensitiveFs returns whether this Path is on a case\-sensitive filesystem.
 
 <a name="Path.IsCharDevice"></a>
 ### func \(\*Path\) IsCharDevice
@@ -759,9 +797,11 @@ IsSymlink returns whether this Path is a symbolic link.
 func (p *Path) Join(paths ...*Path) *Path
 ```
 
-Join returns a new Path with all passed Path structs joined together. Use JoinStrings to join strings with this Path.
+Join returns a new Path with all passed Path structs joined together. Paths are not checked whether they are absolute or relative.
 
-This function utilizes filepath.Join.
+Use JoinStrings to join strings with this Path.
+
+This function uses filepath.Join.
 
 <a name="Path.JoinStrings"></a>
 ### func \(\*Path\) JoinStrings
@@ -772,7 +812,7 @@ func (p *Path) JoinStrings(paths ...string) *Path
 
 JoinStrings returns a new Path with all passed strings joined together.
 
-This function utilizes filepath.Join.
+This function uses filepath.Join.
 
 <a name="Path.Lstat"></a>
 ### func \(\*Path\) Lstat
@@ -792,7 +832,51 @@ This function utilizes os.Lstat.
 func (p *Path) MarshalText() (text []byte, err error)
 ```
 
-MarshalText marshals this Path into a byte array. Implements the encoding.TextMarshaler interface.
+MarshalText marshals this Path's Posix representation into a byte array. Implements the encoding.TextMarshaler interface.
+
+<a name="Path.MatchesPattern"></a>
+### func \(\*Path\) MatchesPattern
+
+```go
+func (p *Path) MatchesPattern(pattern string, caseSensitive bool) bool
+```
+
+MatchesPattern matches this Path against the provided pattern. It wraps MatchesPatternE and returns the boolean success return value or false in case of an error.
+
+<a name="Path.MatchesPatternE"></a>
+### func \(\*Path\) MatchesPatternE
+
+```go
+func (p *Path) MatchesPatternE(pattern string, caseSensitive bool) (bool, error)
+```
+
+MatchesPatternE matches this Path against the provided pattern. Returns whether the matching is successful or any occurring error.
+
+Uses path.Match. Use forward slashes as path separators.
+
+Empty patterns are not allowed.
+
+<a name="Path.MatchesPatternFsCasing"></a>
+### func \(\*Path\) MatchesPatternFsCasing
+
+```go
+func (p *Path) MatchesPatternFsCasing(pattern string) bool
+```
+
+MatchesPatternFsCasing matches this path against the provided pattern. It wraps MatchesPatternFsCasingE and returns the boolean success return value or false in case of an error.
+
+<a name="Path.MatchesPatternFsCasingE"></a>
+### func \(\*Path\) MatchesPatternFsCasingE
+
+```go
+func (p *Path) MatchesPatternFsCasingE(pattern string) (bool, error)
+```
+
+MatchesPatternFsCasingE matches this path against the provided pattern. Returns whether the matching is successful or any occurring error.
+
+Matching is performed based on the file system case sensitivity.
+
+Empty patterns are not allowed.
 
 <a name="Path.Parent"></a>
 ### func \(\*Path\) Parent
@@ -803,7 +887,7 @@ func (p *Path) Parent() *Path
 
 Parent returns a copy of this Path in the parent directory.
 
-This function utilizes filepath.Dir.
+This function uses filepath.Dir.
 
 <a name="Path.Parts"></a>
 ### func \(\*Path\) Parts
@@ -823,7 +907,7 @@ func (p *Path) RelativeTo(o *Path) (*Path, error)
 
 RelativeTo returns this Path relative to another.
 
-This function utilizes filepath.Rel.
+This function uses filepath.Rel.
 
 <a name="Path.Resolve"></a>
 ### func \(\*Path\) Resolve
@@ -835,17 +919,6 @@ func (p *Path) Resolve() (*Path, error)
 Resolve resolves all symbolic links and ensures an absolute path representation.
 
 This function utilizes filepath.EvalSymlinks.
-
-<a name="Path.Root"></a>
-### func \(\*Path\) Root
-
-```go
-func (p *Path) Root() string
-```
-
-Root returns the first part of the path. On absolute paths this is the filesystem root, on relative paths all parts up to the first non\-'..' part are included.
-
-On Unix\-based operating systems, the Windows path root \(e.g. 'C:\\'\) is not considered a filepath root. However, it will be returned as a root because 'C:\\' or 'C:/' is seen as the root of a relative path.
 
 <a name="Path.Split"></a>
 ### func \(\*Path\) Split
@@ -901,7 +974,7 @@ ToPosix returns a string representation with forward slashes.
 func (p *Path) UnmarshalText(text []byte) error
 ```
 
-UnmarshalText unmarshalls any byte array into a Path type. Implements the encoding.TextUnmarshaler interface.
+UnmarshalText unmarshalls any byte array into a Path type using the NewPath constructor. Implements the encoding.TextUnmarshaler interface.
 
 <a name="Path.WithName"></a>
 ### func \(\*Path\) WithName
