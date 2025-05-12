@@ -105,6 +105,6 @@ Although we recommend handling paths in a case-insensitive manner, we respect st
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
 
 ## Attributions 🖊️
-See [NOTICES.md](NOTICES.md) for a complete list of used third party projects and source code.
+See [NOTICE.md](NOTICE.md) for a complete list of used third party projects and source code.
 
 The displayed Gopher in the artwork is licensed under the [_Creative Commons 4.0 Attribution License_](https://creativecommons.org/licenses/by/4.0/) as per https://go.dev/brand#logo (last seen: 30-09-2024). This project's artwork falls under the same licence.
