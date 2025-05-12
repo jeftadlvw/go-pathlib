@@ -99,7 +99,7 @@ Glob returns all paths matching the given pattern within this Path's directory.
 This function utilizes filepath.Glob. It ignores IO errors.
 */
 func (p *Path) Glob(pattern string) ([]*Path, error) {
-	matches, err := nativeGlob(p, pattern)
+	matches, err := nativeGlob(p, pattern, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -113,12 +113,12 @@ func (p *Path) Glob(pattern string) ([]*Path, error) {
 }
 
 /*
-Contains returns whether the passed pattern exist within this Path's directory.
+HasGlobMatchE returns whether the passed pattern exist within this Path's directory.
 
 This function utilizes filepath.Glob.
 */
-func (p *Path) Contains(pattern string) (bool, error) {
-	matches, err := nativeGlob(p, pattern)
+func (p *Path) HasGlobMatchE(pattern string) (bool, error) {
+	matches, err := nativeGlob(p, pattern, 1)
 	if err != nil {
 		return false, err
 	}
@@ -127,12 +127,43 @@ func (p *Path) Contains(pattern string) (bool, error) {
 }
 
 /*
-BContains returns whether the passed pattern exists within this Path's directory.
-It wraps Contains and returns the boolean success value.
+HasGlobMatch returns whether the passed pattern exists within this Path's directory.
+It wraps HasGlobMatchE and returns the boolean success value or false in case of an error.
 */
-func (p *Path) BContains(pattern string) bool {
-	contains, _ := p.Contains(pattern)
+func (p *Path) HasGlobMatch(pattern string) bool {
+	contains, err := p.HasGlobMatchE(pattern)
+	if err != nil {
+		return false
+	}
+
 	return contains
+}
+
+/*
+MatchesPatternFsCasingE matches this path against the provided pattern.
+Returns whether the matching is successful or any occurring error.
+
+Matching is performed based on the file system case sensitivity.
+
+Empty patterns are not allowed.
+*/
+func (p *Path) MatchesPatternFsCasingE(pattern string) (bool, error) {
+	// TODO implement
+	panic("not implemented")
+}
+
+/*
+MatchesPatternFsCasing matches this path against the provided pattern.
+It wraps MatchesPatternFsCasingE and returns the boolean success return value
+or false in case of an error.
+*/
+func (p *Path) MatchesPatternFsCasing(pattern string) bool {
+	match, err := p.MatchesPatternFsCasingE(pattern)
+	if err != nil {
+		return false
+	}
+
+	return match
 }
 
 /*
@@ -141,7 +172,7 @@ Stat returns file info for this Path.
 This function utilizes os.Stat.
 */
 func (p *Path) Stat() (os.FileInfo, error) {
-	return os.Stat(p.path)
+	return os.Stat(p.String())
 }
 
 /*
@@ -150,7 +181,7 @@ Lstat returns file info for this Path, not following symbolic links.
 This function utilizes os.Lstat.
 */
 func (p *Path) Lstat() (os.FileInfo, error) {
-	return os.Lstat(p.path)
+	return os.Lstat(p.String())
 }
 
 /*
@@ -198,10 +229,10 @@ func (p *Path) EqualsFs(other *Path) bool {
 }
 
 /*
-IsCaseSensitive returns whether this Path is on a case-sensitive filesystem.
+IsCaseSensitiveFs returns whether this Path is on a case-sensitive filesystem.
 */
-func (p *Path) IsCaseSensitive() bool {
-	caseSensitive, err := IsCaseSensitive(p)
+func (p *Path) IsCaseSensitiveFs() bool {
+	caseSensitive, err := IsCaseSensitiveFs(p)
 	return caseSensitive && err == nil
 }
 
@@ -487,8 +518,8 @@ func MoveDir(src, dst *Path) error {
 RenameFile renames the file at the source path to the destination path.
 This is a wrapper for MoveFile.
 */
-func RenameFile(src, dst *Path) error {
-	return MoveFile(src, dst)
+func RenameFile(src *Path, name string) error {
+	return MoveFile(src, src.Parent().JoinStrings(name))
 }
 
 /*
@@ -593,13 +624,21 @@ func EqualsFs(p1, p2 *Path) (bool, error) {
 }
 
 /*
-IsCaseSensitive checks if the filesystem at the specified path is case-sensitive.
-It creates a temporary file, then checks if the same path with different case can be accessed.
+IsCaseSensitiveFs checks if the filesystem at the specified path is case-sensitive.
+
+It first tries to check for the given path, toggling the casing of the first encountered letter in the path's base,
+checking if the file exists and if both file descriptors point to the same file.
+
+If no letter exists within the path's base, a temporary file is created in the same directory with which the upper procedure is repeated.
+
+If both attempts don't result a valid state, an error is returned.
 */
-func IsCaseSensitive(p *Path) (bool, error) {
+func IsCaseSensitiveFs(p *Path) (bool, error) {
 	if !p.Exists() {
 		return false, errors.New("path does not exist")
 	}
+
+	// TODO Implement as stated in function documentation
 
 	// Get a directory to test in
 	var testDir *Path
@@ -608,6 +647,9 @@ func IsCaseSensitive(p *Path) (bool, error) {
 	} else {
 		testDir = p.Parent()
 	}
+
+	// TODO change case of file name and check if both exist and are same stat
+	//  instead of creating a new file (which may fails due to permissions)
 
 	// Create temporary file in directory with forced lowercase prefix.
 	// A forced lowercase prefix is important so we can test the  filesystem case sensitivity
@@ -659,17 +701,22 @@ func pathCheck(p *Path) int {
 nativeGlob is a wrapper function for Go's filepath.Glob.
 It checks if the passed Path exists and returns the raw matches or errors.
 
+If n == 0, all matches are returned. Else, <= n matches are returned.
+
 Returns an error if pattern is an empty string.
 
 filepath.Glob ignores IO errors.
 */
-func nativeGlob(p *Path, pattern string) ([]string, error) {
+func nativeGlob(p *Path, pattern string, n uint) ([]string, error) {
+	// TODO use os.Readdir(https://pkg.go.dev/os#File.Readdir) for more granular control on amount
+	// TODO support recursive globbing "**"
+
 	if strings.TrimSpace(pattern) == "" {
 		return nil, errors.New("pattern must not be empty")
 	}
 
 	if !p.Exists() {
-		return nil, errors.New("this Path does not exist")
+		return nil, errors.New("this path does not exist")
 	}
 
 	if !p.IsDir() {

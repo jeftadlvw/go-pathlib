@@ -11,7 +11,7 @@ import (
 func TestTempBaseDir(t *testing.T) {
 	tempBaseDir := TempBaseDir()
 
-	require.True(t, tempBaseDir.Equals(NewPath(os.TempDir())))
+	require.True(t, tempBaseDir.Equals(NewPath(os.TempDir()), true))
 	require.True(t, tempBaseDir.IsDir())
 }
 
@@ -49,7 +49,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 		require.NoError(t, err)
 		defaultTests(t, tempFile)
 
-		require.True(t, tempFile.Parent().Equals(TempBaseDir()))
+		require.True(t, tempFile.Parent().Equals(TempBaseDir(), true))
 	})
 
 	baseDirCases := []*Path{
@@ -145,6 +145,6 @@ func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOption
 
 	expectedPrefix := opts.Prefix
 
-	require.True(t, p.Parent().Equals(expectedBaseDir))
+	require.True(t, p.Parent().Equals(expectedBaseDir, true))
 	require.True(t, strings.HasPrefix(p.Base(), expectedPrefix))
 }

@@ -169,8 +169,8 @@ func TestPath_GlobContains(t *testing.T) {
 		pattern := input[1]
 
 		matches, globErr := path.Glob(pattern)
-		contains, containsErr := path.Contains(pattern)
-		containsB := path.BContains(pattern)
+		contains, containsErr := path.HasGlobMatchE(pattern)
+		containsB := path.HasGlobMatch(pattern)
 
 		require.Equal(t, error, globErr != nil)
 		require.Equal(t, error, containsErr != nil)
