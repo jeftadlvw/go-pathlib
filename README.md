@@ -51,25 +51,41 @@ Although the core API exists, I'd like to test the look and feel of this library
 The following features are planned and fixed on the roadmap. They extend the API and improve the integration into other ecosystems. Because _go-pathlib_ should stay a single-file library, new features are categorized into optional extensions.
 
 **0.0.3**
-- [ ] filesystem operations (create, move, delete or rename files and directories)
-- [x] APIs for temporary files and directories
-- [ ] abstraction: get stats
-- [x] abstraction: open files
-- [ ] filesystem case sensitivity: compare paths on filesystem level, check if path is case-sensitive
+
+_The APIs are nearly complete but still need testing._
+
+- [ ] `pathlib_fs.go`: filesystem operations (create, move, delete or rename files and directories, get stats, filesystem-level equality check, ...)
+- [x] `pathlib_io.go`: open files, read, write
+- [x] `pathlib_temp.go`: API for temporary files and directories
+
+_0.0.3 also adds support for Windows-style path strings, which still needs testing for every core function._
 
 **Future**
 - [ ] recursive globbing using double asterisks (stable and tested without using external dependencies)
 - [ ] extend globbing to not include directories
 - [ ] implement "range over function" for globbing (requires newer go versions)
 - [ ] function to check if a file is (semantically) hidden
-- [ ] tested Windows support
+- [ ] fully tested Windows path support
 
 **Planned extensions**
 - [ ] integration into [go-validator](https://github.com/go-playground/validator) (custom field types and validators)
 
 This is a non-exhaustive list. Feel free to suggest other features and integrations!
 
-## Recommendations 🌚
+## Intended usage and gotcha's 🌚
+### Posix vs. Windows path representation
+Posix first, Windows derived.
+
+The default constructor `NewPath()` assumes a Posix path. If you know that your path string is a Windows path representation, use `NewPathFromWindows()`. This constructor ensures correct handling of existing volume names or UNC-path roots.
+
+Windows paths are transformed to Posix (including some encoding) and transformed back if needed (like `String()` on Windows runtimes).
+
+
+### `\` on Posix vs `\` on Windows
+Backslashes (`\`) are allowed in regular Posix path part _names_, but are seen as _path separators_ in Windows paths. Thus, a path string containing a backslash is interpreted differently on different operating systems. This is a problem if a filepath with backslashes is persisted using Posix and read/used on Windows.
+
+There is really nothing to prevent this behavior, which is why this library prints a warning to stderr if a Posix path string contains a backslash. You can disable these warnings by setting `pathlib.PrintBackslashWarningOnPosix` to `false`.
+
 ### Persisting file paths
 When persisting file paths in e.g. configuration files or a database, use **lowercase paths** and use the **posix representation** for maximum portability. Also persist a path **relative to some base path**, and resolve the absolute path at runtime.
 
@@ -83,12 +99,7 @@ Whether you design the paths in your application to be case-sensitive or not is 
 Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default while allowing flexibility explicitly**. We provide several functions to check for path equality:
 - `Equals`: default, lexical, case-sensitive
 - `EqualsFlat`: lexical, case-insensitive
-- `EqualsFs` _(unimplemented)_: filesystem equality
-
-## Gotcha's ‼️
-On Unix-based operating systems, Windows path roots (e.g. `C:\` or `D:\`) are not considered as filepath roots. Instead, they are seen as relative path elements. With this in mind, `Path.Root()` might still "correctly" return e.g. `C:` for `C:/foo.bar` on Unix-based operating systems.
-
-This is also why it's recommended to persist relative paths, so you won't fall into these implementation detail traps.
+- `EqualsFs`: filesystem equality (only in `pathlib_fs.go`)
 
 ## Contributing 👥
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
