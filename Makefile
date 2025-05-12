@@ -1,4 +1,4 @@
-.PHONY: test
+.PHONY: test doc-gen
 
 test:
 	@go test
