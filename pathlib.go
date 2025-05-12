@@ -52,6 +52,10 @@ var windowsNetworkPathRegex = regexp.MustCompile("^//[a-zA-Z0-9]+/[a-zA-Z0-9]+")
 var multipleCanonicalPathSeparatorsRegex = regexp.MustCompile(`//+`)
 var multipleWindowsPathSeparatorsRegex = regexp.MustCompile(`\\+`)
 
+// PrintBackslashWarningOnPosix is a toggle for printing a warning on Posix
+// if a path string contains a backslash.
+var PrintBackslashWarningOnPosix = true
+
 /*
 Path is a struct that represents a filesystem path.
 
@@ -617,7 +621,7 @@ func normalizePath(p string) string {
 	directoryDepth := 0
 
 	// anchorDepth counts the depth of a possible anchor. It will always be >= 0
-	// and can lexicographically not be incremented
+	// and can lexically not be incremented
 	anchorDepth := 0
 
 	for _, part := range splitParts {
@@ -845,8 +849,6 @@ func flipCase(s string) string {
 	}
 	return strings.ToLower(firstChar) + s[1:]
 }
-
-var PrintBackslashWarningOnPosix = true
 
 /*
 warnForBackslashesOnPosix prints a warning if we're running on in a non-Windows environment
