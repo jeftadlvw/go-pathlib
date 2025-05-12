@@ -37,7 +37,7 @@ OpenFile opens a file for reading and writing.
 If the file does not exist, it is created with 0644 permissions. If the file already
 exists, it is truncated.
 
-It's the callers responsibility to close the os.File.
+It's the caller's responsibility to close the returned os.File.
 */
 func OpenFile(path *Path) (*os.File, error) {
 	return OpenFileWithOptions(path, defaultOpenOptions())
@@ -52,7 +52,7 @@ If OpenOptions.Mode is an empty string, it defaults to "rw"
 The order for OpenOptions.Mode is enforced as follows: "r" (read), "w" (write), "a" (append) must be used
 in exactly this order. "a" can only be used if "w" is used.
 
-It's the callers responsibility to close the os.File.
+It's the caller's responsibility to close the returned os.File.
 */
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 
@@ -60,12 +60,12 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 		return nil, errors.New("permission out of bounds. min: 0, max: Oo777")
 	}
 
-	// set default permission value
+	// set the default permission value
 	if opts.Permission == 0 {
 		opts.Permission = defaultOpenPermission
 	}
 
-	// set default open mode
+	// set the default open mode
 	if len(opts.Mode) == 0 {
 		opts.Mode = defaultOpenMode
 	}
@@ -96,7 +96,7 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 		return nil, err
 	}
 
-	// Fun fact: unix based operating systems support open a file descriptor
+	// Fun fact: Unix-based operating systems support opening a file descriptor
 	// on directory paths in readonly mode. Fuck that inconsistency and return an error
 	// if the path is a directory.
 	stat, err := file.Stat()
@@ -138,7 +138,7 @@ func WriteBytes(path *Path, data []byte) (int, error) {
 }
 
 /*
-WriteString writes a string data to the defined file.
+WriteString writes a string to the defined file.
 
 The file is not created. Preexisting content is truncated.
 */
