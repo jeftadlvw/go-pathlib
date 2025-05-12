@@ -6,6 +6,14 @@ import (
 )
 
 /*
+Disposable interface shows that a struct has resources that must be disposed manually.
+*/
+type Disposable interface {
+	// Dispose cleans up struct resources.
+	Dispose()
+}
+
+/*
 TempPath is a container for a temporary path.
 */
 type TempPath struct {
@@ -22,14 +30,6 @@ func (p *TempPath) Dispose() error {
 
 	p.dispose()
 	return nil
-}
-
-/*
-Disposable interface shows that a struct has resources that must be disposed manually.
-*/
-type Disposable interface {
-	// Dispose cleans up struct resources.
-	Dispose()
 }
 
 /*
@@ -132,7 +132,7 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
 
 /*
 CreateTempDir creates a new temporary directory.
-It's the callers responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call TempPath.Dispose().
 
 Example:
 
@@ -150,7 +150,7 @@ func CreateTempDir() (*TempPath, error) {
 /*
 CreateTempDirWithOptions creates a temporary directory with further options.
 
-It's the callers responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call TempPath.Dispose().
 
 Example:
 
