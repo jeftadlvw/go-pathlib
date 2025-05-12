@@ -41,132 +41,309 @@ func TestPathInterfaceImplementations(t *testing.T) {
 	})
 }
 
-func TestPathConversions(t *testing.T) {
-	cases := []TestCase[string, *Path]{
-		{Input: "", Expect: NewPath(".")},
-		{Input: ".", Expect: NewPath(".")},
-		{Input: "..", Expect: NewPath("../")},
-		{Input: "/", Expect: NewPath("/")},
-		{Input: "//", Expect: NewPath("/")},
-		{Input: "./", Expect: NewPath("./")},
-		{Input: "./", Expect: NewPath(".")},
-		{Input: ".//", Expect: NewPath(".")},
-		{Input: "../", Expect: NewPath("..")},
-		{Input: "../.", Expect: NewPath("../")},
-		{Input: "../..", Expect: NewPath("../../")},
-		{Input: "../../", Expect: NewPath("../../")},
-		{Input: "../../.", Expect: NewPath("../../")},
-		{Input: "/..", Expect: NewPath("/")},
-		{Input: "/../..", Expect: NewPath("/")},
-		{Input: "foo", Expect: NewPath("foo")},
-		{Input: "foo/", Expect: NewPath("foo")},
-		{Input: "foo/.", Expect: NewPath("foo")},
-		{Input: "foo/..", Expect: NewPath(".")},
-		{Input: "foo/../..", Expect: NewPath("..")},
-		{Input: "foo/../bar", Expect: NewPath("bar")},
-		{Input: "foo/../bar/..", Expect: NewPath(".")},
-		{Input: "foo/../../bar", Expect: NewPath("../bar")},
-		{Input: "foo/../../bar/..", Expect: NewPath("..")},
-		{Input: "foo/bar", Expect: NewPath("foo/bar")},
-		{Input: "    foo/bar", Expect: NewPath("foo/bar")},
-		{Input: "  \t foo/bar", Expect: NewPath("foo/bar")},
-		{Input: "foo/bar\n", Expect: NewPath("foo/bar")},
-		{Input: "/foo/bar", Expect: NewPath("/foo/bar")},
-		{Input: "/foo/bar/baz.yz", Expect: NewPath("/foo/bar/baz.yz")},
-		{Input: "./foo/bar/baz.yz", Expect: NewPath("foo/bar/baz.yz")},
-		{Input: "/foo/bar/baz.yz/..", Expect: NewPath("/foo/bar")},
-		{Input: "some-random_thing", Expect: NewPath("some-random_thing")},
-		{Input: "some-random_/thing/", Expect: NewPath("some-random_/thing")},
-		{Input: "c:", Expect: NewPath("c:")},
-		{Input: "c:/", Expect: NewPath("c:")},
-		{Input: "c://", Expect: NewPath("c:")},
-		{Input: "c://hello", Expect: NewPath("c:/hello")},
-		{Input: "c:hello", Expect: NewPath("c:hello")},
-		{Input: "c:\\", Expect: NewPath("c:/")},
-		{Input: "c:\\\\", Expect: NewPath("c:/")},
-		{Input: "c:\\\\hello", Expect: NewPath("c:/hello")},
+func TestPathInputOutputDisplay(t *testing.T) {
+	type ExpectMatrix struct {
+		AsPosixOnPosix     string
+		AsPosixOnWindows   string
+		AsWindowsOnPosix   string
+		AsWindowsOnWindows string
+	}
+
+	type ExpectMatrixMask struct {
+		AsPosix   bool
+		AsWindows bool
+		OnPosix   bool
+		OnWindows bool
+	}
+
+	cases := []TestCase[string, ExpectMatrix]{
+		{Input: "", Expect: ExpectMatrix{
+			AsPosixOnPosix: ".", AsPosixOnWindows: ".", AsWindowsOnPosix: ".", AsWindowsOnWindows: "."}},
+		{Input: ".", Expect: ExpectMatrix{
+			AsPosixOnPosix: ".", AsPosixOnWindows: ".", AsWindowsOnPosix: ".", AsWindowsOnWindows: "."}},
+		{Input: "..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "..", AsPosixOnWindows: "..", AsWindowsOnPosix: "..", AsWindowsOnWindows: ".."}},
+		{Input: "/", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "//", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "\\", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "./", Expect: ExpectMatrix{
+			AsPosixOnPosix: ".", AsPosixOnWindows: ".", AsWindowsOnPosix: ".", AsWindowsOnWindows: "."}},
+		{Input: ".//", Expect: ExpectMatrix{
+			AsPosixOnPosix: ".", AsPosixOnWindows: ".", AsWindowsOnPosix: ".", AsWindowsOnWindows: "."}},
+		{Input: "../", Expect: ExpectMatrix{
+			AsPosixOnPosix: "..", AsPosixOnWindows: "..", AsWindowsOnPosix: "..", AsWindowsOnWindows: ".."}},
+		{Input: "../.", Expect: ExpectMatrix{
+			AsPosixOnPosix: "..", AsPosixOnWindows: "..", AsWindowsOnPosix: "..", AsWindowsOnWindows: ".."}},
+		{Input: "../..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "../..", AsPosixOnWindows: "..\\..", AsWindowsOnPosix: "../..", AsWindowsOnWindows: "..\\.."}},
+		{Input: "../../", Expect: ExpectMatrix{
+			AsPosixOnPosix: "../..", AsPosixOnWindows: "..\\..", AsWindowsOnPosix: "../..", AsWindowsOnWindows: "..\\.."}},
+		{Input: "../../.", Expect: ExpectMatrix{
+			AsPosixOnPosix: "../..", AsPosixOnWindows: "..\\..", AsWindowsOnPosix: "../..", AsWindowsOnWindows: "..\\.."}},
+		{Input: "../../foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "../../foo", AsPosixOnWindows: "..\\..\\foo", AsWindowsOnPosix: "../../foo", AsWindowsOnWindows: "..\\..\\foo"}},
+		{Input: "/..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "/.", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "/../..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo", AsPosixOnWindows: "foo", AsWindowsOnPosix: "foo", AsWindowsOnWindows: "foo"}},
+		{Input: "foo  ", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo  ", AsPosixOnWindows: "foo  ", AsWindowsOnPosix: "foo  ", AsWindowsOnWindows: "foo  "}},
+		{Input: "foo/", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo", AsPosixOnWindows: "foo", AsWindowsOnPosix: "foo", AsWindowsOnWindows: "foo"}},
+		{Input: "foo/.", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo", AsPosixOnWindows: "foo", AsWindowsOnPosix: "foo", AsWindowsOnWindows: "foo"}},
+		{Input: "foo/..", Expect: ExpectMatrix{
+			AsPosixOnPosix: ".", AsPosixOnWindows: ".", AsWindowsOnPosix: ".", AsWindowsOnWindows: "."}},
+		{Input: "foo/../..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "..", AsPosixOnWindows: "..", AsWindowsOnPosix: "..", AsWindowsOnWindows: ".."}},
+		{Input: "foo/../bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "bar", AsPosixOnWindows: "bar", AsWindowsOnPosix: "bar", AsWindowsOnWindows: "bar"}},
+		{Input: "foo/../bar/..", Expect: ExpectMatrix{
+			AsPosixOnPosix: ".", AsPosixOnWindows: ".", AsWindowsOnPosix: ".", AsWindowsOnWindows: "."}},
+		{Input: "foo/../../bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "../bar", AsPosixOnWindows: "..\\bar", AsWindowsOnPosix: "../bar", AsWindowsOnWindows: "..\\bar"}},
+		{Input: "foo/../../bar/..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "..", AsPosixOnWindows: "..", AsWindowsOnPosix: "..", AsWindowsOnWindows: ".."}},
+		{Input: "foo/bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo/bar", AsPosixOnWindows: "foo\\bar", AsWindowsOnPosix: "foo/bar", AsWindowsOnWindows: "foo\\bar"}},
+		{Input: "  foo  ", Expect: ExpectMatrix{
+			AsPosixOnPosix: "  foo  ", AsPosixOnWindows: "  foo  ", AsWindowsOnPosix: "  foo  ", AsWindowsOnWindows: "  foo  "}},
+		{Input: "  \t foo/bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "  \t foo/bar", AsPosixOnWindows: "  \t foo\\bar", AsWindowsOnPosix: "  \t foo/bar", AsWindowsOnWindows: "  \t foo\\bar"}},
+		{Input: "foo/bar\n", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo/bar\n", AsPosixOnWindows: "foo\\bar\n", AsWindowsOnPosix: "foo/bar\n", AsWindowsOnWindows: "foo\\bar\n"}},
+		{Input: "foo/  bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo/  bar", AsPosixOnWindows: "foo\\  bar", AsWindowsOnPosix: "foo/  bar", AsWindowsOnWindows: "foo\\  bar"}},
+		{Input: "/ foo/  bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/ foo/  bar", AsPosixOnWindows: "\\ foo\\  bar", AsWindowsOnPosix: "/ foo/  bar", AsWindowsOnWindows: "\\ foo\\  bar"}},
+		{Input: "/ foo/ \\ bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/ foo/ \\ bar", AsPosixOnWindows: "\\ foo\\ \\ bar", AsWindowsOnPosix: "/ foo/ / bar", AsWindowsOnWindows: "\\ foo\\ \\ bar"}},
+		{Input: "/ foo/\\ \\ bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/ foo/\\ \\ bar", AsPosixOnWindows: "\\ foo\\ \\ bar", AsWindowsOnPosix: "/ foo/ / bar", AsWindowsOnWindows: "\\ foo\\ \\ bar"}},
+		{Input: "/ foo/ \\ \\ bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/ foo/ \\ \\ bar", AsPosixOnWindows: "\\ foo\\ \\ \\ bar", AsWindowsOnPosix: "/ foo/ / / bar", AsWindowsOnWindows: "\\ foo\\ \\ \\ bar"}},
+		{Input: "/ foo/\\bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/ foo/\\bar", AsPosixOnWindows: "\\ foo\\bar", AsWindowsOnPosix: "/ foo/bar", AsWindowsOnWindows: "\\ foo\\bar"}},
+		{Input: "/ foo/\\ \\\\ bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/ foo/\\ \\\\ bar", AsPosixOnWindows: "\\ foo\\ \\ bar", AsWindowsOnPosix: "/ foo/ / bar", AsWindowsOnWindows: "\\ foo\\ \\ bar"}},
+		{Input: "/foo/bar", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/foo/bar", AsPosixOnWindows: "\\foo\\bar", AsWindowsOnPosix: "/foo/bar", AsWindowsOnWindows: "\\foo\\bar"}},
+		{Input: "/foo/bar/baz.yz", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/foo/bar/baz.yz", AsPosixOnWindows: "\\foo\\bar\\baz.yz", AsWindowsOnPosix: "/foo/bar/baz.yz", AsWindowsOnWindows: "\\foo\\bar\\baz.yz"}},
+		{Input: "./foo/bar/baz.yz", Expect: ExpectMatrix{
+			AsPosixOnPosix: "foo/bar/baz.yz", AsPosixOnWindows: "foo\\bar\\baz.yz", AsWindowsOnPosix: "foo/bar/baz.yz", AsWindowsOnWindows: "foo\\bar\\baz.yz"}},
+		{Input: "/foo/bar/baz.yz/..", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/foo/bar", AsPosixOnWindows: "\\foo\\bar", AsWindowsOnPosix: "/foo/bar", AsWindowsOnWindows: "\\foo\\bar"}},
+		{Input: "some-random_thing", Expect: ExpectMatrix{
+			AsPosixOnPosix: "some-random_thing", AsPosixOnWindows: "some-random_thing", AsWindowsOnPosix: "some-random_thing", AsWindowsOnWindows: "some-random_thing"}},
+		{Input: "some-random_/thing/", Expect: ExpectMatrix{
+			AsPosixOnPosix: "some-random_/thing", AsPosixOnWindows: "some-random_\\thing", AsWindowsOnPosix: "some-random_/thing", AsWindowsOnWindows: "some-random_\\thing"}},
+		{Input: "c:", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:", AsPosixOnWindows: "c:", AsWindowsOnPosix: "c:", AsWindowsOnWindows: "c:"}},
+		{Input: "c:/", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:", AsPosixOnWindows: "c:", AsWindowsOnPosix: "c:", AsWindowsOnWindows: "c:\\"}},
+		{Input: "c://", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:", AsPosixOnWindows: "c:", AsWindowsOnPosix: "c:", AsWindowsOnWindows: "c:\\"}},
+		{Input: "c://hello", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:/hello", AsPosixOnWindows: "c:\\hello", AsWindowsOnPosix: "c:/hello", AsWindowsOnWindows: "c:\\hello"}},
+		{Input: "c:hello", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:hello", AsPosixOnWindows: "c:hello", AsWindowsOnPosix: "c:hello", AsWindowsOnWindows: "c:hello"}},
+		{Input: "c:\\", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:\\", AsPosixOnWindows: "c:\\", AsWindowsOnPosix: "c:", AsWindowsOnWindows: "c:\\"}},
+		{Input: "\\", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\", AsPosixOnWindows: "\\", AsWindowsOnPosix: "/", AsWindowsOnWindows: "\\"}},
+		{Input: "\\foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\foo", AsPosixOnWindows: "\\foo", AsWindowsOnPosix: "/foo", AsWindowsOnWindows: "\\foo"}},
+		{Input: "c:\\\\", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:\\\\", AsPosixOnWindows: "c:\\", AsWindowsOnPosix: "c:", AsWindowsOnWindows: "c:\\"}},
+		{Input: "c:\\\\hello", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:\\\\hello", AsPosixOnWindows: "c:\\hello", AsWindowsOnPosix: "c:/hello", AsWindowsOnWindows: "c:\\hello"}},
+		{Input: "c:\\hello\\world", Expect: ExpectMatrix{
+			AsPosixOnPosix: "c:\\hello\\world", AsPosixOnWindows: "c:\\hello\\world", AsWindowsOnPosix: "c:/hello/world", AsWindowsOnWindows: "c:\\hello\\world"}},
+		{Input: "\\\\host\\share", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\\\host\\share", AsPosixOnWindows: "\\host\\share", AsWindowsOnPosix: "/host/share", AsWindowsOnWindows: "\\\\host\\share"}},
+		{Input: "\\\\host\\share\\foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\\\host\\share\\foo", AsPosixOnWindows: "\\host\\share\\foo", AsWindowsOnPosix: "/host/share/foo", AsWindowsOnWindows: "\\\\host\\share\\foo"}},
+		{Input: "\\\\host\\share\\  foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\\\host\\share\\  foo", AsPosixOnWindows: "\\host\\share\\  foo", AsWindowsOnPosix: "/host/share/  foo", AsWindowsOnWindows: "\\\\host\\share\\  foo"}},
+		{Input: "\\\\host\\share/foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "\\\\host\\share/foo", AsPosixOnWindows: "\\host\\share\\foo", AsWindowsOnPosix: "/host/share/foo", AsWindowsOnWindows: "\\\\host\\share\\foo"}},
+		{Input: "//host/share/foo", Expect: ExpectMatrix{
+			AsPosixOnPosix: "/host/share/foo", AsPosixOnWindows: "\\host\\share\\foo", AsWindowsOnPosix: "/host/share/foo", AsWindowsOnWindows: "\\\\host\\share\\foo"}},
 	}
 
 	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input)
 	}
 
-	runForResults(t, cases, func(t *testing.T, input string, expect *Path) {
-		inputPath := NewPath(input)
+	runForResults(t, cases, func(t *testing.T, input string, expect ExpectMatrix) {
+		runTests := func(t *testing.T, expect string, input string, expectPath *Path, inputPath *Path, expectMatrixMask ExpectMatrixMask) {
+			/*
+				// Do not test internal representation, because they may differ based on the constructor.
+				t.Run("internal repr", func(t *testing.T) {
+					require.Equal(t, *expectPath, *inputPath)
+				})
+			*/
 
-		t.Run("fromString", func(t *testing.T) {
-			require.Equal(t, *expect, *inputPath)
+			t.Run("ToString_posix", func(t *testing.T) {
+				if !expectMatrixMask.OnPosix {
+					t.Skip("Test not targeted to Posix runtime")
+				}
+
+				if runningOnWindows {
+					t.Skip("Cannot run Posix test on Windows runtime")
+				}
+
+				require.Equal(t, expect, inputPath.String())
+				require.Equal(t, expect, inputPath.ToPosix())
+			})
+
+			t.Run("ToString_windows", func(t *testing.T) {
+				if !expectMatrixMask.OnWindows {
+					t.Skip("Test not targeted to Windows runtime")
+				}
+
+				if notRunningOnWindows {
+					t.Skip("Running Windows test in Non-Windows runtime")
+				}
+
+				require.Equal(t, expect, inputPath.String())
+				require.Equal(t, expect, inputPath.toWindows())
+			})
+
+			t.Run("internal_toWindows", func(t *testing.T) {
+				if !expectMatrixMask.OnWindows {
+					t.Skip("Test not targeted to Windows runtime")
+				}
+
+				fmt.Println(input)
+
+				require.Equal(t, expect, inputPath.toWindows())
+			})
+
+			t.Run("matching_posix_repr", func(t *testing.T) {
+				// This test fails if a Posix path contains "\\" and is checked on Windows,
+				// because on Posix, "\\" is allowed and not escaped.
+
+				if strings.Contains(input, "\\") && expectMatrixMask.AsPosix && expectMatrixMask.OnWindows {
+					t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
+				}
+
+				require.Equal(t, expectPath.ToPosix(), inputPath.ToPosix())
+			})
+
+			t.Run("TextMarshalling", func(t *testing.T) {
+				if strings.Contains(input, "\\") && expectMatrixMask.AsPosix && expectMatrixMask.OnWindows {
+					t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
+				}
+
+				marshaled, err := inputPath.MarshalText()
+				require.NoError(t, err)
+
+				require.Equal(t, expectPath.ToPosix(), string(marshaled))
+			})
+
+			t.Run("TextUnmarshalling", func(t *testing.T) {
+				if strings.Contains(input, "\\") && expectMatrixMask.AsPosix && expectMatrixMask.OnWindows {
+					t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
+				}
+
+				var emptyPath = &Path{}
+
+				marshaled, err := inputPath.MarshalText()
+				require.NoError(t, err)
+
+				err = emptyPath.UnmarshalText(marshaled)
+				require.NoError(t, err)
+
+				require.Equal(t, expectPath.ToPosix(), emptyPath.ToPosix())
+			})
+
+			escapeSequences := "\n\r\t\\"
+
+			t.Run("JsonMarshalling", func(t *testing.T) {
+				if strings.ContainsAny(input, escapeSequences) {
+					t.Skip("Input contained escape sequences")
+				}
+
+				marshaled, err := json.Marshal([]*Path{inputPath})
+				require.NoError(t, err)
+
+				require.Equal(t, fmt.Sprintf(`["%s"]`, expectPath.ToPosix()), string(marshaled))
+			})
+
+			t.Run("JsonUnmarshalling", func(t *testing.T) {
+				if strings.ContainsAny(input, escapeSequences) {
+					t.Skip("Input contained escape sequences")
+				}
+
+				var emptyPaths []*Path
+
+				jsonInput := fmt.Sprintf(`["%s"]`, inputPath.ToPosix())
+
+				err := json.Unmarshal([]byte(jsonInput), &emptyPaths)
+				require.NoError(t, err)
+
+				require.Len(t, emptyPaths, 1)
+				require.Equal(t, expectPath.ToPosix(), (*emptyPaths[0]).ToPosix())
+			})
+		}
+
+		t.Run("AsPosixOnPosix", func(t *testing.T) {
+			t.Parallel()
+
+			inputPath := NewPath(input)
+			expectPath := NewPath(expect.AsPosixOnPosix)
+			runTests(t, expect.AsPosixOnPosix, input, expectPath, inputPath, ExpectMatrixMask{
+				AsPosix: true,
+				OnPosix: true,
+			})
 		})
 
-		t.Run("toString", func(t *testing.T) {
-			require.Equal(t, expect.path, inputPath.String())
+		t.Run("AsPosixOnWindows", func(t *testing.T) {
+			t.Parallel()
+
+			inputPath := NewPath(input)
+			expectPath := NewPathFromWindows(expect.AsPosixOnWindows)
+			runTests(t, expect.AsPosixOnWindows, input, expectPath, inputPath, ExpectMatrixMask{
+				AsPosix:   true,
+				OnWindows: true,
+			})
 		})
 
-		t.Run("text unmarshalling", func(t *testing.T) {
-			var emptyPath = &Path{}
+		t.Run("AsWindowsOnPosix", func(t *testing.T) {
+			t.Parallel()
 
-			err := emptyPath.UnmarshalText([]byte(input))
-			require.NoError(t, err)
-
-			require.Equal(t, *expect, *emptyPath)
+			inputPath := NewPathFromWindows(input)
+			expectPath := NewPath(expect.AsWindowsOnPosix)
+			runTests(t, expect.AsWindowsOnPosix, input, expectPath, inputPath, ExpectMatrixMask{
+				AsWindows: true,
+				OnPosix:   true,
+			})
 		})
 
-		t.Run("text marshalling", func(t *testing.T) {
-			marshaled, err := inputPath.MarshalText()
-			require.NoError(t, err)
+		t.Run("AsWindowsOnWindows", func(t *testing.T) {
+			t.Parallel()
 
-			require.Equal(t, expect.String(), string(marshaled))
-		})
-
-		t.Run("json unmarshalling", func(t *testing.T) {
-			var emptyPaths []*Path
-			input := fmt.Sprintf(`["%s"]`, inputPath.String())
-
-			err := json.Unmarshal([]byte(input), &emptyPaths)
-			require.NoError(t, err)
-
-			require.Len(t, emptyPaths, 1)
-			require.Equal(t, *expect, *emptyPaths[0])
-		})
-
-		t.Run("json marshalling", func(t *testing.T) {
-			marshaled, err := json.Marshal([]*Path{inputPath})
-			require.NoError(t, err)
-
-			require.Equal(t, fmt.Sprintf(`["%s"]`, expect.String()), string(marshaled))
-		})
-	})
-}
-
-func TestPathWhiteSpaceRepresentation(t *testing.T) {
-	cases := []TestCase[string, []string]{
-		{Input: "path/with\\ whitespace", Expect: []string{"path/with whitespace", "path/with\\ whitespace"}},
-		{Input: "\\  whitespace", Expect: []string{"  whitespace", "\\ \\ whitespace"}},
-	}
-
-	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
-	}
-
-	runForResults(t, cases, func(t *testing.T, input string, expect []string) {
-		require.Equal(t, len(expect), 2)
-		internalRepr := expect[0]
-		stringRepr := expect[1]
-
-		inputPath := NewPath(input)
-
-		t.Run("fromString", func(t *testing.T) {
-			require.Equal(t, internalRepr, inputPath.path)
-		})
-
-		t.Run("toString", func(t *testing.T) {
-			require.Equal(t, stringRepr, inputPath.String())
+			inputPath := NewPathFromWindows(input)
+			expectPath := NewPathFromWindows(expect.AsWindowsOnWindows)
+			runTests(t, expect.AsWindowsOnWindows, input, expectPath, inputPath, ExpectMatrixMask{
+				AsWindows: true,
+				OnWindows: true,
+			})
 		})
 	})
 }
 
 func TestNewCwd(t *testing.T) {
-	// call library function
+	// call standard library function
 	pathlibCwdPath, err := NewCwd()
 	require.NoError(t, err)
 
@@ -301,7 +478,7 @@ func TestPath_Split(t *testing.T) {
 
 func TestPath_Stem(t *testing.T) {
 	cases := []TestCase[*Path, string]{
-		{Input: NewPath("."), Expect: ""},
+		{Input: NewPath("."), Expect: "."},
 		{Input: NewPath(".."), Expect: ".."},
 		{Input: NewPath("/"), Expect: ""},
 		{Input: NewPath("foo/bar"), Expect: "bar"},
@@ -431,30 +608,40 @@ func TestPath_ExtensionParts(t *testing.T) {
 	})
 }
 
-func TestPath_Root(t *testing.T) {
+func TestPath_Anchor(t *testing.T) {
 	cases := []TestCase[*Path, string]{
-		{Input: NewPath("."), Expect: "."},
-		{Input: NewPath(".."), Expect: ".."},
+		{Input: NewPath("."), Expect: ""},
+		{Input: NewPath(".."), Expect: ""},
 		{Input: NewPath("/"), Expect: "/"},
-		{Input: NewPath("c:/"), Expect: "c:"},
-		{Input: NewPath("c://"), Expect: "c:"},
-		{Input: NewPath("c:\\"), Expect: "c:"},
-		{Input: NewPath("c:\\\\"), Expect: "c:"},
-		{Input: NewPath("c:/foo"), Expect: "c:"},
-		{Input: NewPath("foo/bar"), Expect: "foo"},
-		{Input: NewPath("foo/bar.js"), Expect: "foo"},
+		{Input: NewPath("c:/"), Expect: ""},
+		{Input: NewPath("c:/foo"), Expect: ""},
+		{Input: NewPath("c://"), Expect: ""},
+		{Input: NewPath("c:\\"), Expect: ""},
+		{Input: NewPath("c:\\foo"), Expect: ""},
+		{Input: NewPath("c:\\\\"), Expect: ""},
+		{Input: NewPath("//host/share"), Expect: "/"},
+		{Input: NewPath("//host/share/"), Expect: "/"},
+		{Input: NewPath("//host/share/foo"), Expect: "/"},
+		{Input: NewPath("\\\\host\\share"), Expect: ""},
+		{Input: NewPath("\\\\host\\share\\"), Expect: ""},
+		{Input: NewPath("\\\\host\\share\\foo"), Expect: ""},
+		{Input: NewPathFromWindows("\\\\host\\share"), Expect: "\\\\host\\share"},
+		{Input: NewPathFromWindows("\\\\host\\share\\"), Expect: "\\\\host\\share"},
+		{Input: NewPathFromWindows("\\\\host\\share\\foo"), Expect: "\\\\host\\share"},
+		{Input: NewPathFromWindows("foo/bar"), Expect: ""},
+		{Input: NewPath("foo/bar.js"), Expect: ""},
 		{Input: NewPath("/foo/bar.js"), Expect: "/"},
-		{Input: NewPath("bar.js"), Expect: "bar.js"},
-		{Input: NewPath("../bar"), Expect: "../bar"},
-		{Input: NewPath("../../bar.js"), Expect: "../../bar.js"},
+		{Input: NewPath("bar.js"), Expect: ""},
+		{Input: NewPath("../bar"), Expect: ""},
+		{Input: NewPath("../../bar.js"), Expect: ""},
 	}
 
 	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.path)
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
-		require.Equal(t, expect, input.Root())
+		require.Equal(t, expect, input.Anchor())
 	})
 }
 
@@ -497,7 +684,7 @@ func TestPath_RelativeTo(t *testing.T) {
 		{Input: []*Path{NewPath(""), NewPath("/a/b")}, Error: true},
 		{Input: []*Path{NewPath("../"), NewPath("/a/b")}, Error: true},
 		{Input: []*Path{NewPath("../b"), NewPath("a/b")}, Expect: NewPath("../../../b")},
-		{Input: []*Path{NewPath("a/b\\ whitespace/c"), NewPath("a/d")}, Expect: NewPath("../b whitespace/c")},
+		{Input: []*Path{NewPath("a/b\\ whitespace/c"), NewPath("a/d")}, Expect: NewPath("../b\\ whitespace/c")},
 	}
 
 	for i := range cases {
@@ -598,23 +785,27 @@ func TestPath_Joins(t *testing.T) {
 		}
 		joinedPathsPath := basePath.Join(strCvtPath...)
 
+		// TODO Test with n randomly generated strings
+
 		require.Equal(t, expect, joinedStrPath)
 		require.Equal(t, expect, joinedPathsPath)
 	})
 }
 
-func TestPath_Equals(t *testing.T) {
+func TestPath_EqualsCaseSensitive(t *testing.T) {
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
 		{Input: []string{"", "a"}, Expect: false},
 		{Input: []string{"foo", "foo"}, Expect: true},
-		{Input: []string{"   foo", "foo"}, Expect: true},
+		{Input: []string{"foo", "fsho"}, Expect: false},
+		{Input: []string{"   foo", "foo"}, Expect: false},
+		{Input: []string{"   foo ", "foo  "}, Expect: false},
 		{Input: []string{"foo", "Foo"}, Expect: false},
 		{Input: []string{"./foo", "foo"}, Expect: true},
-		{Input: []string{"./foo", "\tfoo"}, Expect: true},
+		{Input: []string{"./foo", "\tfoo"}, Expect: false},
 		{Input: []string{"./foo", "/foo"}, Expect: false},
 		{Input: []string{"/foo", "/foo"}, Expect: true},
-		{Input: []string{"/foo", "/foo\n"}, Expect: true},
+		{Input: []string{"/foo", "/foo\n"}, Expect: false},
 		{Input: []string{"/foo", "/Foo"}, Expect: false},
 	}
 
@@ -626,26 +817,28 @@ func TestPath_Equals(t *testing.T) {
 		require.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
-		pathEquals := basePath.Equals(NewPath(input[1]))
-		stringEquals := basePath.EqualsString(input[1])
+		pathEqualsCaseSensitive := basePath.Equals(NewPath(input[1]), true)
+		stringEqualsCaseSensitive := basePath.EqualsString(input[1], true)
 
-		require.Equal(t, expect, pathEquals)
-		require.Equal(t, expect, stringEquals)
+		require.Equal(t, expect, pathEqualsCaseSensitive)
+		require.Equal(t, expect, stringEqualsCaseSensitive)
 	})
 }
 
-func TestPath_EqualsFlat(t *testing.T) {
+func TestPath_EqualsCaseInSensitive(t *testing.T) {
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
 		{Input: []string{"", "a"}, Expect: false},
 		{Input: []string{"foo", "foo"}, Expect: true},
-		{Input: []string{"   foo", "foo"}, Expect: true},
+		{Input: []string{"foo", "fsho"}, Expect: false},
+		{Input: []string{"   foo", "foo"}, Expect: false},
+		{Input: []string{"   foo ", "foo  "}, Expect: false},
 		{Input: []string{"foo", "Foo"}, Expect: true},
 		{Input: []string{"./foo", "foo"}, Expect: true},
-		{Input: []string{"./foo", "\tfoo"}, Expect: true},
+		{Input: []string{"./foo", "\tfoo"}, Expect: false},
 		{Input: []string{"./foo", "/foo"}, Expect: false},
 		{Input: []string{"/foo", "/foo"}, Expect: true},
-		{Input: []string{"/foo", "/foo\n"}, Expect: true},
+		{Input: []string{"/foo", "/foo\n"}, Expect: false},
 		{Input: []string{"/foo", "/Foo"}, Expect: true},
 	}
 
@@ -657,40 +850,11 @@ func TestPath_EqualsFlat(t *testing.T) {
 		require.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
-		pathEquals := basePath.EqualsFlat(NewPath(input[1]))
-		stringEquals := basePath.EqualsStringFlat(input[1])
+		pathEqualsCaseInSensitive := basePath.Equals(NewPath(strings.ToLower(input[1])), false)
+		stringEqualsCaseInSensitive := basePath.EqualsString(strings.ToLower(input[1]), false)
 
-		require.Equal(t, expect, pathEquals)
-		require.Equal(t, expect, stringEquals)
-	})
-}
-
-func TestPath_ToPosix(t *testing.T) {
-	cases := []TestCase[*Path, string]{
-		{Input: NewPath("."), Expect: "."},
-		{Input: NewPath(".."), Expect: ".."},
-		{Input: NewPath("/foo"), Expect: "/foo"},
-		{Input: NewPath("\\\\foo"), Expect: "/foo"},
-		{Input: NewPath("\\\\foo\\bar"), Expect: "/foo/bar"},
-		{Input: NewPath("\\\\foo\\\\bar"), Expect: "/foo/bar"},
-		{Input: NewPath("/foo/bar"), Expect: "/foo/bar"},
-		{Input: NewPath("//foo/bar"), Expect: "/foo/bar"},
-		{Input: NewPath("//foo//bar"), Expect: "/foo/bar"},
-		{Input: NewPath("/foo/with\\ whitespace"), Expect: "/foo/with\\ whitespace"},
-		{Input: NewPath("\\foo\\with\\ whitespace"), Expect: "/foo/with\\ whitespace"},
-		{Input: NewPath("\\\\foo\\\\with\\ whitespace"), Expect: "/foo/with\\ whitespace"},
-		{Input: NewPath("C:\\foo\\with\\ whitespace"), Expect: "C:/foo/with\\ whitespace"},
-		{Input: NewPath("C:/foo/with\\ whitespace"), Expect: "C:/foo/with\\ whitespace"},
-	}
-
-	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
-	}
-
-	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
-		toPosix := input.ToPosix()
-
-		require.Equal(t, expect, toPosix)
+		require.Equal(t, expect, pathEqualsCaseInSensitive)
+		require.Equal(t, expect, stringEqualsCaseInSensitive)
 	})
 }
 
