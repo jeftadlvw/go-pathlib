@@ -10,7 +10,7 @@ Disposable interface shows that a struct has resources that must be disposed man
 */
 type Disposable interface {
 	// Dispose cleans up struct resources.
-	Dispose()
+	Dispose() error
 }
 
 /*
@@ -20,7 +20,7 @@ type TempPath struct {
 	Path
 
 	// dispose is an internal function that removes the temporary path.
-	dispose func()
+	dispose func() error
 }
 
 func (p *TempPath) Dispose() error {
@@ -28,8 +28,7 @@ func (p *TempPath) Dispose() error {
 		return errors.New("dispose function is nil")
 	}
 
-	p.dispose()
-	return nil
+	return p.dispose()
 }
 
 /*
@@ -72,16 +71,15 @@ func (t *TempPathOptions) toUsableValues() (string, string, error) {
 /*
 CreateTempFile creates a new temporary file.
 
-It's the callers responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call TempPath.Dispose().
 
 Example:
 
 	tempFile, err := CreateTempFile()
 	if err != nil {
-		fmt.Printf("Could not create temporary file")
+		// handle error
 	}
-
-	defer tempFile.Dispose()
+	defer func() { _ = tempFile.Dispose() }()
 */
 func CreateTempFile() (*TempPath, error) {
 	return CreateTempFileWithOptions(nil)
@@ -90,7 +88,7 @@ func CreateTempFile() (*TempPath, error) {
 /*
 CreateTempFileWithOptions creates a temporary file with further options.
 
-It's the callers responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call TempPath.Dispose().
 
 Example:
 
@@ -101,10 +99,9 @@ Example:
 
 	tempFile, err := CreateTempFileWithOptions(options)
 	if err != nil {
-		fmt.Printf("Could not create temporary file")
+		// handle error
 	}
-
-	defer tempFile.Dispose()
+	defer func() { _ = tempFile.Dispose() }()
 */
 func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
@@ -124,8 +121,8 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
 
 	return &TempPath{
 		Path: tempFilePath,
-		dispose: func() {
-			_ = os.Remove(pathName)
+		dispose: func() error {
+			return os.Remove(pathName)
 		},
 	}, nil
 }
@@ -138,10 +135,9 @@ Example:
 
 	tempDir, err := CreateTempDir()
 	if err != nil {
-		fmt.Printf("Could not create temporary directory")
+		// handle error
 	}
-
-	defer tempDir.Dispose()
+	defer func() { _ = tempDir.Dispose() }()
 */
 func CreateTempDir() (*TempPath, error) {
 	return CreateTempDirWithOptions(nil)
@@ -159,12 +155,11 @@ Example:
 		Prefix: "foo"
 	}
 
-	tempDir, err := CreateTempDirWithOptions()
+	tempDir, err := CreateTempDirWithOptions(options)
 	if err != nil {
-		fmt.Printf("Could not create temporary directory")
+		// handle error
 	}
-
-	defer tempDir.Dispose()
+	defer func() { _ = tempDir.Dispose() }()
 */
 func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
@@ -181,8 +176,8 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 
 	return &TempPath{
 		Path: tempDirPath,
-		dispose: func() {
-			_ = os.RemoveAll(dirName)
+		dispose: func() error {
+			return os.RemoveAll(dirName)
 		},
 	}, nil
 }

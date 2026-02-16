@@ -2,16 +2,17 @@ package pathlib
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTempBaseDir(t *testing.T) {
 	tempBaseDir := TempBaseDir()
 
-	require.True(t, tempBaseDir.Equals(NewPath(os.TempDir()), true))
+	require.True(t, tempBaseDir.Equals(NewPath(os.TempDir()), CaseSensitive))
 	require.True(t, tempBaseDir.IsDir())
 }
 
@@ -49,7 +50,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 		require.NoError(t, err)
 		defaultTests(t, tempFile)
 
-		require.True(t, tempFile.Parent().Equals(TempBaseDir(), true))
+		require.True(t, tempFile.Parent().Equals(TempBaseDir(), CaseSensitive))
 	})
 
 	baseDirCases := []*Path{
@@ -145,6 +146,6 @@ func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOption
 
 	expectedPrefix := opts.Prefix
 
-	require.True(t, p.Parent().Equals(expectedBaseDir, true))
+	require.True(t, p.Parent().Equals(expectedBaseDir, CaseSensitive))
 	require.True(t, strings.HasPrefix(p.Base(), expectedPrefix))
 }

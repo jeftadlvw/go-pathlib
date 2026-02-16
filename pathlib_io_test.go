@@ -3,7 +3,7 @@ package pathlib
 import (
 	"fmt"
 	"github.com/stretchr/testify/require"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -45,8 +45,8 @@ func TestOpenFile(t *testing.T) {
 	}
 
 	fileWritableTest := func(t *testing.T, file *os.File) {
-		_, err = file.WriteString(randomFileContents)
-		require.NoError(t, err, "expected file to be writable, but got error")
+		_, writeErr := file.WriteString(randomFileContents)
+		require.NoError(t, writeErr, "expected file to be writable, but got error")
 	}
 
 	t.Run("file did not exist", func(t *testing.T) {
@@ -196,6 +196,8 @@ func TestOpenFileWithOptions(t *testing.T) {
 						localPermissionCase = defaultOpenPermission
 					}
 
+					// os.FileMode is uint32, so the < 0 check is always false.
+					// It is kept for clarity to document the intended bounds check.
 					localPermissionCaseOutOfBounds := localPermissionCase < 0 || localPermissionCase > 0777
 
 					filePermissionTest := func(t *testing.T, file *os.File) {
@@ -273,8 +275,6 @@ func TestOpenFileWithOptions(t *testing.T) {
 					}()
 
 					t.Run("file existed", func(t *testing.T) {
-						fmt.Println(expectedMode.Ok, localModeCaseValue, localPermissionCase, fmt.Sprintf("%O", localPermissionCase))
-
 						if expectedMode.Ok && ((isMode(localModeCaseValue, "r") && localPermissionCase < 0400) ||
 							(isMode(localModeCaseValue, "w") && (localPermissionCase < 0200 || (localPermissionCase >= 0400 && localPermissionCase < 0600))) ||
 							(isMode(localModeCaseValue, "rw") && localPermissionCase < 0600)) {
@@ -343,9 +343,8 @@ func TestOpenFileWithOptions(t *testing.T) {
 								require.NoError(t, err)
 								require.NotNil(t, file)
 
-								stats, err := file.Stat()
+								_, err = file.Stat()
 								require.NoError(t, err)
-								fmt.Println(stats.Size())
 							})
 						}
 
@@ -394,16 +393,13 @@ func TestReadWriteAppendOperations(t *testing.T) {
 	var testCombinationCases []TestCombinationCase
 	for i := 0; i < 20; i++ {
 		testCombinationCases = append(testCombinationCases, TestCombinationCase{
-			First:  testStrings[rand.Intn(len(testStrings))],
-			Second: testStrings[rand.Intn(len(testStrings))],
+			First:  testStrings[rand.IntN(len(testStrings))],
+			Second: testStrings[rand.IntN(len(testStrings))],
 		})
 	}
 
 	for idx, combination := range testCombinationCases {
 		t.Run(fmt.Sprint(idx), func(t *testing.T) {
-			fmt.Println(combination.First)
-			fmt.Println(combination.Second)
-
 			// Create a temporary path for testing
 			tempFile, err := os.CreateTemp("", "pathlib_io_test")
 			require.NoError(t, err)

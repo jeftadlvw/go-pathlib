@@ -4,7 +4,7 @@ Package pathlib contains source code for go-pathlib.
 It's a one-file library that can be used in other projects by using Go's package system
 or by placing the source code file itself into the source tree.
 
-pathlib.go contains lexigraphically based functions and does not interoperate with the
+pathlib.go contains lexicographically based functions and does not interoperate with the
 file system. Case sensitivity is defined explicitly. Filesystem-specific functionality is outsourced to pathlib_fs.go.
 
 Use pathlib_fs.go, pathlib_io.go or pathlib_temp.go for more interoperability.
@@ -14,7 +14,7 @@ package pathlib
 import (
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,9 +23,16 @@ import (
 	"strings"
 )
 
+type CompareOption bool
+
 const (
-	// pathCheckNoExist indicates that the checked Path does not exist.
-	pathCheckNoExist = iota
+	CaseSensitive   CompareOption = true
+	CaseInsensitive CompareOption = false
+)
+
+const (
+	// pathCheckNoExistOrUnreadable indicates that the checked Path does not exist.
+	pathCheckNoExistOrUnreadable = iota
 
 	// pathCheckFile indicates that the checked Path is a file.
 	pathCheckFile
@@ -72,7 +79,21 @@ type Path struct {
 
 /*
 NewPath is the constructor function for a new Path struct instance.
-The passed path string is automatically cleaned and ready for further use.
+
+The passed path string is automatically cleaned and ready for further use using the following rules:
+- Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
+- Parts are separated by a single forward slash ("/").
+- Multiple forward slashes are replaced by one single slash.
+- Trailing forward slashes are removed.
+
+Defined edge cases:
+- an empty string, "." and "./" results into "."
+- if all rules result into an empty string, the path also result into "."
+- ".." stays ".."
+- "/", "/.", and "/.." result into "/"
+
+The path is not lowercased, because the path might be used on a case-sensitive filesystem.
+Functions that are case-insensitive must additionally lowercase this representation.
 */
 func NewPath(path string) *Path {
 	warnForBackslashesOnPosix(path)
@@ -83,6 +104,9 @@ func NewPath(path string) *Path {
 /*
 NewPathFromWindows applies preprocessing to the passed path string to
 ensure a correct internal state and behavior for Windows-styled path strings.
+
+The same normalization rules as NewPath apply, with additional handling for
+Windows volume names (e.g. "C:") and UNC paths (e.g. "\\\\host\\share").
 */
 func NewPathFromWindows(path string) *Path {
 	warnForBackslashesOnPosix(path)
@@ -271,43 +295,43 @@ func (p *Path) Anchor() string {
 }
 
 /*
-MatchesPatternE matches this Path against the provided pattern.
+MatchesPatternE matches this Path's Posix representation against a pattern with support for double asterisk (**).
 Returns whether the matching is successful or any occurring error.
 
-Uses path.Match. Use forward slashes as path separators.
+Wraps path.Match with some custom rules for double asterisk support.
+Use forward slashes as path separators.
 
-Empty patterns are not allowed.
+By default, matching is case-sensitive. Pass CaseInsensitive to ignore casing.
+
+Empty patterns cause an error.
 */
-func (p *Path) MatchesPatternE(pattern string, caseSensitive bool) (bool, error) {
+func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error) {
 	if pattern == "" {
-		return false, errors.New("pattern must not be empty")
+		return false, errors.New("pattern may not be empty")
 	}
 
-	var (
-		matched bool
-		err     error
-	)
-
-	if caseSensitive {
-		matched, err = path.Match(pattern, p.stripEncodings())
-	} else {
-		matched, err = path.Match(strings.ToLower(pattern), strings.ToLower(p.stripEncodings()))
+	caseSensitive := true
+	if len(opts) > 0 {
+		caseSensitive = bool(opts[0])
 	}
 
-	if err != nil {
-		return false, err
+	pathString := p.ToPosix()
+
+	if !caseSensitive {
+		pattern = strings.ToLower(pattern)
+		pathString = strings.ToLower(pathString)
 	}
 
-	return matched, nil
+	return matchPattern(pattern, pathString)
 }
 
 /*
 MatchesPattern matches this Path against the provided pattern.
-It wraps MatchesPatternE and returns the boolean success return value
-or false in case of an error.
+
+It wraps MatchesPatternE and returns the boolean success return value or false in case of an error.
 */
-func (p *Path) MatchesPattern(pattern string, caseSensitive bool) bool {
-	match, err := p.MatchesPatternE(pattern, caseSensitive)
+func (p *Path) MatchesPattern(pattern string, opts ...CompareOption) bool {
+	match, err := p.MatchesPatternE(pattern, opts...)
 	return match && err == nil
 }
 
@@ -413,26 +437,38 @@ func (p *Path) JoinStrings(paths ...string) *Path {
 
 /*
 Equals returns whether this and another Path match lexically.
+By default, comparison is case-sensitive.
 */
-func (p *Path) Equals(other *Path, caseSensitive bool) bool {
+func (p *Path) Equals(other *Path, opts ...CompareOption) bool {
+	caseSensitive := true
+	if len(opts) > 0 {
+		caseSensitive = bool(opts[0])
+	}
+
 	if caseSensitive {
 		return p.stripEncodings() == other.stripEncodings()
 	}
 
-	return strings.ToLower(p.stripEncodings()) == strings.ToLower(other.stripEncodings())
+	return strings.EqualFold(p.stripEncodings(), other.stripEncodings())
 }
 
 /*
 EqualsString returns whether this and the passed string match lexically.
+By default, comparison is case-sensitive.
 */
-func (p *Path) EqualsString(other string, caseSensitive bool) bool {
+func (p *Path) EqualsString(other string, opts ...CompareOption) bool {
+	caseSensitive := true
+	if len(opts) > 0 {
+		caseSensitive = bool(opts[0])
+	}
+
 	otherCanonical := normalizePath(other)
 
 	if caseSensitive {
 		return p.stripEncodings() == otherCanonical
 	}
 
-	return strings.ToLower(p.stripEncodings()) == strings.ToLower(otherCanonical)
+	return strings.EqualFold(p.stripEncodings(), otherCanonical)
 }
 
 /*
@@ -573,7 +609,7 @@ Defined edge cases:
 - an empty string, "." and "./" return "."
 - an empty string after all filters also returns "."
 - ".." returns ".."
-- "/", "/..", and "/.." return "/"
+- "/", "/.", and "/.." return "/"
 
 The path is not lowercased, because the path might be used on a case-sensitive filesystem.
 Functions that are case-insensitive must additionally lowercase this representation.
@@ -635,7 +671,7 @@ func normalizePath(p string) string {
 		if part == ".." {
 			if hasAnchor {
 				// If the original path had an anchor, cap the minimum depth at 0.
-				directoryDepth = mathMaxInt(directoryDepth-1, 0)
+				directoryDepth = max(directoryDepth-1, 0)
 			} else if len(pathParts) != 0 {
 				// If there are enumerated parts, decrement the directory depth
 				directoryDepth--
@@ -649,7 +685,7 @@ func normalizePath(p string) string {
 
 		// Strip path parts that are not relevant anymore through a previous parent directory reference
 		if len(pathParts) > directoryDepth {
-			pathParts = append(pathParts[:mathMaxInt(directoryDepth, 0)], part)
+			pathParts = append(pathParts[:max(directoryDepth, 0)], part)
 
 			// Reset directory depth as it has been applied to the parts.
 			// If directory depth was negative, add them to the anchor depth.
@@ -669,7 +705,7 @@ func normalizePath(p string) string {
 
 	// Strip path parts in case of directory depth changes after a first part addition
 	if len(pathParts) > directoryDepth {
-		pathParts = pathParts[:mathMaxInt(directoryDepth, 0)]
+		pathParts = pathParts[:max(directoryDepth, 0)]
 	}
 
 	// Recombine cleaned path parts
@@ -771,11 +807,271 @@ func normalizeWindowsPath(p string) string {
 	return normalizedWindowsAnchor + cleanedNoAnchor
 }
 
-func mathMaxInt(a, b int) int {
-	if a > b {
-		return a
+// matchPattern is the internal implementation that handles ** expansion.
+func matchPattern(pattern, name string) (bool, error) {
+	// Validate pattern for bad syntax (check each segment)
+	if err := validatePattern(pattern); err != nil {
+		return false, err
 	}
-	return b
+
+	// If no **, use standard path.Match
+	if !strings.Contains(pattern, "**") {
+		return path.Match(pattern, name)
+	}
+
+	return matchWithDoubleAsterisk(pattern, name)
+}
+
+// validatePattern checks if the pattern has valid syntax.
+func validatePattern(pattern string) error {
+	// Split by ** and validate each segment with path.Match
+	segments := strings.Split(pattern, "**")
+	for _, seg := range segments {
+		// Remove leading/trailing slashes for validation
+		seg = strings.Trim(seg, "/")
+		if seg == "" {
+			continue
+		}
+		// Use path.Match to validate syntax (match against empty string just to check pattern validity)
+		_, err := path.Match(seg, "")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// matchWithDoubleAsterisk handles patterns containing **.
+func matchWithDoubleAsterisk(pattern, name string) (bool, error) {
+	// Split pattern by **
+	parts := strings.Split(pattern, "**")
+
+	// Handle edge cases
+	if len(parts) == 1 {
+		// No ** found (shouldn't reach here, but safety check)
+		return path.Match(pattern, name)
+	}
+
+	// For pattern like "**", it matches everything
+	if pattern == "**" {
+		return true, nil
+	}
+
+	// Process the pattern parts
+	return matchParts(parts, name)
+}
+
+// matchParts matches the name against pattern parts split by **.
+func matchParts(parts []string, name string) (bool, error) {
+	// First part must match the beginning of name (if not empty)
+	firstPart := parts[0]
+	if firstPart != "" {
+		// First part doesn't start with **, so it must match from the beginning
+		firstPart = strings.TrimSuffix(firstPart, "/")
+		if !matchesPrefix(name, firstPart) {
+			return false, nil
+		}
+		// Calculate how much of name was consumed
+		prefixLen := findPrefixMatchLength(name, firstPart)
+		if prefixLen == -1 {
+			return false, nil
+		}
+		name = name[prefixLen:]
+		name = strings.TrimPrefix(name, "/")
+	}
+
+	// Last part must match the end of name (if not empty)
+	lastPart := parts[len(parts)-1]
+	if lastPart != "" {
+		lastPart = strings.TrimPrefix(lastPart, "/")
+		if !matchesSuffix(name, lastPart) {
+			return false, nil
+		}
+		// Calculate how much of name remains
+		suffixLen := findSuffixMatchLength(name, lastPart)
+		if suffixLen == -1 {
+			return false, nil
+		}
+		name = name[:len(name)-suffixLen]
+		name = strings.TrimSuffix(name, "/")
+	}
+
+	// Middle parts must appear in order somewhere in name
+	for i := 1; i < len(parts)-1; i++ {
+		middlePart := strings.Trim(parts[i], "/")
+		if middlePart == "" {
+			continue
+		}
+
+		idx := findPatternInPath(name, middlePart)
+		if idx == -1 {
+			return false, nil
+		}
+		// Move past this match
+		matchLen := findMatchLengthAt(name, idx, middlePart)
+		name = name[idx+matchLen:]
+		name = strings.TrimPrefix(name, "/")
+	}
+
+	return true, nil
+}
+
+// matchesPrefix checks if name starts with a pattern prefix.
+func matchesPrefix(name, pattern string) bool {
+	if pattern == "" {
+		return true
+	}
+
+	patternParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(name, "/")
+
+	if len(nameParts) < len(patternParts) {
+		return false
+	}
+
+	for i, pp := range patternParts {
+		matched, err := path.Match(pp, nameParts[i])
+		if err != nil || !matched {
+			return false
+		}
+	}
+	return true
+}
+
+// findPrefixMatchLength returns the length of name consumed by matching the pattern prefix.
+func findPrefixMatchLength(name, pattern string) int {
+	if pattern == "" {
+		return 0
+	}
+
+	patternParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(name, "/")
+
+	if len(nameParts) < len(patternParts) {
+		return -1
+	}
+
+	length := 0
+	for i, pp := range patternParts {
+		matched, err := path.Match(pp, nameParts[i])
+		if err != nil || !matched {
+			return -1
+		}
+		if i > 0 {
+			length++ // for the /
+		}
+		length += len(nameParts[i])
+	}
+	return length
+}
+
+// matchesSuffix checks if name ends with a pattern suffix.
+func matchesSuffix(name, pattern string) bool {
+	if pattern == "" {
+		return true
+	}
+
+	patternParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(name, "/")
+
+	if len(nameParts) < len(patternParts) {
+		return false
+	}
+
+	offset := len(nameParts) - len(patternParts)
+	for i, pp := range patternParts {
+		matched, err := path.Match(pp, nameParts[offset+i])
+		if err != nil || !matched {
+			return false
+		}
+	}
+	return true
+}
+
+// findSuffixMatchLength returns the length of name consumed by matching the pattern suffix.
+func findSuffixMatchLength(name, pattern string) int {
+	if pattern == "" {
+		return 0
+	}
+
+	patternParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(name, "/")
+
+	if len(nameParts) < len(patternParts) {
+		return -1
+	}
+
+	offset := len(nameParts) - len(patternParts)
+	length := 0
+	for i, pp := range patternParts {
+		matched, err := path.Match(pp, nameParts[offset+i])
+		if err != nil || !matched {
+			return -1
+		}
+		if i > 0 {
+			length++ // for the /
+		}
+		length += len(nameParts[offset+i])
+	}
+	return length
+}
+
+// findPatternInPath finds where a pattern segment matches within the path.
+// Returns the byte index or -1 if not found.
+func findPatternInPath(name, pattern string) int {
+	if pattern == "" {
+		return 0
+	}
+
+	patternParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(name, "/")
+
+	if len(nameParts) < len(patternParts) {
+		return -1
+	}
+
+	// Try to find pattern parts as a contiguous sequence in name parts
+	for startIdx := 0; startIdx <= len(nameParts)-len(patternParts); startIdx++ {
+		allMatch := true
+		for i, pp := range patternParts {
+			matched, err := path.Match(pp, nameParts[startIdx+i])
+			if err != nil || !matched {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			// Calculate byte position
+			pos := 0
+			for i := 0; i < startIdx; i++ {
+				if i > 0 {
+					pos++
+				}
+				pos += len(nameParts[i])
+			}
+			if startIdx > 0 {
+				pos++ // trailing /
+			}
+			return pos
+		}
+	}
+	return -1
+}
+
+// findMatchLengthAt returns the length of the match starting at the given position.
+func findMatchLengthAt(name string, startIdx int, pattern string) int {
+	remaining := name[startIdx:]
+	patternParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(remaining, "/")
+
+	length := 0
+	for i := 0; i < len(patternParts) && i < len(nameParts); i++ {
+		if i > 0 {
+			length++
+		}
+		length += len(nameParts[i])
+	}
+	return length
 }
 
 func mathAbsInt(i int) int {
@@ -792,62 +1088,16 @@ func stripLeadingDots(s string) string {
 /*
 hasDots is a simple helper function that returns whether the given
 string contains a '.' character.
-
-It does not use strings.Contains for overhead and complexity reasons.
 */
 func hasDots(s string) bool {
-	for _, v := range s {
-		if v == '.' {
-			return true
-		}
-	}
-
-	return false
+	return strings.Contains(s, ".")
 }
 
 /*
 dotCount is a simple helper function that returns the number of '.' occurrences in a string.
-
-It does not use strings.Count for complexity reasons.
 */
 func dotCount(s string) int {
-	switch len(s) {
-	case 0:
-		return 0
-	case 1:
-		if s[0] == '.' {
-			return 1
-		}
-		return 0
-	}
-
-	dotAscii := '.'
-	count := 0
-
-	for _, v := range s {
-		if v == dotAscii {
-			count += 1
-		}
-	}
-
-	return count
-}
-
-/*
-flipCase is a utility function that takes the first character and flips it's case.
-The leftover characters are appended.
-This results in a string which is different from the original which can be used
-for e.g. case sensitivity (in)variance checks.
-*/
-func flipCase(s string) string {
-	if s == "" {
-		return s
-	}
-	firstChar := string(s[0])
-	if strings.ToLower(firstChar) == firstChar {
-		return strings.ToUpper(firstChar) + s[1:]
-	}
-	return strings.ToLower(firstChar) + s[1:]
+	return strings.Count(s, ".")
 }
 
 /*
@@ -879,14 +1129,14 @@ This is a utility function used by tests and extensions.
 */
 func generateRandomString(minLength, maxLength int) string {
 	// Generate a random length between minLength and maxLength
-	length := rand.Intn(maxLength-minLength+1) + minLength
+	length := rand.IntN(maxLength-minLength+1) + minLength
 
 	// Create a byte slice to store the random string
 	result := make([]byte, length)
 
 	// Fill the byte slice with random characters from the charset
 	for i := 0; i < length; i++ {
-		result[i] = charset[rand.Intn(len(charset))]
+		result[i] = charset[rand.IntN(len(charset))]
 	}
 
 	return string(result)

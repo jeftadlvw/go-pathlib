@@ -23,37 +23,39 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
 
 ## Index
 
+- [Constants](<#constants>)
 - [Variables](<#variables>)
 - [func AppendBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#AppendBytes>)
 - [func AppendString\(path \*Path, data string\) \(int, error\)](<#AppendString>)
-- [func CopyDir\(src, dst \*Path\) error](<#CopyDir>)
-- [func CopyFile\(src, dst \*Path\) error](<#CopyFile>)
-- [func CreateDir\(path \*Path\) error](<#CreateDir>)
-- [func CreateDirAll\(path \*Path\) error](<#CreateDirAll>)
-- [func CreateDirAllWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateDirAllWithOptions>)
-- [func CreateDirWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateDirWithOptions>)
+- [func Copy\(src \*Path, destination \*Path\) error](<#Copy>)
 - [func CreateFile\(path \*Path\) error](<#CreateFile>)
 - [func CreateFileWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateFileWithOptions>)
-- [func CreateSymlink\(src, target \*Path\) error](<#CreateSymlink>)
-- [func CreateSymlinkWithOptions\(src, target \*Path, options FileOptions\) \(bool, error\)](<#CreateSymlinkWithOptions>)
-- [func DeleteDir\(path \*Path\) error](<#DeleteDir>)
-- [func DeleteFile\(path \*Path\) error](<#DeleteFile>)
-- [func DeleteTree\(path \*Path\) error](<#DeleteTree>)
-- [func EqualsFs\(p1, p2 \*Path\) \(bool, error\)](<#EqualsFs>)
-- [func IsCaseSensitiveFs\(p \*Path\) \(bool, error\)](<#IsCaseSensitiveFs>)
-- [func MoveDir\(src, dst \*Path\) error](<#MoveDir>)
-- [func MoveFile\(src, dst \*Path\) error](<#MoveFile>)
+- [func CreateSymlink\(symlinkTarget, symlinkPath \*Path\) error](<#CreateSymlink>)
+- [func MkDir\(path \*Path\) error](<#MkDir>)
+- [func MkDirWithOptions\(path \*Path, options DirOptions\) \(bool, error\)](<#MkDirWithOptions>)
+- [func Move\(src \*Path, dst \*Path\) error](<#Move>)
 - [func OpenFile\(path \*Path\) \(\*os.File, error\)](<#OpenFile>)
 - [func OpenFileWithOptions\(path \*Path, opts OpenOptions\) \(\*os.File, error\)](<#OpenFileWithOptions>)
 - [func ReadFile\(path \*Path\) \(\[\]byte, error\)](<#ReadFile>)
 - [func ReadFileToString\(path \*Path\) \(string, error\)](<#ReadFileToString>)
-- [func RenameDir\(src, dst \*Path\) error](<#RenameDir>)
-- [func RenameFile\(src \*Path, name string\) error](<#RenameFile>)
-- [func SetPerm\(path \*Path, mode fs.FileMode\) error](<#SetPerm>)
+- [func Remove\(path \*Path\) error](<#Remove>)
+- [func RemoveAll\(path \*Path\) error](<#RemoveAll>)
+- [func Rename\(src \*Path, name string\) error](<#Rename>)
+- [func SetPermission\(path \*Path, mode fs.FileMode\) error](<#SetPermission>)
 - [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
 - [func WriteString\(path \*Path, data string\) \(int, error\)](<#WriteString>)
+- [type AbortFunc](<#AbortFunc>)
+- [type DirOptions](<#DirOptions>)
+  - [func DefaultDirOptions\(\) DirOptions](<#DefaultDirOptions>)
 - [type Disposable](<#Disposable>)
 - [type FileOptions](<#FileOptions>)
+  - [func DefaultFileOptions\(\) FileOptions](<#DefaultFileOptions>)
+- [type FilterFunc](<#FilterFunc>)
+- [type GlobOptionFilterType](<#GlobOptionFilterType>)
+- [type GlobOptions](<#GlobOptions>)
+  - [func DefaultGlobOptions\(\) GlobOptions](<#DefaultGlobOptions>)
+- [type ListOptions](<#ListOptions>)
+  - [func DefaultListOptions\(\) ListOptions](<#DefaultListOptions>)
 - [type OpenOptions](<#OpenOptions>)
 - [type Path](<#Path>)
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
@@ -76,37 +78,44 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func \(p \*Path\) ExtensionCount\(\) int](<#Path.ExtensionCount>)
   - [func \(p \*Path\) ExtensionParts\(\) \[\]string](<#Path.ExtensionParts>)
   - [func \(p \*Path\) Glob\(pattern string\) \(\[\]\*Path, error\)](<#Path.Glob>)
+  - [func \(p \*Path\) GlobWithOptions\(pattern string, options GlobOptions\) \(\[\]\*Path, error\)](<#Path.GlobWithOptions>)
   - [func \(p \*Path\) HasExtensions\(\) bool](<#Path.HasExtensions>)
   - [func \(p \*Path\) HasGlobMatch\(pattern string\) bool](<#Path.HasGlobMatch>)
   - [func \(p \*Path\) HasGlobMatchE\(pattern string\) \(bool, error\)](<#Path.HasGlobMatchE>)
   - [func \(p \*Path\) IsAbsolute\(\) bool](<#Path.IsAbsolute>)
   - [func \(p \*Path\) IsBlockDevice\(\) bool](<#Path.IsBlockDevice>)
-  - [func \(p \*Path\) IsCaseSensitiveFs\(\) bool](<#Path.IsCaseSensitiveFs>)
   - [func \(p \*Path\) IsCharDevice\(\) bool](<#Path.IsCharDevice>)
   - [func \(p \*Path\) IsDir\(\) bool](<#Path.IsDir>)
+  - [func \(p \*Path\) IsEmptyDir\(\) bool](<#Path.IsEmptyDir>)
   - [func \(p \*Path\) IsFiFoPipe\(\) bool](<#Path.IsFiFoPipe>)
   - [func \(p \*Path\) IsFile\(\) bool](<#Path.IsFile>)
+  - [func \(p \*Path\) IsOnCaseSensitiveFs\(\) bool](<#Path.IsOnCaseSensitiveFs>)
   - [func \(p \*Path\) IsRelative\(\) bool](<#Path.IsRelative>)
   - [func \(p \*Path\) IsSocket\(\) bool](<#Path.IsSocket>)
   - [func \(p \*Path\) IsSymlink\(\) bool](<#Path.IsSymlink>)
   - [func \(p \*Path\) Join\(paths ...\*Path\) \*Path](<#Path.Join>)
   - [func \(p \*Path\) JoinStrings\(paths ...string\) \*Path](<#Path.JoinStrings>)
+  - [func \(p \*Path\) List\(options ListOptions\) \(\[\]\*Path, error\)](<#Path.List>)
+  - [func \(p \*Path\) ListDirs\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListDirs>)
+  - [func \(p \*Path\) ListFiles\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListFiles>)
   - [func \(p \*Path\) Lstat\(\) \(os.FileInfo, error\)](<#Path.Lstat>)
   - [func \(p \*Path\) MarshalText\(\) \(text \[\]byte, err error\)](<#Path.MarshalText>)
   - [func \(p \*Path\) MatchesPattern\(pattern string, caseSensitive bool\) bool](<#Path.MatchesPattern>)
   - [func \(p \*Path\) MatchesPatternE\(pattern string, caseSensitive bool\) \(bool, error\)](<#Path.MatchesPatternE>)
-  - [func \(p \*Path\) MatchesPatternFsCasing\(pattern string\) bool](<#Path.MatchesPatternFsCasing>)
-  - [func \(p \*Path\) MatchesPatternFsCasingE\(pattern string\) \(bool, error\)](<#Path.MatchesPatternFsCasingE>)
   - [func \(p \*Path\) Parent\(\) \*Path](<#Path.Parent>)
   - [func \(p \*Path\) Parts\(\) \[\]string](<#Path.Parts>)
+  - [func \(p \*Path\) ReadSymlinkTarget\(\) \(\*Path, error\)](<#Path.ReadSymlinkTarget>)
   - [func \(p \*Path\) RelativeTo\(o \*Path\) \(\*Path, error\)](<#Path.RelativeTo>)
   - [func \(p \*Path\) Resolve\(\) \(\*Path, error\)](<#Path.Resolve>)
   - [func \(p \*Path\) Split\(\) \(\*Path, string\)](<#Path.Split>)
   - [func \(p \*Path\) Stat\(\) \(os.FileInfo, error\)](<#Path.Stat>)
   - [func \(p \*Path\) Stem\(\) string](<#Path.Stem>)
   - [func \(p \*Path\) String\(\) string](<#Path.String>)
+  - [func \(p \*Path\) SymlinkTo\(linkPath \*Path\) error](<#Path.SymlinkTo>)
   - [func \(p \*Path\) ToPosix\(\) string](<#Path.ToPosix>)
   - [func \(p \*Path\) UnmarshalText\(text \[\]byte\) error](<#Path.UnmarshalText>)
+  - [func \(p \*Path\) Walk\(walkFunc WalkFunc\) error](<#Path.Walk>)
+  - [func \(p \*Path\) WalkR\(walkFunc WalkRFunc\) error](<#Path.WalkR>)
   - [func \(p \*Path\) WithName\(name string\) \*Path](<#Path.WithName>)
 - [type TempPath](<#TempPath>)
   - [func CreateTempDir\(\) \(\*TempPath, error\)](<#CreateTempDir>)
@@ -115,7 +124,23 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func CreateTempFileWithOptions\(options \*TempPathOptions\) \(\*TempPath, error\)](<#CreateTempFileWithOptions>)
   - [func \(p \*TempPath\) Dispose\(\) error](<#TempPath.Dispose>)
 - [type TempPathOptions](<#TempPathOptions>)
+- [type WalkFunc](<#WalkFunc>)
+- [type WalkRFunc](<#WalkRFunc>)
 
+
+## Constants
+
+<a name="DefaultDirMode"></a>DefaultDirMode is the default directory permission mode \(rwxr\-xr\-x\)
+
+```go
+const DefaultDirMode fs.FileMode = 0755
+```
+
+<a name="DefaultFileMode"></a>DefaultFileMode is the default file permission mode \(rw\-r\-\-r\-\-\)
+
+```go
+const DefaultFileMode fs.FileMode = 0644
+```
 
 ## Variables
 
@@ -147,59 +172,20 @@ AppendString appends a string to the defined file.
 
 The file is not created.
 
-<a name="CopyDir"></a>
-## func CopyDir
+<a name="Copy"></a>
+## func Copy
 
 ```go
-func CopyDir(src, dst *Path) error
+func Copy(src *Path, destination *Path) error
 ```
 
-CopyDir copies the directory at the source path to the destination path, recursively copying all contents. Destination parent directories must exist.
+Copy copies the source path to the destination path.
 
-<a name="CopyFile"></a>
-## func CopyFile
+If the source path is a directory, the whole directory tree is copied. All other files and file types are copied as\-is.
 
-```go
-func CopyFile(src, dst *Path) error
-```
+Copying a directory requires the target directory to be empty.
 
-CopyFile copies the file at the source path to the destination path. Destination parent directories must exist.
-
-<a name="CreateDir"></a>
-## func CreateDir
-
-```go
-func CreateDir(path *Path) error
-```
-
-CreateDir creates the directory at the defined path with mode 0755. Parent directories must exist.
-
-<a name="CreateDirAll"></a>
-## func CreateDirAll
-
-```go
-func CreateDirAll(path *Path) error
-```
-
-CreateDirAll creates the directory at the defined path with mode 0755, creating all necessary parent directories with the same mode.
-
-<a name="CreateDirAllWithOptions"></a>
-## func CreateDirAllWithOptions
-
-```go
-func CreateDirAllWithOptions(path *Path, options FileOptions) (bool, error)
-```
-
-CreateDirAllWithOptions creates the directory at the defined path with given options, creating all necessary parent directories with the same mode. If ExistOk is true and the directory already exists, no action is taken. Returns true if directories were created, false otherwise.
-
-<a name="CreateDirWithOptions"></a>
-## func CreateDirWithOptions
-
-```go
-func CreateDirWithOptions(path *Path, options FileOptions) (bool, error)
-```
-
-CreateDirWithOptions creates the directory at the defined path with given options. If ExistOk is true and the directory already exists, no action is taken. Parent directories must exist. Returns true if a new directory was created, false otherwise.
+The source path must exist. Destination parent directories must exist.
 
 <a name="CreateFile"></a>
 ## func CreateFile
@@ -208,7 +194,9 @@ CreateDirWithOptions creates the directory at the defined path with given option
 func CreateFile(path *Path) error
 ```
 
-CreateFile creates the file at the defined path with mode 0644. If the file already exists, it will be truncated. Parent directories must exist.
+CreateFile creates the file at the defined path with mode 0644. If the file already exists, it will be truncated.
+
+Parent directories must exist.
 
 <a name="CreateFileWithOptions"></a>
 ## func CreateFileWithOptions
@@ -219,7 +207,9 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error)
 
 CreateFileWithOptions creates the file at the defined path with given options.
 
-If FileOptions.ExistOk is true and the file already exists, no action is taken. Parent directories must exist.
+If FileOptions.ExistOk is true and the file already exists, no action is taken and false is returned. Parent directories must exist.
+
+FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system and defaults to DefaultFileMode.
 
 Returns true if a new file was created, false otherwise.
 
@@ -227,88 +217,49 @@ Returns true if a new file was created, false otherwise.
 ## func CreateSymlink
 
 ```go
-func CreateSymlink(src, target *Path) error
+func CreateSymlink(symlinkTarget, symlinkPath *Path) error
 ```
 
-CreateSymlink creates a symbolic link at the source path pointing to the target path.
+CreateSymlink creates a symlink at the symlinkPath that points to symlinkTarget.
 
-<a name="CreateSymlinkWithOptions"></a>
-## func CreateSymlinkWithOptions
+symlinkTarget may be relative or absolute.
+
+symlinkPath may not exist, but parent directory should.
+
+<a name="MkDir"></a>
+## func MkDir
 
 ```go
-func CreateSymlinkWithOptions(src, target *Path, options FileOptions) (bool, error)
+func MkDir(path *Path) error
 ```
 
-CreateSymlinkWithOptions creates a symbolic link at the source path pointing to the target path. If ExistOk is true and the source path already exists, no action is taken. Returns true if a new symlink was created, false otherwise.
+MkDir creates the directory at the defined path with mode 0755. Parent directories must exist.
 
-<a name="DeleteDir"></a>
-## func DeleteDir
+<a name="MkDirWithOptions"></a>
+## func MkDirWithOptions
 
 ```go
-func DeleteDir(path *Path) error
+func MkDirWithOptions(path *Path, options DirOptions) (bool, error)
 ```
 
-DeleteDir removes the directory at the specified path. Returns an error if the directory is not empty.
+MkDirWithOptions creates the directory at the defined path with given options. If ExistOk is true and the directory already exists, no action is taken.
 
-<a name="DeleteFile"></a>
-## func DeleteFile
+DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system and defaults to DefaultDirMode.
+
+Returns true if a new directory was created, false otherwise.
+
+<a name="Move"></a>
+## func Move
 
 ```go
-func DeleteFile(path *Path) error
+func Move(src *Path, dst *Path) error
 ```
 
-DeleteFile removes the file at the specified path. Returns an error if the path is a directory.
+Move moves the file or directory at the source path to the destination path. If the destination is on the same filesystem, this is equivalent to a rename operation.
 
-<a name="DeleteTree"></a>
-## func DeleteTree
+Fails if destination already exists, except if the source path is a directory, and the target path is an empty directory.
 
-```go
-func DeleteTree(path *Path) error
-```
-
-DeleteTree removes the directory at the specified path and all its contents.
-
-<a name="EqualsFs"></a>
-## func EqualsFs
-
-```go
-func EqualsFs(p1, p2 *Path) (bool, error)
-```
-
-EqualsFs returns whether the two paths point to the same file system object. This comparison is performed using file stats, not string comparison.
-
-<a name="IsCaseSensitiveFs"></a>
-## func IsCaseSensitiveFs
-
-```go
-func IsCaseSensitiveFs(p *Path) (bool, error)
-```
-
-IsCaseSensitiveFs checks if the filesystem at the specified path is case\-sensitive.
-
-It first tries to check for the given path, toggling the casing of the first encountered letter in the path's base, checking if the file exists and if both file descriptors point to the same file.
-
-If no letter exists within the path's base, a temporary file is created in the same directory with which the upper procedure is repeated.
-
-If both attempts don't result a valid state, an error is returned.
-
-<a name="MoveDir"></a>
-## func MoveDir
-
-```go
-func MoveDir(src, dst *Path) error
-```
-
-MoveDir moves the directory at the source path to the destination path. If the destination is on the same filesystem, this is equivalent to a rename operation. Destination parent directories must exist.
-
-<a name="MoveFile"></a>
-## func MoveFile
-
-```go
-func MoveFile(src, dst *Path) error
-```
-
-MoveFile moves the file at the source path to the destination path. If the destination is on the same filesystem, this is equivalent to a rename operation. Destination parent directories must exist.
+Destination parent directories must exist.
 
 <a name="OpenFile"></a>
 ## func OpenFile
@@ -354,32 +305,45 @@ func ReadFileToString(path *Path) (string, error)
 
 ReadFileToString reads the passed file and returns its content as a string.
 
-<a name="RenameDir"></a>
-## func RenameDir
+<a name="Remove"></a>
+## func Remove
 
 ```go
-func RenameDir(src, dst *Path) error
+func Remove(path *Path) error
 ```
 
-RenameDir renames the directory at the source path to the destination path. This is a wrapper for MoveDir.
+Remove removes the file at the specified path or removes an empty directory.
 
-<a name="RenameFile"></a>
-## func RenameFile
+Nothing happens if the given path does not exist.
+
+<a name="RemoveAll"></a>
+## func RemoveAll
 
 ```go
-func RenameFile(src *Path, name string) error
+func RemoveAll(path *Path) error
 ```
 
-RenameFile renames the file at the source path to the destination path. This is a wrapper for MoveFile.
+RemoveAll recursively removes the directory and all its entries at the specified path.
 
-<a name="SetPerm"></a>
-## func SetPerm
+Nothing happens if the given path does not exist.
+
+<a name="Rename"></a>
+## func Rename
 
 ```go
-func SetPerm(path *Path, mode fs.FileMode) error
+func Rename(src *Path, name string) error
 ```
 
-SetPerm sets the permission mode for the specified path.
+Rename renames the file at the source path to the destination path. This is a convenience wrapper for Move.
+
+<a name="SetPermission"></a>
+## func SetPermission
+
+```go
+func SetPermission(path *Path, mode fs.FileMode) error
+```
+
+SetPermission sets the permission mode for the specified path.
 
 <a name="WriteBytes"></a>
 ## func WriteBytes
@@ -403,6 +367,42 @@ WriteString writes a string to the defined file.
 
 The file is not created. Preexisting content is truncated.
 
+<a name="AbortFunc"></a>
+## type AbortFunc
+
+AbortFunc defines a function that sets a state in a lower function in the stacktrace.
+
+```go
+type AbortFunc func()
+```
+
+<a name="DirOptions"></a>
+## type DirOptions
+
+DirOptions contains options for file and directory creation and deletion operations
+
+```go
+type DirOptions struct {
+    // ExistOk specifies whether it's acceptable if the file/directory already exists
+    ExistOk bool
+
+    // Mode specifies the file/directory permission mode
+    Mode fs.FileMode
+
+    // CreateAll creates all missing directories.
+    CreateAll bool
+}
+```
+
+<a name="DefaultDirOptions"></a>
+### func DefaultDirOptions
+
+```go
+func DefaultDirOptions() DirOptions
+```
+
+DefaultDirOptions returns the default options for directory operations.
+
 <a name="Disposable"></a>
 ## type Disposable
 
@@ -424,10 +424,109 @@ FileOptions contains options for file and directory creation and deletion operat
 type FileOptions struct {
     // ExistOk specifies whether it's acceptable if the file/directory already exists
     ExistOk bool
+
     // Mode specifies the file/directory permission mode
     Mode fs.FileMode
 }
 ```
+
+<a name="DefaultFileOptions"></a>
+### func DefaultFileOptions
+
+```go
+func DefaultFileOptions() FileOptions
+```
+
+DefaultFileOptions returns the default options for file operations.
+
+<a name="FilterFunc"></a>
+## type FilterFunc
+
+
+
+```go
+type FilterFunc func(path *Path) bool
+```
+
+<a name="GlobOptionFilterType"></a>
+## type GlobOptionFilterType
+
+
+
+```go
+type GlobOptionFilterType uint
+```
+
+<a name="GlobOptionFilterAll"></a>
+
+```go
+const (
+    GlobOptionFilterAll         GlobOptionFilterType = 0
+    GlobOptionFilterFiles       GlobOptionFilterType = 1
+    GlobOptionFilterDirectories GlobOptionFilterType = 2
+)
+```
+
+<a name="GlobOptions"></a>
+## type GlobOptions
+
+GlobOptions contains options for file globbing.
+
+```go
+type GlobOptions struct {
+    // CaseSensitive defines whether pattern matching should be case-sensitive or not.
+    // Defaults to false.
+    CaseSensitive bool
+
+    // Filter defines which type of entry to glob:
+    //  - GlobOptionFilterAll allows both files and directories.
+    //  - GlobOptionFilterFiles only allows files.
+    //  - GlobOptionFilterDirectories only allows directories.
+    // Defaults to GlobOptionFilterAll.
+    Filter GlobOptionFilterType
+
+    // FilterFunc is a custom filter function used instead of Filter if non-nil.
+    // Defaults to nil.
+    FilterFunc FilterFunc
+
+    // SkipOnDirError defines whether to skip globbing a directory if reading that directory
+    // caused an error. If set to false, an error is returned and globbing stops. If set to true,
+    // globbing continues silently. Defaults to false.
+    SkipOnDirError bool
+
+    // Limit sets a limit. Globbing will return at most this number of entries.
+    // If <= 0, no limit is used. Defaults to 0.
+    Limit int
+    // contains filtered or unexported fields
+}
+```
+
+<a name="DefaultGlobOptions"></a>
+### func DefaultGlobOptions
+
+```go
+func DefaultGlobOptions() GlobOptions
+```
+
+DefaultGlobOptions returns the default options for directory operations.
+
+<a name="ListOptions"></a>
+## type ListOptions
+
+ListOptions is a type derivative for GlobOptions.
+
+```go
+type ListOptions GlobOptions
+```
+
+<a name="DefaultListOptions"></a>
+### func DefaultListOptions
+
+```go
+func DefaultListOptions() ListOptions
+```
+
+DefaultListOptions returns the same as DefaultGlobOptions, but type cast to ListOptions.
 
 <a name="OpenOptions"></a>
 ## type OpenOptions
@@ -605,7 +704,9 @@ Equals returns whether this and another Path match lexically.
 func (p *Path) EqualsFs(other *Path) bool
 ```
 
-EqualsFs returns whether this Path and another Path point to the same file system object. This comparison is performed using file stats, not string comparison.
+EqualsFs returns whether this Path and another Path point to the same file system inode. This comparison is performed using file stats, not string comparison.
+
+Symlinks are resolved.
 
 <a name="Path.EqualsString"></a>
 ### func \(\*Path\) EqualsString
@@ -624,6 +725,8 @@ func (p *Path) Exists() bool
 ```
 
 Exists returns whether this Path exists.
+
+If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
 
 <a name="Path.Extension"></a>
 ### func \(\*Path\) Extension
@@ -663,9 +766,24 @@ See Extension for what is considered an extension.
 func (p *Path) Glob(pattern string) ([]*Path, error)
 ```
 
-Glob returns all paths matching the given pattern within this Path's directory.
+Glob returns all files matching the given pattern within this Path's Posix representation.
 
-This function utilizes filepath.Glob. It ignores IO errors.
+If an error is returned, all entries until that error are returned.
+
+This Path must be a directory.
+
+<a name="Path.GlobWithOptions"></a>
+### func \(\*Path\) GlobWithOptions
+
+```go
+func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error)
+```
+
+GlobWithOptions returns all entries matching the given pattern within this Path's Posix representation.
+
+If an error is returned, all entries until that error are returned.
+
+This Path must be a directory.
 
 <a name="Path.HasExtensions"></a>
 ### func \(\*Path\) HasExtensions
@@ -692,9 +810,9 @@ HasGlobMatch returns whether the passed pattern exists within this Path's direct
 func (p *Path) HasGlobMatchE(pattern string) (bool, error)
 ```
 
-HasGlobMatchE returns whether the passed pattern exist within this Path's directory.
+HasGlobMatchE returns whether the passed pattern exists within this Path's directory.
 
-This function utilizes filepath.Glob.
+This function uses filepath.Glob.
 
 <a name="Path.IsAbsolute"></a>
 ### func \(\*Path\) IsAbsolute
@@ -716,15 +834,6 @@ func (p *Path) IsBlockDevice() bool
 
 IsBlockDevice returns whether this Path is a block device.
 
-<a name="Path.IsCaseSensitiveFs"></a>
-### func \(\*Path\) IsCaseSensitiveFs
-
-```go
-func (p *Path) IsCaseSensitiveFs() bool
-```
-
-IsCaseSensitiveFs returns whether this Path is on a case\-sensitive filesystem.
-
 <a name="Path.IsCharDevice"></a>
 ### func \(\*Path\) IsCharDevice
 
@@ -743,6 +852,19 @@ func (p *Path) IsDir() bool
 
 IsDir returns whether this Path is an existing directory.
 
+If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
+
+<a name="Path.IsEmptyDir"></a>
+### func \(\*Path\) IsEmptyDir
+
+```go
+func (p *Path) IsEmptyDir() bool
+```
+
+IsEmptyDir returns whether this Path is an empty existing directory.
+
+If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
+
 <a name="Path.IsFiFoPipe"></a>
 ### func \(\*Path\) IsFiFoPipe
 
@@ -760,6 +882,23 @@ func (p *Path) IsFile() bool
 ```
 
 IsFile returns whether this Path is an existing file.
+
+If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
+
+<a name="Path.IsOnCaseSensitiveFs"></a>
+### func \(\*Path\) IsOnCaseSensitiveFs
+
+```go
+func (p *Path) IsOnCaseSensitiveFs() bool
+```
+
+IsOnCaseSensitiveFs checks if the filesystem at this Path is case\-sensitive.
+
+It first tries to check for the given path, toggling the casing of the first encountered letter in the path's base, checking if the file exists and if both file descriptors point to the same file.
+
+If no letter exists within the path's base, a temporary file is created in the same directory for which the upper procedure is repeated.
+
+If both attempts result in an invalid state, false is returned.
 
 <a name="Path.IsRelative"></a>
 ### func \(\*Path\) IsRelative
@@ -814,6 +953,43 @@ JoinStrings returns a new Path with all passed strings joined together.
 
 This function uses filepath.Join.
 
+<a name="Path.List"></a>
+### func \(\*Path\) List
+
+```go
+func (p *Path) List(options ListOptions) ([]*Path, error)
+```
+
+List returns a slice of Path, sorted by Posix representations. Serves as a simple convenience function for retrieving a sorted enumeration of filtered entries.
+
+If an error occurs, no entries are returned.
+
+Use Walk or WalkR for more fine\-grained control.
+
+This function uses GlobWithOptions.
+
+<a name="Path.ListDirs"></a>
+### func \(\*Path\) ListDirs
+
+```go
+func (p *Path) ListDirs(recursive bool) ([]*Path, error)
+```
+
+ListDirs returns all directories in the Path's directory, sorted by Posix representations. Serves as a simple convenience function for retrieving a sorted enumeration of directories.
+
+This function uses List. The same requirements and behaviors apply.
+
+<a name="Path.ListFiles"></a>
+### func \(\*Path\) ListFiles
+
+```go
+func (p *Path) ListFiles(recursive bool) ([]*Path, error)
+```
+
+ListFiles returns all files in the Path's directory, sorted by Posix representations. Serves as a simple convenience function for retrieving a sorted enumeration of files.
+
+This function uses List. The same requirements and behaviors apply.
+
 <a name="Path.Lstat"></a>
 ### func \(\*Path\) Lstat
 
@@ -823,7 +999,7 @@ func (p *Path) Lstat() (os.FileInfo, error)
 
 Lstat returns file info for this Path, not following symbolic links.
 
-This function utilizes os.Lstat.
+This function uses os.Lstat.
 
 <a name="Path.MarshalText"></a>
 ### func \(\*Path\) MarshalText
@@ -841,7 +1017,9 @@ MarshalText marshals this Path's Posix representation into a byte array. Impleme
 func (p *Path) MatchesPattern(pattern string, caseSensitive bool) bool
 ```
 
-MatchesPattern matches this Path against the provided pattern. It wraps MatchesPatternE and returns the boolean success return value or false in case of an error.
+MatchesPattern matches this Path against the provided pattern.
+
+It wraps MatchesPatternE and returns the boolean success return value or false in case of an error.
 
 <a name="Path.MatchesPatternE"></a>
 ### func \(\*Path\) MatchesPatternE
@@ -850,33 +1028,13 @@ MatchesPattern matches this Path against the provided pattern. It wraps MatchesP
 func (p *Path) MatchesPatternE(pattern string, caseSensitive bool) (bool, error)
 ```
 
-MatchesPatternE matches this Path against the provided pattern. Returns whether the matching is successful or any occurring error.
+MatchesPatternE matches this Path's Posix representation against a pattern with support for double asterisk \(\*\*\). Returns whether the matching is successful or any occurring error.
 
-Uses path.Match. Use forward slashes as path separators.
+Wraps path.Match with some custom rules for double asterisk support. Use forward slashes as path separators.
 
-Empty patterns are not allowed.
+If caseSensitive is false, both pattern and name are lowercased before matching.
 
-<a name="Path.MatchesPatternFsCasing"></a>
-### func \(\*Path\) MatchesPatternFsCasing
-
-```go
-func (p *Path) MatchesPatternFsCasing(pattern string) bool
-```
-
-MatchesPatternFsCasing matches this path against the provided pattern. It wraps MatchesPatternFsCasingE and returns the boolean success return value or false in case of an error.
-
-<a name="Path.MatchesPatternFsCasingE"></a>
-### func \(\*Path\) MatchesPatternFsCasingE
-
-```go
-func (p *Path) MatchesPatternFsCasingE(pattern string) (bool, error)
-```
-
-MatchesPatternFsCasingE matches this path against the provided pattern. Returns whether the matching is successful or any occurring error.
-
-Matching is performed based on the file system case sensitivity.
-
-Empty patterns are not allowed.
+Empty patterns cause an error.
 
 <a name="Path.Parent"></a>
 ### func \(\*Path\) Parent
@@ -898,6 +1056,17 @@ func (p *Path) Parts() []string
 
 Parts returns all single parts of the Path. It uses filepath.Separator to split the path string.
 
+<a name="Path.ReadSymlinkTarget"></a>
+### func \(\*Path\) ReadSymlinkTarget
+
+```go
+func (p *Path) ReadSymlinkTarget() (*Path, error)
+```
+
+ReadSymlinkTarget reads the target path for this Path.
+
+This Path must be a symlink.
+
 <a name="Path.RelativeTo"></a>
 ### func \(\*Path\) RelativeTo
 
@@ -918,7 +1087,7 @@ func (p *Path) Resolve() (*Path, error)
 
 Resolve resolves all symbolic links and ensures an absolute path representation.
 
-This function utilizes filepath.EvalSymlinks.
+This function uses filepath.EvalSymlinks and Absolute.
 
 <a name="Path.Split"></a>
 ### func \(\*Path\) Split
@@ -938,7 +1107,7 @@ func (p *Path) Stat() (os.FileInfo, error)
 
 Stat returns file info for this Path.
 
-This function utilizes os.Stat.
+This function uses os.Stat.
 
 <a name="Path.Stem"></a>
 ### func \(\*Path\) Stem
@@ -958,6 +1127,19 @@ func (p *Path) String() string
 
 String returns this Path as a string.
 
+<a name="Path.SymlinkTo"></a>
+### func \(\*Path\) SymlinkTo
+
+```go
+func (p *Path) SymlinkTo(linkPath *Path) error
+```
+
+SymlinkTo creates a symbolic link at the source path pointing to the target path.
+
+This path must exist.
+
+This function uses CreateSymlink.
+
 <a name="Path.ToPosix"></a>
 ### func \(\*Path\) ToPosix
 
@@ -975,6 +1157,30 @@ func (p *Path) UnmarshalText(text []byte) error
 ```
 
 UnmarshalText unmarshalls any byte array into a Path type using the NewPath constructor. Implements the encoding.TextUnmarshaler interface.
+
+<a name="Path.Walk"></a>
+### func \(\*Path\) Walk
+
+```go
+func (p *Path) Walk(walkFunc WalkFunc) error
+```
+
+Walk walks this directory and calls walkFunc for every entry \(files, directories, etc.\). This path must be a directory. Symlinks are followed.
+
+walkFunc receives a path joined with this Path.
+
+<a name="Path.WalkR"></a>
+### func \(\*Path\) WalkR
+
+```go
+func (p *Path) WalkR(walkFunc WalkRFunc) error
+```
+
+WalkR walks this directory recursively and calls walkFunc for every entry. This path must be a directory. Symlinks are followed.
+
+walkFunc receives paths that are already joined with this Path.
+
+walkFunc takes the current entry, a function to abort walking the entire tree and a function to abort walking the current branch.
 
 <a name="Path.WithName"></a>
 ### func \(\*Path\) WithName
@@ -1004,7 +1210,7 @@ type TempPath struct {
 func CreateTempDir() (*TempPath, error)
 ```
 
-CreateTempDir creates a new temporary directory. It's the callers responsibility to call TempPath.Dispose\(\).
+CreateTempDir creates a new temporary directory. It's the caller's responsibility to call TempPath.Dispose\(\).
 
 Example:
 
@@ -1026,7 +1232,7 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error)
 
 CreateTempDirWithOptions creates a temporary directory with further options.
 
-It's the callers responsibility to call TempPath.Dispose\(\).
+It's the caller's responsibility to call TempPath.Dispose\(\).
 
 Example:
 
@@ -1122,6 +1328,28 @@ type TempPathOptions struct {
     */
     Prefix string
 }
+```
+
+<a name="WalkFunc"></a>
+## type WalkFunc
+
+WalkFunc defines a function that takes a Path to perform actions with the Path. If no more walking is allowed, call abortGlobFunc.
+
+```go
+type WalkFunc func(p *Path, abortGlob AbortFunc) error
+```
+
+<a name="WalkRFunc"></a>
+## type WalkRFunc
+
+WalkRFunc is the equivalent of WalkFunc, but for recursive globbing. It takes a Path to perform actions with the Path. It also takes an error which is non\-nil if there was an error for the currently passed Path.
+
+If an error is returned, the entire globbing operation is aborted.
+
+Use abortLocalTree to tell globbing to not consider this Path and all following entries in this directory any further.
+
+```go
+type WalkRFunc func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error
 ```
 
 Generated by [gomarkdoc](<https://github.com/princjef/gomarkdoc>)

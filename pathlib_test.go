@@ -4,21 +4,14 @@ import (
 	"encoding"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-type TestInput[I any] struct {
-	Name  string
-	Input I
-}
-
-type TestExpect[T any] struct {
-	Expect T
-	Error  bool
-}
+// TODO Add test cases for correct windows path encoding handling.
 
 type TestCase[I any, E any] struct {
 	Name   string
@@ -222,8 +215,6 @@ func TestPathInputOutputDisplay(t *testing.T) {
 				if !expectMatrixMask.OnWindows {
 					t.Skip("Test not targeted to Windows runtime")
 				}
-
-				fmt.Println(input)
 
 				require.Equal(t, expect, inputPath.toWindows())
 			})
@@ -674,32 +665,33 @@ func TestPath_AbsoluteAndRelative(t *testing.T) {
 
 func TestPath_RelativeTo(t *testing.T) {
 	cases := []TestCase[[]*Path, *Path]{
-		{Input: []*Path{NewPath("/a/b"), NewPath("/")}, Expect: NewPath("a/b")},
-		{Input: []*Path{NewPath("/a/b"), NewPath("/a")}, Expect: NewPath("b")},
-		{Input: []*Path{NewPath("a/b"), NewPath("a")}, Expect: NewPath("b")},
-		{Input: []*Path{NewPath("a/b/d"), NewPath("a/b/c")}, Expect: NewPath("../d")},
-		{Input: []*Path{NewPath("/b"), NewPath("/a")}, Expect: NewPath("../b")},
-		{Input: []*Path{NewPath("/b/d"), NewPath("/a/c")}, Expect: NewPath("../../b/d")},
-		{Input: []*Path{NewPath("/"), NewPath("/a/b")}, Expect: NewPath("../..")},
-		{Input: []*Path{NewPath(""), NewPath("/a/b")}, Error: true},
-		{Input: []*Path{NewPath("../"), NewPath("/a/b")}, Error: true},
-		{Input: []*Path{NewPath("../b"), NewPath("a/b")}, Expect: NewPath("../../../b")},
-		{Input: []*Path{NewPath("a/b\\ whitespace/c"), NewPath("a/d")}, Expect: NewPath("../b\\ whitespace/c")},
+		{Input: []*Path{NewPath("/"), NewPath("/a/b")}, Expect: NewPath("a/b")},
+		{Input: []*Path{NewPath("/a"), NewPath("/a/b")}, Expect: NewPath("b")},
+		{Input: []*Path{NewPath("a"), NewPath("a/b")}, Expect: NewPath("b")},
+		{Input: []*Path{NewPath("a/b"), NewPath("a")}, Expect: NewPath("..")},
+		{Input: []*Path{NewPath("a/b/c"), NewPath("a/b/d")}, Expect: NewPath("../d")},
+		{Input: []*Path{NewPath("/a"), NewPath("/b")}, Expect: NewPath("../b")},
+		{Input: []*Path{NewPath("/a/c"), NewPath("/b/d")}, Expect: NewPath("../../b/d")},
+		{Input: []*Path{NewPath("/a/b"), NewPath("/")}, Expect: NewPath("../..")},
+		{Input: []*Path{NewPath("/a/b"), NewPath("")}, Error: true},
+		{Input: []*Path{NewPath("/a/b"), NewPath("../")}, Error: true},
+		{Input: []*Path{NewPath("a/b"), NewPath("../b")}, Expect: NewPath("../../../b")},
+		{Input: []*Path{NewPath("a/d"), NewPath("a/b\\ whitespace/c")}, Expect: NewPath("../b\\ whitespace/c")},
 	}
 
 	for i := range cases {
 		cases[i].Name = fmt.Sprintf("[%d]", i+1)
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, error bool) {
+	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
 		require.Equal(t, len(input), 2)
 
 		basePath := input[0]
-		otherPath := input[1]
-		relativePath, err := basePath.RelativeTo(otherPath)
+		originalPath := input[1]
+		relativePath, err := originalPath.RelativeTo(basePath)
 
-		require.Equal(t, error, err != nil)
-		if !error {
+		require.Equal(t, expectError, err != nil)
+		if !expectError {
 			require.Equal(t, expect, relativePath)
 		}
 	})
@@ -743,15 +735,15 @@ func TestPath_AbsoluteTo(t *testing.T) {
 		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, error bool) {
+	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
 		require.Equal(t, len(input), 2)
 
 		base := input[0]
 		other := input[1]
 		absolutePath, err := base.AbsoluteTo(other)
-		require.Equal(t, error, err != nil)
+		require.Equal(t, expectError, err != nil)
 
-		if !error {
+		if !expectError {
 			require.Equal(t, expect, absolutePath)
 		}
 	})
@@ -817,15 +809,18 @@ func TestPath_EqualsCaseSensitive(t *testing.T) {
 		require.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
-		pathEqualsCaseSensitive := basePath.Equals(NewPath(input[1]), true)
-		stringEqualsCaseSensitive := basePath.EqualsString(input[1], true)
+		pathEqualsDefaultCase := basePath.Equals(NewPath(input[1]))
+		pathEqualsCaseSensitive := basePath.Equals(NewPath(input[1]), CaseSensitive)
+		stringEqualsCaseSensitive := basePath.EqualsString(input[1], CaseSensitive)
 
+		require.Equal(t, expect, pathEqualsDefaultCase)
 		require.Equal(t, expect, pathEqualsCaseSensitive)
 		require.Equal(t, expect, stringEqualsCaseSensitive)
+		require.Equal(t, pathEqualsDefaultCase, pathEqualsCaseSensitive)
 	})
 }
 
-func TestPath_EqualsCaseInSensitive(t *testing.T) {
+func TestPath_EqualsCaseInsensitive(t *testing.T) {
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
 		{Input: []string{"", "a"}, Expect: false},
@@ -850,37 +845,42 @@ func TestPath_EqualsCaseInSensitive(t *testing.T) {
 		require.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
-		pathEqualsCaseInSensitive := basePath.Equals(NewPath(strings.ToLower(input[1])), false)
-		stringEqualsCaseInSensitive := basePath.EqualsString(strings.ToLower(input[1]), false)
+		pathEqualsDefaultCase := basePath.Equals(NewPath(input[1]))
+		pathEqualsCaseSensitive := basePath.Equals(NewPath(input[1]), CaseSensitive)
+		pathEqualsCaseInsensitive := basePath.Equals(NewPath(input[1]), CaseInsensitive)
+		stringEqualsCaseInsensitive := basePath.EqualsString(input[1], CaseInsensitive)
 
-		require.Equal(t, expect, pathEqualsCaseInSensitive)
-		require.Equal(t, expect, stringEqualsCaseInSensitive)
+		require.Equal(t, pathEqualsDefaultCase, pathEqualsCaseSensitive)
+		require.Equal(t, expect, pathEqualsCaseInsensitive)
+		require.Equal(t, expect, stringEqualsCaseInsensitive)
 	})
 }
 
 func TestPath_WithName(t *testing.T) {
-	cases := []TestCase[[]string, *Path]{
-		{Input: []string{"", "foo"}, Expect: NewPath("foo")},
-		{Input: []string{"/", "foo"}, Expect: NewPath("/foo")},
-		{Input: []string{"../", "foo"}, Expect: NewPath("foo")},
-		{Input: []string{"../..", "foo"}, Expect: NewPath("../foo")},
-		{Input: []string{"foo/bar", "foo"}, Expect: NewPath("foo/foo")},
-		{Input: []string{"/foo/bar", "foo"}, Expect: NewPath("/foo/foo")},
-		{Input: []string{"foo/file.txt", "bar.txt"}, Expect: NewPath("foo/bar.txt")},
-		{Input: []string{"foo/.txt", ".json"}, Expect: NewPath("foo/.json")},
-		{Input: []string{"/foo/.txt", ".json"}, Expect: NewPath("/foo/.json")},
+	type Input struct {
+		Original string
+		NewName  string
+	}
+
+	cases := []TestCase[Input, *Path]{
+		{Input: Input{Original: "", NewName: "foo"}, Expect: NewPath("foo")},
+		{Input: Input{Original: "/", NewName: "foo"}, Expect: NewPath("/foo")},
+		{Input: Input{Original: "../", NewName: "foo"}, Expect: NewPath("foo")},
+		{Input: Input{Original: "../..", NewName: "foo"}, Expect: NewPath("../foo")},
+		{Input: Input{Original: "foo/bar", NewName: "foo"}, Expect: NewPath("foo/foo")},
+		{Input: Input{Original: "/foo/bar", NewName: "foo"}, Expect: NewPath("/foo/foo")},
+		{Input: Input{Original: "foo/file.txt", NewName: "bar.txt"}, Expect: NewPath("foo/bar.txt")},
+		{Input: Input{Original: "foo/.txt", NewName: ".json"}, Expect: NewPath("foo/.json")},
+		{Input: Input{Original: "/foo/.txt", NewName: ".json"}, Expect: NewPath("/foo/.json")},
 	}
 
 	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
+		cases[i].Name = fmt.Sprintf("[original:%s__newname:%s]", testCase.Input.Original, testCase.Input.NewName)
 	}
 
-	runForResults(t, cases, func(t *testing.T, input []string, expect *Path) {
-		require.True(t, len(input) == 2)
-
-		// call function and assert
-		path := NewPath(input[0])
-		changedName := path.WithName(input[1])
+	runForResults(t, cases, func(t *testing.T, input Input, expect *Path) {
+		path := NewPath(input.Original)
+		changedName := path.WithName(input.NewName)
 
 		require.Equal(t, expect, changedName)
 	})
@@ -911,48 +911,7 @@ func TestPath_Copy(t *testing.T) {
 	})
 }
 
-/*
- * TestPath_flipCase tests the underlying function for case-sensitivity checks.
- */
-func TestPath_flipCase(t *testing.T) {
-	cases := []TestCase[string, string]{
-		{Input: "", Expect: ""},
-		{Input: "/", Expect: "/"},
-		{Input: "Aaa", Expect: "aaa"},
-		{Input: "AAA", Expect: "aAA"},
-		{Input: "aAA", Expect: "AAA"},
-		{Input: "aaa", Expect: "Aaa"},
-		{Input: "aaa ads", Expect: "Aaa ads"},
-	}
-
-	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
-	}
-
-	runForResults(t, cases, func(t *testing.T, input string, expect string) {
-		require.Equal(t, expect, flipCase(input))
-	})
-}
-
-func mergeTestInputWithExpected[I any, E any](t *testing.T, testInputs []TestInput[I], testExpected []TestExpect[E]) []TestCase[I, E] {
-	if len(testInputs) != len(testExpected) {
-		t.Fatalf("Unequal number of given inputs (%d) and expected results (%d)", len(testInputs), len(testExpected))
-	}
-
-	cases := make([]TestCase[I, E], len(testInputs))
-	for i, input := range testInputs {
-		cases[i] = TestCase[I, E]{
-			Name:   input.Name,
-			Input:  input.Input,
-			Expect: testExpected[i].Expect,
-			Error:  testExpected[i].Error,
-		}
-	}
-
-	return cases
-}
-
-func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, error bool)) {
+func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, expectError bool)) {
 	for _, test := range cases {
 
 		caseName := test.Name
@@ -966,8 +925,63 @@ func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc
 	}
 }
 
-func runForResults[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E)) {
+func runForResults[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expectError E)) {
 	runForResultsE(t, cases, func(t *testing.T, input I, expect E, error bool) {
 		testFunc(t, input, expect)
 	})
+}
+
+func TestMatchesPatternE(t *testing.T) {
+	type matchInput struct {
+		Path    string
+		Pattern string
+		Opts    []CompareOption
+	}
+
+	type matchExpect struct {
+		Match bool
+		Error bool
+	}
+
+	cases := []struct {
+		Name   string
+		Input  matchInput
+		Expect matchExpect
+	}{
+		{"simple match", matchInput{"foo.go", "*.go", nil}, matchExpect{true, false}},
+		{"simple no match", matchInput{"foo.go", "*.txt", nil}, matchExpect{false, false}},
+		{"exact match", matchInput{"foo", "foo", nil}, matchExpect{true, false}},
+		{"double asterisk", matchInput{"a/b/c.go", "**/*.go", nil}, matchExpect{true, false}},
+		{"double asterisk matches all", matchInput{"a/b/c", "**", nil}, matchExpect{true, false}},
+		{"single asterisk no cross slash", matchInput{"a/b.go", "*.go", nil}, matchExpect{false, false}},
+		{"empty pattern", matchInput{"foo", "", nil}, matchExpect{false, true}},
+		{"empty pattern on dot path", matchInput{".", "", nil}, matchExpect{false, true}},
+		{"bad pattern syntax", matchInput{"foo", "[", nil}, matchExpect{false, true}},
+
+		// case-sensitive (default)
+		{"case sensitive default", matchInput{"Foo.GO", "*.go", nil}, matchExpect{false, false}},
+		{"case sensitive explicit", matchInput{"Foo.GO", "*.go", []CompareOption{CaseSensitive}}, matchExpect{false, false}},
+
+		// case-insensitive
+		{"case insensitive match", matchInput{"Foo.GO", "*.go", []CompareOption{CaseInsensitive}}, matchExpect{true, false}},
+		{"case insensitive exact", matchInput{"FOO", "foo", []CompareOption{CaseInsensitive}}, matchExpect{true, false}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			p := NewPath(tc.Input.Path)
+			match, err := p.MatchesPatternE(tc.Input.Pattern, tc.Input.Opts...)
+			matchNoErr := p.MatchesPattern(tc.Input.Pattern, tc.Input.Opts...)
+
+			require.Equal(t, match, matchNoErr)
+
+			if tc.Expect.Error {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, tc.Expect.Match, match)
+		})
+	}
 }

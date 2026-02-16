@@ -56,8 +56,8 @@ It's the caller's responsibility to close the returned os.File.
 */
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 
-	if opts.Permission < 0 || opts.Permission > 0777 {
-		return nil, errors.New("permission out of bounds. min: 0, max: Oo777")
+	if opts.Permission > 0777 { // opts.Permission is uint32, so it can never be < 0
+		return nil, errors.New("permission out of bounds. min: 0, max: 0o777")
 	}
 
 	// set the default permission value

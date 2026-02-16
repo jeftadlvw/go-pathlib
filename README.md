@@ -12,7 +12,7 @@ A simple one-file library for handling filesystem paths. Utilizing Golang's [pat
 
 This library is developed and tested on Unix-based operating systems. Windows should work (in theory), please open an issue if you face any problems.
 
-Minimum tested Go version: `1.18`
+Minimum tested Go version: `1.22`
 
 ## Getting started 🚀
 ```shell
@@ -54,15 +54,18 @@ The following features are planned and fixed on the roadmap. They extend the API
 
 _The APIs are nearly complete but still need testing._
 
-- [ ] `pathlib_fs.go`: filesystem operations (create, move, delete or rename files and directories, get stats, filesystem-level equality check, ...)
+- [x] `pathlib_fs.go`: filesystem operations (create, move, delete or rename files and directories, get stats, filesystem-level equality check, ...)
 - [x] `pathlib_io.go`: open files, read, write
 - [x] `pathlib_temp.go`: API for temporary files and directories
 
-_0.0.3 also adds support for Windows-style path strings, which still needs testing for every core function._
+_0.0.3 also adds support for Windows-style path strings, which still need testing for every core function._
 
 **Future**
-- [ ] recursive globbing using double asterisks (stable and tested without using external dependencies)
-- [ ] extend globbing to not include directories
+- [x] extend globbing to not include directories
+- [ ] custom error structs and fitting error handling
+- [ ] context.Context support for filesystem walking and globbing
+- [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
+- [ ] Improve DX for file walking by returning abort errors instead of calling abort functions
 - [ ] implement "range over function" for globbing (requires newer go versions)
 - [ ] function to check if a file is (semantically) hidden
 - [ ] fully tested Windows path support
@@ -96,9 +99,8 @@ Don't assume the underlying filesystem is case-insensitive. This is the case for
 
 Whether you design the paths in your application to be case-sensitive or not is your decision. But keep in mind that **case sensitivity also comes with path ambiguity** (e.g.: should `file.txt` and `FILE.txt` be treated equally?).
 
-Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default while allowing flexibility explicitly**. We provide several functions to check for path equality:
-- `Equals`: default, lexical, case-sensitive
-- `EqualsFlat`: lexical, case-insensitive
+Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default while allowing flexibility explicitly**. We provide two functions to check for path equality:
+- `Equals`: default, lexical, case-sensitive by default, but switchable with flag
 - `EqualsFs`: filesystem equality (only in `pathlib_fs.go`)
 
 ## Contributing 👥
