@@ -17,7 +17,7 @@ Package pathlib contains source code for go\-pathlib.
 
 It's a one\-file library that can be used in other projects by using Go's package system or by placing the source code file itself into the source tree.
 
-pathlib.go contains lexigraphically based functions and does not interoperate with the file system. Case sensitivity is defined explicitly. Filesystem\-specific functionality is outsourced to pathlib\_fs.go.
+pathlib.go contains lexicographically based functions and does not interoperate with the file system. Case sensitivity is defined explicitly. Filesystem\-specific functionality is outsourced to pathlib\_fs.go.
 
 Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability.
 
@@ -45,6 +45,7 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
 - [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
 - [func WriteString\(path \*Path, data string\) \(int, error\)](<#WriteString>)
 - [type AbortFunc](<#AbortFunc>)
+- [type CompareOption](<#CompareOption>)
 - [type DirOptions](<#DirOptions>)
   - [func DefaultDirOptions\(\) DirOptions](<#DefaultDirOptions>)
 - [type Disposable](<#Disposable>)
@@ -70,9 +71,9 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func \(p \*Path\) Anchor\(\) string](<#Path.Anchor>)
   - [func \(p \*Path\) Base\(\) string](<#Path.Base>)
   - [func \(p \*Path\) Copy\(\) \*Path](<#Path.Copy>)
-  - [func \(p \*Path\) Equals\(other \*Path, caseSensitive bool\) bool](<#Path.Equals>)
+  - [func \(p \*Path\) Equals\(other \*Path, opts ...CompareOption\) bool](<#Path.Equals>)
   - [func \(p \*Path\) EqualsFs\(other \*Path\) bool](<#Path.EqualsFs>)
-  - [func \(p \*Path\) EqualsString\(other string, caseSensitive bool\) bool](<#Path.EqualsString>)
+  - [func \(p \*Path\) EqualsString\(other string, opts ...CompareOption\) bool](<#Path.EqualsString>)
   - [func \(p \*Path\) Exists\(\) bool](<#Path.Exists>)
   - [func \(p \*Path\) Extension\(\) string](<#Path.Extension>)
   - [func \(p \*Path\) ExtensionCount\(\) int](<#Path.ExtensionCount>)
@@ -100,8 +101,8 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func \(p \*Path\) ListFiles\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListFiles>)
   - [func \(p \*Path\) Lstat\(\) \(os.FileInfo, error\)](<#Path.Lstat>)
   - [func \(p \*Path\) MarshalText\(\) \(text \[\]byte, err error\)](<#Path.MarshalText>)
-  - [func \(p \*Path\) MatchesPattern\(pattern string, caseSensitive bool\) bool](<#Path.MatchesPattern>)
-  - [func \(p \*Path\) MatchesPatternE\(pattern string, caseSensitive bool\) \(bool, error\)](<#Path.MatchesPatternE>)
+  - [func \(p \*Path\) MatchesPattern\(pattern string, opts ...CompareOption\) bool](<#Path.MatchesPattern>)
+  - [func \(p \*Path\) MatchesPatternE\(pattern string, opts ...CompareOption\) \(bool, error\)](<#Path.MatchesPatternE>)
   - [func \(p \*Path\) Parent\(\) \*Path](<#Path.Parent>)
   - [func \(p \*Path\) Parts\(\) \[\]string](<#Path.Parts>)
   - [func \(p \*Path\) ReadSymlinkTarget\(\) \(\*Path, error\)](<#Path.ReadSymlinkTarget>)
@@ -376,6 +377,24 @@ AbortFunc defines a function that sets a state in a lower function in the stackt
 type AbortFunc func()
 ```
 
+<a name="CompareOption"></a>
+## type CompareOption
+
+
+
+```go
+type CompareOption bool
+```
+
+<a name="CaseSensitive"></a>
+
+```go
+const (
+    CaseSensitive   CompareOption = true
+    CaseInsensitive CompareOption = false
+)
+```
+
 <a name="DirOptions"></a>
 ## type DirOptions
 
@@ -411,7 +430,7 @@ Disposable interface shows that a struct has resources that must be disposed man
 ```go
 type Disposable interface {
     // Dispose cleans up struct resources.
-    Dispose()
+    Dispose() error
 }
 ```
 
@@ -474,9 +493,9 @@ GlobOptions contains options for file globbing.
 
 ```go
 type GlobOptions struct {
-    // CaseSensitive defines whether pattern matching should be case-sensitive or not.
-    // Defaults to false.
-    CaseSensitive bool
+    // CaseSensitivity defines whether pattern matching should be case-sensitive or not.
+    // Defaults to CaseInsensitive.
+    CaseSensitivity CompareOption
 
     // Filter defines which type of entry to glob:
     //  - GlobOptionFilterAll allows both files and directories.
@@ -516,7 +535,10 @@ DefaultGlobOptions returns the default options for directory operations.
 ListOptions is a type derivative for GlobOptions.
 
 ```go
-type ListOptions GlobOptions
+type ListOptions struct {
+    GlobOptions
+    Recursive bool
+}
 ```
 
 <a name="DefaultListOptions"></a>
@@ -589,7 +611,13 @@ This function uses os.UserHomeDir.
 func NewPath(path string) *Path
 ```
 
-NewPath is the constructor function for a new Path struct instance. The passed path string is automatically cleaned and ready for further use.
+NewPath is the constructor function for a new Path struct instance.
+
+The passed path string is automatically cleaned and ready for further use using the following rules: \- Parts can include whitespaces wherever they want \(leading, somewhere in between and ending\). \- Parts are separated by a single forward slash \("/"\). \- Multiple forward slashes are replaced by one single slash. \- Trailing forward slashes are removed.
+
+Defined edge cases: \- an empty string, "." and "./" results into "." \- if all rules result into an empty string, the path also result into "." \- ".." stays ".." \- "/", "/.", and "/.." result into "/"
+
+The path is not lowercased, because the path might be used on a case\-sensitive filesystem. Functions that are case\-insensitive must additionally lowercase this representation.
 
 <a name="NewPathFromOs"></a>
 ### func NewPathFromOs
@@ -610,6 +638,8 @@ func NewPathFromWindows(path string) *Path
 ```
 
 NewPathFromWindows applies preprocessing to the passed path string to ensure a correct internal state and behavior for Windows\-styled path strings.
+
+The same normalization rules as NewPath apply, with additional handling for Windows volume names \(e.g. "C:"\) and UNC paths \(e.g. "\\\\\\\\host\\\\share"\).
 
 <a name="PathFromParts"></a>
 ### func PathFromParts
@@ -692,10 +722,10 @@ Copy creates a copy of this Path.
 ### func \(\*Path\) Equals
 
 ```go
-func (p *Path) Equals(other *Path, caseSensitive bool) bool
+func (p *Path) Equals(other *Path, opts ...CompareOption) bool
 ```
 
-Equals returns whether this and another Path match lexically.
+Equals returns whether this and another Path match lexically. By default, comparison is case\-sensitive.
 
 <a name="Path.EqualsFs"></a>
 ### func \(\*Path\) EqualsFs
@@ -712,10 +742,10 @@ Symlinks are resolved.
 ### func \(\*Path\) EqualsString
 
 ```go
-func (p *Path) EqualsString(other string, caseSensitive bool) bool
+func (p *Path) EqualsString(other string, opts ...CompareOption) bool
 ```
 
-EqualsString returns whether this and the passed string match lexically.
+EqualsString returns whether this and the passed string match lexically. By default, comparison is case\-sensitive.
 
 <a name="Path.Exists"></a>
 ### func \(\*Path\) Exists
@@ -1014,7 +1044,7 @@ MarshalText marshals this Path's Posix representation into a byte array. Impleme
 ### func \(\*Path\) MatchesPattern
 
 ```go
-func (p *Path) MatchesPattern(pattern string, caseSensitive bool) bool
+func (p *Path) MatchesPattern(pattern string, opts ...CompareOption) bool
 ```
 
 MatchesPattern matches this Path against the provided pattern.
@@ -1025,14 +1055,14 @@ It wraps MatchesPatternE and returns the boolean success return value or false i
 ### func \(\*Path\) MatchesPatternE
 
 ```go
-func (p *Path) MatchesPatternE(pattern string, caseSensitive bool) (bool, error)
+func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error)
 ```
 
 MatchesPatternE matches this Path's Posix representation against a pattern with support for double asterisk \(\*\*\). Returns whether the matching is successful or any occurring error.
 
 Wraps path.Match with some custom rules for double asterisk support. Use forward slashes as path separators.
 
-If caseSensitive is false, both pattern and name are lowercased before matching.
+By default, matching is case\-sensitive. Pass CaseInsensitive to ignore casing.
 
 Empty patterns cause an error.
 
@@ -1217,10 +1247,9 @@ Example:
 ```
 tempDir, err := CreateTempDir()
 if err != nil {
-	fmt.Printf("Could not create temporary directory")
+	// handle error
 }
-
-defer tempDir.Dispose()
+defer func() { _ = tempDir.Dispose() }()
 ```
 
 <a name="CreateTempDirWithOptions"></a>
@@ -1242,12 +1271,11 @@ options := &TempPathOptions{
 	Prefix: "foo"
 }
 
-tempDir, err := CreateTempDirWithOptions()
+tempDir, err := CreateTempDirWithOptions(options)
 if err != nil {
-	fmt.Printf("Could not create temporary directory")
+	// handle error
 }
-
-defer tempDir.Dispose()
+defer func() { _ = tempDir.Dispose() }()
 ```
 
 <a name="CreateTempFile"></a>
@@ -1259,17 +1287,16 @@ func CreateTempFile() (*TempPath, error)
 
 CreateTempFile creates a new temporary file.
 
-It's the callers responsibility to call TempPath.Dispose\(\).
+It's the caller's responsibility to call TempPath.Dispose\(\).
 
 Example:
 
 ```
 tempFile, err := CreateTempFile()
 if err != nil {
-	fmt.Printf("Could not create temporary file")
+	// handle error
 }
-
-defer tempFile.Dispose()
+defer func() { _ = tempFile.Dispose() }()
 ```
 
 <a name="CreateTempFileWithOptions"></a>
@@ -1281,7 +1308,7 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error)
 
 CreateTempFileWithOptions creates a temporary file with further options.
 
-It's the callers responsibility to call TempPath.Dispose\(\).
+It's the caller's responsibility to call TempPath.Dispose\(\).
 
 Example:
 
@@ -1293,10 +1320,9 @@ options := &TempPathOptions{
 
 tempFile, err := CreateTempFileWithOptions(options)
 if err != nil {
-	fmt.Printf("Could not create temporary file")
+	// handle error
 }
-
-defer tempFile.Dispose()
+defer func() { _ = tempFile.Dispose() }()
 ```
 
 <a name="TempPath.Dispose"></a>
