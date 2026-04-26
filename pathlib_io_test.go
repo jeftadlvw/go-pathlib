@@ -2,11 +2,12 @@ package pathlib
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestIoDefaults(t *testing.T) {

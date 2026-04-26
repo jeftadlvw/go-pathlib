@@ -117,7 +117,7 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
 	_ = file.Close()
 	pathName := file.Name()
 
-	tempFilePath := *NewPathFromOs(pathName)
+	tempFilePath := *NewPath(pathName)
 
 	return &TempPath{
 		Path: tempFilePath,
@@ -172,7 +172,7 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 		return nil, err
 	}
 
-	tempDirPath := *NewPathFromOs(dirName)
+	tempDirPath := *NewPath(dirName)
 
 	return &TempPath{
 		Path: tempDirPath,
@@ -183,5 +183,5 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 }
 
 func TempBaseDir() *Path {
-	return NewPathFromOs(os.TempDir())
+	return NewPath(os.TempDir())
 }

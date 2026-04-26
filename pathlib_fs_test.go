@@ -1526,7 +1526,7 @@ func TestPath_SymlinkTo(t *testing.T) {
 				expectedReadTarget = filepath.Base(srcPath.String())
 			}
 
-			readTargetPath := NewPathFromOs(readTarget)
+			readTargetPath := NewPath(readTarget)
 			var readTargetPathAbsolute *Path
 			if readTargetPath.IsAbsolute() {
 				readTargetPathAbsolute = readTargetPath.Copy()
@@ -2904,7 +2904,7 @@ func TestDeviceMethods(t *testing.T) {
 		require.False(t, dirPath.IsCharDevice(), "directory is not a char device")
 		require.False(t, nonExistent.IsCharDevice(), "non-existent path is not a char device")
 
-		if runtime.GOOS != "windows" {
+		if notRunningOnWindows {
 			devNull := NewPath("/dev/null")
 			require.True(t, devNull.IsCharDevice(), "/dev/null should be a char device")
 		}

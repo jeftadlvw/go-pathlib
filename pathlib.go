@@ -72,7 +72,7 @@ const (
 /*
 Path is a struct that represents a filesystem path.
 
-Create a new instance using NewPath().
+Create a new instance using NewPathFromPosix().
 Other constructor functions are prefixed with 'New'.
 
 Implements the fmt.Stringer interface.
@@ -94,7 +94,24 @@ type Path struct {
 }
 
 /*
-NewPath is the constructor function for a new Path struct instance.
+NewPath ensure correct internal state and behavior depending on the current
+operating system.
+
+It is meant to be used when handling file paths received by the operating system by
+system calls or subprocesses.
+
+It branches to either NewPathFromPosix or NewPathFromWindows.
+*/
+func NewPath(path string) *Path {
+	if runningOnWindows {
+		return NewPathFromWindows(path)
+	}
+
+	return NewPathFromPosix(path)
+}
+
+/*
+NewPathFromPosix is the constructor function for a new Path struct instance.
 
 The passed path string is automatically cleaned and ready for further use using the following rules:
 - Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
@@ -111,7 +128,7 @@ Defined edge cases:
 The path is not lowercased, because the path might be used on a case-sensitive filesystem.
 Functions that are case-insensitive must additionally lowercase this representation.
 */
-func NewPath(path string) *Path {
+func NewPathFromPosix(path string) *Path {
 	warnForBackslashesOnPosix(path)
 
 	return &Path{path: normalizePath(path)}
@@ -121,27 +138,12 @@ func NewPath(path string) *Path {
 NewPathFromWindows applies preprocessing to the passed path string to
 ensure a correct internal state and behavior for Windows-styled path strings.
 
-The same normalization rules as NewPath apply, with additional handling for
+The same normalization rules as NewPathFromPosix apply, with additional handling for
 Windows volume names (e.g. "C:") and UNC paths (e.g. "\\\\host\\share").
 */
 func NewPathFromWindows(path string) *Path {
 	warnForBackslashesOnPosix(path)
 	return normalizeWindowsPath(path)
-}
-
-/*
-NewPathFromOs ensure correct internal state and behavior depending on the current
-operating system.
-
-It is meant to be used when handling file paths received by the operating system by
-system calls or subprocesses.
-*/
-func NewPathFromOs(path string) *Path {
-	if runningOnWindows {
-		return NewPathFromWindows(path)
-	}
-
-	return NewPath(path)
 }
 
 /*
@@ -155,7 +157,7 @@ func NewCwd() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPathFromOs(cwdPath), nil
+	return NewPath(cwdPath), nil
 }
 
 /*
@@ -169,14 +171,14 @@ func NewHome() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPathFromOs(homePath), nil
+	return NewPath(homePath), nil
 }
 
 /*
 PathFromParts combines passed parts into a new Path.
 */
 func PathFromParts(parts ...string) *Path {
-	return NewPath(".").JoinStrings(parts...)
+	return NewPathFromPosix(".").JoinStrings(parts...)
 }
 
 /*
@@ -599,11 +601,11 @@ func (p *Path) MarshalText() (text []byte, err error) {
 }
 
 /*
-UnmarshalText unmarshalls any byte array into a Path type using the NewPath constructor.
+UnmarshalText unmarshalls any byte array into a Path type using the NewPathFromPosix constructor.
 Implements the encoding.TextUnmarshaler interface.
 */
 func (p *Path) UnmarshalText(text []byte) error {
-	*p = *NewPathFromOs(string(text))
+	*p = *NewPath(string(text))
 	return nil
 }
 

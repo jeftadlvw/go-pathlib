@@ -288,8 +288,8 @@ func TestPathInputOutputDisplay(t *testing.T) {
 		t.Run("AsPosixOnPosix", func(t *testing.T) {
 			t.Parallel()
 
-			inputPath := NewPath(input)
-			expectPath := NewPath(expect.AsPosixOnPosix)
+			inputPath := NewPathFromPosix(input)
+			expectPath := NewPathFromPosix(expect.AsPosixOnPosix)
 			runTests(t, expect.AsPosixOnPosix, input, expectPath, inputPath, ExpectMatrixMask{
 				AsPosix: true,
 				OnPosix: true,
@@ -299,7 +299,7 @@ func TestPathInputOutputDisplay(t *testing.T) {
 		t.Run("AsPosixOnWindows", func(t *testing.T) {
 			t.Parallel()
 
-			inputPath := NewPath(input)
+			inputPath := NewPathFromPosix(input)
 			expectPath := NewPathFromWindows(expect.AsPosixOnWindows)
 			runTests(t, expect.AsPosixOnWindows, input, expectPath, inputPath, ExpectMatrixMask{
 				AsPosix:   true,
@@ -311,7 +311,7 @@ func TestPathInputOutputDisplay(t *testing.T) {
 			t.Parallel()
 
 			inputPath := NewPathFromWindows(input)
-			expectPath := NewPath(expect.AsWindowsOnPosix)
+			expectPath := NewPathFromPosix(expect.AsWindowsOnPosix)
 			runTests(t, expect.AsWindowsOnPosix, input, expectPath, inputPath, ExpectMatrixMask{
 				AsWindows: true,
 				OnPosix:   true,
