@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO Add test cases for correct windows path encoding handling.
-
 type TestCase[I any, E any] struct {
 	Name   string
 	Input  I
@@ -616,9 +614,9 @@ func TestPath_Anchor(t *testing.T) {
 		{Input: NewPath("\\\\host\\share"), Expect: ""},
 		{Input: NewPath("\\\\host\\share\\"), Expect: ""},
 		{Input: NewPath("\\\\host\\share\\foo"), Expect: ""},
-		{Input: NewPathFromWindows("\\\\host\\share"), Expect: "\\\\host\\share"},
-		{Input: NewPathFromWindows("\\\\host\\share\\"), Expect: "\\\\host\\share"},
-		{Input: NewPathFromWindows("\\\\host\\share\\foo"), Expect: "\\\\host\\share"},
+		{Input: NewPathFromWindows("\\\\host\\share"), Expect: platformNativeUNC("//host/share")},
+		{Input: NewPathFromWindows("\\\\host\\share\\"), Expect: platformNativeUNC("//host/share")},
+		{Input: NewPathFromWindows("\\\\host\\share\\foo"), Expect: platformNativeUNC("//host/share")},
 		{Input: NewPathFromWindows("foo/bar"), Expect: ""},
 		{Input: NewPath("foo/bar.js"), Expect: ""},
 		{Input: NewPath("/foo/bar.js"), Expect: "/"},
@@ -633,6 +631,57 @@ func TestPath_Anchor(t *testing.T) {
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
 		require.Equal(t, expect, input.Anchor())
+	})
+}
+
+func TestPath_WindowsVolume(t *testing.T) {
+	cases := []TestCase[*Path, string]{
+		{Input: NewPath("."), Expect: ""},
+		{Input: NewPath("/"), Expect: ""},
+		{Input: NewPath("/foo/bar"), Expect: ""},
+		{Input: NewPath("foo/bar"), Expect: ""},
+		{Input: NewPathFromWindows("C:/foo"), Expect: "C:"},
+		{Input: NewPathFromWindows("c:/"), Expect: "c:"},
+		{Input: NewPathFromWindows("D:\\bar"), Expect: "D:"},
+		{Input: NewPathFromWindows("c:"), Expect: "c:"},
+		{Input: NewPathFromWindows("\\\\host\\share"), Expect: ""},
+		{Input: NewPathFromWindows("\\\\host\\share\\foo"), Expect: ""},
+		{Input: NewPathFromWindows("//host/share"), Expect: ""},
+		{Input: NewPathFromWindows("//host/share/foo"), Expect: ""},
+		{Input: NewPathFromWindows("foo/bar"), Expect: ""},
+	}
+
+	for i, testCase := range cases {
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.path)
+	}
+
+	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		require.Equal(t, expect, input.WindowsVolume())
+	})
+}
+
+func TestPath_WindowsUncRoot(t *testing.T) {
+	cases := []TestCase[*Path, string]{
+		{Input: NewPath("."), Expect: ""},
+		{Input: NewPath("/"), Expect: ""},
+		{Input: NewPath("/foo/bar"), Expect: ""},
+		{Input: NewPath("foo/bar"), Expect: ""},
+		{Input: NewPathFromWindows("C:/foo"), Expect: ""},
+		{Input: NewPathFromWindows("c:/"), Expect: ""},
+		{Input: NewPathFromWindows("\\\\host\\share"), Expect: platformNativeUNC("//host/share")},
+		{Input: NewPathFromWindows("\\\\host\\share\\"), Expect: platformNativeUNC("//host/share")},
+		{Input: NewPathFromWindows("\\\\host\\share\\foo"), Expect: platformNativeUNC("//host/share")},
+		{Input: NewPathFromWindows("//server/vol"), Expect: platformNativeUNC("//server/vol")},
+		{Input: NewPathFromWindows("//server/vol/bar"), Expect: platformNativeUNC("//server/vol")},
+		{Input: NewPathFromWindows("foo/bar"), Expect: ""},
+	}
+
+	for i, testCase := range cases {
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.path)
+	}
+
+	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		require.Equal(t, expect, input.WindowsUncRoot())
 	})
 }
 
@@ -909,6 +958,15 @@ func TestPath_Copy(t *testing.T) {
 		// ensure copied path has same contents as original
 		require.Equal(t, input, copiedPath)
 	})
+}
+
+// platformNativeUNC returns the expected platform-native representation of a UNC anchor.
+// On Posix it returns forward slashes, on Windows backslashes.
+func platformNativeUNC(posixForm string) string {
+	if runningOnWindows {
+		return toWindowsSeparators(posixForm)
+	}
+	return posixForm
 }
 
 func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, expectError bool)) {

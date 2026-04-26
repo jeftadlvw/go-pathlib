@@ -295,16 +295,20 @@ func (p *Path) ExtensionParts() []string {
 }
 
 /*
-Anchor returns the first part of the path.
+Anchor returns the first part of the path in platform-native form.
 
 On absolute paths this is the filesystem root ("/").
-For Windows paths the raw volume name is returned (e.g. "C:" or "//host/share")
+For Windows paths the volume name or UNC root is returned
+(e.g. "C:" or "//host/share" on Posix, "C:" or "\\host\share" on Windows).
 
 Relative paths don't have a defined anchor, "" is returned.
 */
 func (p *Path) Anchor() string {
 	if p.isWindowsAnchoredPath() {
-		return strings.ReplaceAll(p.windowsAnchor, canonicalPathSeparator, windowsPathSeparator)
+		if runningOnWindows {
+			return toWindowsSeparators(p.windowsAnchor)
+		}
+		return p.windowsAnchor
 	}
 
 	if p.IsRelative() {
@@ -312,6 +316,38 @@ func (p *Path) Anchor() string {
 	}
 
 	return "/"
+}
+
+/*
+WindowsVolume returns the drive letter anchor of a Windows volume path
+(e.g. "C:") in platform-native form.
+
+Returns "" if this is not a volume-anchored path.
+*/
+func (p *Path) WindowsVolume() string {
+	if !p.isWindowsVolumeAnchoredPath() {
+		return ""
+	}
+
+	return p.windowsAnchor
+}
+
+/*
+WindowsUncRoot returns the UNC root of a Windows network path
+(e.g. "//host/share" on Posix, "\\host\share" on Windows) in platform-native form.
+
+Returns "" if this is not a UNC-anchored path.
+*/
+func (p *Path) WindowsUncRoot() string {
+	if !p.isWindowsUNCAnchoredPath() {
+		return ""
+	}
+
+	if runningOnWindows {
+		return toWindowsSeparators(p.windowsAnchor)
+	}
+
+	return p.windowsAnchor
 }
 
 /*
@@ -527,7 +563,10 @@ func (p *Path) copyWithNewPath(newPath string) *Path {
 }
 
 /*
-String returns this Path as a string.
+String returns this Path in platform-native form.
+
+On Windows this uses backslashes and prepends the anchor; on Posix it uses forward slashes.
+Use ToPosix or ToWindows for an explicit representation.
 */
 func (p *Path) String() string {
 	if runningOnWindows {
@@ -593,16 +632,24 @@ func (p *Path) isWindowsUNCAnchoredPath() bool {
 
 func (p *Path) toWindows() string {
 	if p.isWindowsUNCAnchoredPath() {
-		anchorWindows := strings.ReplaceAll(p.windowsAnchor, canonicalPathSeparator, windowsPathSeparator)
+		anchorWindows := toWindowsSeparators(p.windowsAnchor)
 		if p.path == canonicalPathSeparator {
 			return anchorWindows
 		}
-		return anchorWindows + strings.ReplaceAll(p.path, canonicalPathSeparator, windowsPathSeparator)
+
+		return anchorWindows + toWindowsSeparators(p.path)
 	}
 
-	fullPath := p.windowsAnchor + p.path
-	pathString := strings.ReplaceAll(fullPath, canonicalPathSeparator, windowsPathSeparator)
+	pathString := toWindowsSeparators(p.pathWithWindowsAnchor())
 	return multipleWindowsPathSeparatorsRegex.ReplaceAllString(pathString, windowsPathSeparator)
+}
+
+func toWindowsSeparators(s string) string {
+	return strings.ReplaceAll(s, canonicalPathSeparator, windowsPathSeparator)
+}
+
+func toCanonicalSeparators(s string) string {
+	return strings.ReplaceAll(s, windowsPathSeparator, canonicalPathSeparator)
 }
 
 /*
@@ -640,7 +687,7 @@ func normalizePath(p string) string {
 // Windows path separator backslashes are replaced with the canonical forward slash separator
 // before any other comparison operation.
 func normalizeWindowsPath(p string) *Path {
-	dirty := strings.ReplaceAll(p, windowsPathSeparator, canonicalPathSeparator)
+	dirty := toCanonicalSeparators(p)
 
 	// Volume anchor: "C:\" (rooted) or "C:" (drive-relative).
 	if match := windowsVolumeNameRegex.FindString(dirty); match != "" {
