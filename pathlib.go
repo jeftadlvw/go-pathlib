@@ -155,7 +155,7 @@ func NewCwd() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPath(cwdPath), nil
+	return NewPathFromOs(cwdPath), nil
 }
 
 /*
@@ -169,7 +169,7 @@ func NewHome() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPath(homePath), nil
+	return NewPathFromOs(homePath), nil
 }
 
 /*
@@ -185,7 +185,7 @@ Parent returns a copy of this Path in the parent directory.
 This function uses path.Dir.
 */
 func (p *Path) Parent() *Path {
-	return NewPath(path.Dir(p.path))
+	return p.copyWithNewPath(path.Dir(p.path))
 }
 
 /*
@@ -215,8 +215,8 @@ func (p *Path) Parts() []string {
 Split splits this Path into its parent and base.
 */
 func (p *Path) Split() (*Path, string) {
-	dir, file := path.Split(p.pathWithWindowsAnchor())
-	return NewPath(dir), file
+	dir, file := path.Split(p.path)
+	return p.copyWithNewPath(normalizePath(dir)), file
 }
 
 /*
@@ -390,10 +390,7 @@ func (p *Path) RelativeTo(o *Path) (*Path, error) {
 		return nil, err
 	}
 
-	newPath := p.Copy()
-	newPath.path = rp
-
-	return newPath, nil
+	return p.copyWithNewPath(rp), nil
 }
 
 /*
@@ -453,10 +450,7 @@ func (p *Path) Join(paths ...*Path) *Path {
 		pathsStr[i] = localPath.path
 	}
 
-	newPath := p.Copy()
-	newPath.path = path.Join(append([]string{p.path}, pathsStr...)...)
-
-	return newPath
+	return p.copyWithNewPath(path.Join(append([]string{p.path}, pathsStr...)...))
 }
 
 /*
@@ -467,10 +461,7 @@ func (p *Path) JoinStrings(paths ...string) *Path {
 		warnForBackslashesOnPosix(localPath)
 	}
 
-	newPath := p.Copy()
-	newPath.path = path.Join(append([]string{p.path}, paths...)...)
-
-	return newPath
+	return p.copyWithNewPath(path.Join(append([]string{p.path}, paths...)...))
 }
 
 /*
@@ -527,6 +518,14 @@ func (p *Path) Copy() *Path {
 	}
 }
 
+// copyWithNewPath creates a copy of this Path with a different path portion,
+// preserving the Windows anchor fields.
+func (p *Path) copyWithNewPath(newPath string) *Path {
+	c := p.Copy()
+	c.path = newPath
+	return c
+}
+
 /*
 String returns this Path as a string.
 */
@@ -565,7 +564,7 @@ UnmarshalText unmarshalls any byte array into a Path type using the NewPath cons
 Implements the encoding.TextUnmarshaler interface.
 */
 func (p *Path) UnmarshalText(text []byte) error {
-	*p = *NewPath(string(text))
+	*p = *NewPathFromOs(string(text))
 	return nil
 }
 
@@ -634,8 +633,12 @@ func normalizePath(p string) string {
 }
 
 // normalizeWindowsPath processes a Windows-style path string into a normalized Path.
+//
 // It handles volume paths (e.g. "C:\foo"), UNC paths (e.g. "\\host\share\foo"),
 // and relative/absolute paths without a Windows-specific anchor.
+//
+// Windows path separator backslashes are replaced with the canonical forward slash separator
+// before any other comparison operation.
 func normalizeWindowsPath(p string) *Path {
 	dirty := strings.ReplaceAll(p, windowsPathSeparator, canonicalPathSeparator)
 

@@ -217,7 +217,7 @@ func (p *Path) Resolve() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPath(ep).Absolute()
+	return NewPathFromOs(ep).Absolute()
 }
 
 /*
@@ -730,7 +730,7 @@ func (p *Path) IsOnCaseSensitiveFs() bool {
 	_ = tempFile.Close()
 	defer os.Remove(tempFilePathStr)
 
-	tempFilePath := NewPath(tempFilePathStr)
+	tempFilePath := NewPathFromOs(tempFilePathStr)
 
 	modifiedTempFilePathBase := switchCaseAtIndex(tempFilePath.Base(), firstLetterIndex)
 	return !tempFilePath.EqualsFs(tempFilePath.Parent().JoinStrings(modifiedTempFilePathBase))
@@ -818,7 +818,7 @@ func (p *Path) ReadSymlinkTarget() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPath(target), nil
+	return NewPathFromOs(target), nil
 }
 
 /*
