@@ -17,9 +17,9 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -49,9 +49,6 @@ const canonicalPathSeparator = "/"
 const posixPathSeparator = "/"
 const windowsPathSeparator = "\\"
 
-// Posix anchor with special character combination
-const windowsAnchorCanonicalEncodingPrefix = "/w\\"
-
 // Regexes use forward slash instead of backwards slash, because we assume forward slash input
 var windowsVolumeNameRegex = regexp.MustCompile("^[A-Za-z]:(/|$)")
 var windowsNetworkPathRegex = regexp.MustCompile("^//[a-zA-Z0-9]+/[a-zA-Z0-9]+")
@@ -63,18 +60,37 @@ var multipleWindowsPathSeparatorsRegex = regexp.MustCompile(`\\+`)
 // if a path string contains a backslash.
 var PrintBackslashWarningOnPosix = true
 
+// Windows path state bitmask values for windowsPathEncodings.
+const (
+	// windowsPathStateVolume indicates a Windows path anchored to a drive volume (e.g. "C:\foo").
+	windowsPathStateVolume uint8 = 1 << iota
+
+	// windowsPathStateUNC indicates a Windows UNC path (e.g. "\\server\share\foo").
+	windowsPathStateUNC
+)
+
 /*
 Path is a struct that represents a filesystem path.
 
 Create a new instance using NewPath().
 Other constructor functions are prefixed with 'New'.
+
+Implements the fmt.Stringer interface.
 */
 type Path struct {
 
-	// The underlying filepath string representation. This is the source of
-	// truth. Other functions are relying on the assumption that this
-	// value has not been changed between operations.
+	// The underlying filepath string representation in canonical (unix-style) form.
+	// For Windows paths this holds only the portion after the anchor.
 	path string
+
+	// windowsAnchor holds the Windows-specific anchor in canonical (forward-slash) form.
+	// "C:"           for volume paths  (windowsPathStateVolume)
+	// "//host/share" for UNC paths     (windowsPathStateUNC)
+	// ""             for all others
+	windowsAnchor string
+
+	// windowsPathEncodings is a bitmask of windowsPathState* flags.
+	windowsPathEncodings uint8
 }
 
 /*
@@ -110,8 +126,7 @@ Windows volume names (e.g. "C:") and UNC paths (e.g. "\\\\host\\share").
 */
 func NewPathFromWindows(path string) *Path {
 	warnForBackslashesOnPosix(path)
-
-	return &Path{path: normalizeWindowsPath(path)}
+	return normalizeWindowsPath(path)
 }
 
 /*
@@ -167,27 +182,30 @@ func PathFromParts(parts ...string) *Path {
 /*
 Parent returns a copy of this Path in the parent directory.
 
-This function uses filepath.Dir.
+This function uses path.Dir.
 */
 func (p *Path) Parent() *Path {
-	return NewPath(filepath.Dir(p.path))
+	return NewPath(path.Dir(p.path))
 }
 
 /*
 Parts returns all single parts of the Path.
-It uses filepath.Separator to split the path string.
 */
 func (p *Path) Parts() []string {
-	stripped := p.stripEncodings()
+	localPath := p.path
 
-	if stripped == "/" {
+	if localPath == "/" {
 		return []string{}
 	}
 
-	split := strings.Split(stripped, canonicalPathSeparator)
+	split := strings.Split(localPath, canonicalPathSeparator)
 
 	if len(split) > 0 && split[0] == "" {
-		return split[1:]
+		split = split[1:]
+	}
+
+	if p.isWindowsVolumeAnchoredPath() {
+		split = slices.Insert(split, 0, p.windowsAnchor)
 	}
 
 	return split
@@ -197,17 +215,21 @@ func (p *Path) Parts() []string {
 Split splits this Path into its parent and base.
 */
 func (p *Path) Split() (*Path, string) {
-	dir, file := filepath.Split(p.stripEncodings())
+	dir, file := path.Split(p.pathWithWindowsAnchor())
 	return NewPath(dir), file
 }
 
 /*
 Base returns the last element of this Path.
 
-This function uses filepath.Base.
+This function uses path.Base.
 */
 func (p *Path) Base() string {
-	return filepath.Base(p.stripEncodings())
+	if p.isWindowsAnchoredPath() && p.isLocalDirectory() {
+		return p.windowsAnchor
+	}
+
+	return path.Base(p.path)
 }
 
 /*
@@ -281,10 +303,8 @@ For Windows paths the raw volume name is returned (e.g. "C:" or "//host/share")
 Relative paths don't have a defined anchor, "" is returned.
 */
 func (p *Path) Anchor() string {
-	if p.hasWindowsAnchorEncodings() {
-		stripped := p.stripWindowsAnchorCanonicalPrefix()
-		split := strings.SplitN(stripped, canonicalPathSeparator, 2)
-		return split[0]
+	if p.isWindowsAnchoredPath() {
+		return strings.ReplaceAll(p.windowsAnchor, canonicalPathSeparator, windowsPathSeparator)
 	}
 
 	if p.IsRelative() {
@@ -338,14 +358,14 @@ func (p *Path) MatchesPattern(pattern string, opts ...CompareOption) bool {
 /*
 IsAbsolute returns whether this Path is absolute.
 
-This function uses filepath.IsAbs.
+This function uses path.IsAbs.
 */
 func (p *Path) IsAbsolute() bool {
-	if p.hasWindowsAnchorEncodings() {
+	if p.isWindowsUNCAnchoredPath() {
 		return true
 	}
 
-	return filepath.IsAbs(p.stripEncodings())
+	return path.IsAbs(p.path)
 }
 
 /*
@@ -360,25 +380,39 @@ func (p *Path) IsRelative() bool {
 /*
 RelativeTo returns this Path relative to another.
 
-This function uses filepath.Rel.
+On Windows, paths cannot be made relative across different anchors.
+This function does not enforce it and selects this Path's anchor.
 */
 func (p *Path) RelativeTo(o *Path) (*Path, error) {
-	rp, err := filepath.Rel(o.stripEncodings(), p.stripEncodings())
-	return NewPath(rp), err
+	rp, err := relPath(o.path, p.path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newPath := p.Copy()
+	newPath.path = rp
+
+	return newPath, nil
 }
 
 /*
 Absolute returns an absolute representation of this Path.
 If the Path is relative, it will be joined with the current working directory.
 If the Path is already absolute, a copy of the Path is returned.
-
-This function uses filepath.Abs.
 */
 func (p *Path) Absolute() (*Path, error) {
-	// If filepath.Abs receives an already absolute path representation,
-	// it just returns the same representation.
-	ap, err := filepath.Abs(p.stripEncodings())
-	return NewPath(ap), err
+	// If already absolute, return a copy
+	if p.IsAbsolute() {
+		return p.Copy(), nil
+	}
+
+	cwd, err := NewCwd()
+	if err != nil {
+		return nil, err
+	}
+
+	return cwd.Join(p), nil
 }
 
 /*
@@ -411,28 +445,32 @@ Paths are not checked whether they are absolute or relative.
 
 Use JoinStrings to join strings with this Path.
 
-This function uses filepath.Join.
+This function uses path.Join.
 */
 func (p *Path) Join(paths ...*Path) *Path {
 	pathsStr := make([]string, len(paths))
 	for i, localPath := range paths {
-		pathsStr[i] = localPath.stripEncodings()
+		pathsStr[i] = localPath.path
 	}
 
-	return NewPath(filepath.Join(append([]string{p.stripEncodings()}, pathsStr...)...))
+	newPath := p.Copy()
+	newPath.path = path.Join(append([]string{p.path}, pathsStr...)...)
+
+	return newPath
 }
 
 /*
 JoinStrings returns a new Path with all passed strings joined together.
-
-This function uses filepath.Join.
 */
 func (p *Path) JoinStrings(paths ...string) *Path {
 	for _, localPath := range paths {
 		warnForBackslashesOnPosix(localPath)
 	}
 
-	return NewPath(filepath.Join(append([]string{p.stripEncodings()}, paths...)...))
+	newPath := p.Copy()
+	newPath.path = path.Join(append([]string{p.path}, paths...)...)
+
+	return newPath
 }
 
 /*
@@ -440,16 +478,16 @@ Equals returns whether this and another Path match lexically.
 By default, comparison is case-sensitive.
 */
 func (p *Path) Equals(other *Path, opts ...CompareOption) bool {
-	caseSensitive := true
+	caseSensitive := CaseSensitive
 	if len(opts) > 0 {
-		caseSensitive = bool(opts[0])
+		caseSensitive = opts[0]
 	}
 
 	if caseSensitive {
-		return p.stripEncodings() == other.stripEncodings()
+		return p.pathWithWindowsAnchor() == other.pathWithWindowsAnchor()
 	}
 
-	return strings.EqualFold(p.stripEncodings(), other.stripEncodings())
+	return strings.EqualFold(p.pathWithWindowsAnchor(), other.pathWithWindowsAnchor())
 }
 
 /*
@@ -465,10 +503,10 @@ func (p *Path) EqualsString(other string, opts ...CompareOption) bool {
 	otherCanonical := normalizePath(other)
 
 	if caseSensitive {
-		return p.stripEncodings() == otherCanonical
+		return p.pathWithWindowsAnchor() == otherCanonical
 	}
 
-	return strings.EqualFold(p.stripEncodings(), otherCanonical)
+	return strings.EqualFold(p.pathWithWindowsAnchor(), otherCanonical)
 }
 
 /*
@@ -482,8 +520,11 @@ func (p *Path) WithName(name string) *Path {
 Copy creates a copy of this Path.
 */
 func (p *Path) Copy() *Path {
-	// Suppose the internal state is valid
-	return &Path{path: p.path}
+	return &Path{
+		path:                 p.path,
+		windowsAnchor:        p.windowsAnchor,
+		windowsPathEncodings: p.windowsPathEncodings,
+	}
 }
 
 /*
@@ -501,14 +542,14 @@ func (p *Path) String() string {
 ToPosix returns a string representation with forward slashes.
 */
 func (p *Path) ToPosix() string {
-	stripped := p.stripEncodings()
-	stripped = multipleCanonicalPathSeparatorsRegex.ReplaceAllString(stripped, canonicalPathSeparator)
+	pathStr := p.pathWithWindowsAnchor()
+	pathStr = multipleCanonicalPathSeparatorsRegex.ReplaceAllString(pathStr, canonicalPathSeparator)
 
-	if len(stripped) > 1 {
-		stripped = strings.TrimRight(stripped, canonicalPathSeparator)
+	if len(pathStr) > 1 {
+		pathStr = strings.TrimRight(pathStr, canonicalPathSeparator)
 	}
 
-	return stripped
+	return pathStr
 }
 
 /*
@@ -528,66 +569,40 @@ func (p *Path) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (p *Path) hasWindowsAnchorEncodings() bool {
-	return strings.HasPrefix(p.path, windowsAnchorCanonicalEncodingPrefix)
-}
-
-/*
-stripEncodings returns the canonical path representation with any path state
-information encodings removed.
-*/
-func (p *Path) stripEncodings() string {
-	trimmedPath, hasWindowsAnchorEncoding := strings.CutPrefix(p.path, windowsAnchorCanonicalEncodingPrefix)
-
-	if hasWindowsAnchorEncoding {
-		windowsSplit := strings.SplitN(trimmedPath, canonicalPathSeparator, 2)
-		newAnchor := strings.ReplaceAll(windowsSplit[0], windowsPathSeparator, canonicalPathSeparator)
-
-		if len(windowsSplit[1]) != 0 {
-			newAnchor += canonicalPathSeparator
-		}
-
-		return newAnchor + windowsSplit[1]
+func (p *Path) pathWithWindowsAnchor() string {
+	if p.isWindowsAnchoredPath() {
+		return p.windowsAnchor + p.path
 	}
 
-	return trimmedPath
+	return p.path
 }
 
-func (p *Path) stripWindowsAnchorCanonicalPrefix() string {
-	cutString, _ := strings.CutPrefix(p.path, windowsAnchorCanonicalEncodingPrefix)
-	return cutString
+// isWindowsAnchoredPath reports whether the path was constructed from a Windows-style path string.
+func (p *Path) isWindowsAnchoredPath() bool {
+	return p.windowsPathEncodings != 0
+}
+
+// isWindows reports whether the path is a Windows UNC path (e.g. "\\server\share").
+func (p *Path) isWindowsVolumeAnchoredPath() bool {
+	return p.windowsPathEncodings&windowsPathStateVolume != 0
+}
+
+// isWindowsUNCAnchoredPath reports whether the path is a Windows UNC path (e.g. "\\server\share").
+func (p *Path) isWindowsUNCAnchoredPath() bool {
+	return p.windowsPathEncodings&windowsPathStateUNC != 0
 }
 
 func (p *Path) toWindows() string {
-	if p.hasWindowsAnchorEncodings() {
-		// Extract Windows anchor
-		windowsSplit := strings.SplitN(strings.TrimPrefix(p.path, windowsAnchorCanonicalEncodingPrefix), canonicalPathSeparator, 2)
-		windowsAnchor := windowsSplit[0]
-		windowsPath := windowsSplit[1]
-
-		if len(windowsAnchor) != 0 {
-			// Replace "\" with "/" in anchor
-			windowsAnchor = strings.ReplaceAll(windowsAnchor, windowsPathSeparator, canonicalPathSeparator)
+	if p.isWindowsUNCAnchoredPath() {
+		anchorWindows := strings.ReplaceAll(p.windowsAnchor, canonicalPathSeparator, windowsPathSeparator)
+		if p.path == canonicalPathSeparator {
+			return anchorWindows
 		}
-
-		if len(windowsPath) != 0 {
-			// Replace "\" with "/" in anchor
-			windowsPath = strings.ReplaceAll(windowsPath, windowsPathSeparator, canonicalPathSeparator)
-
-			// Remove double separators
-			windowsPath = multipleCanonicalPathSeparatorsRegex.ReplaceAllString(windowsPath, canonicalPathSeparator)
-		}
-
-		// Add path separator if anchor and path don't have a leading/ending slash
-		if len(windowsAnchor) != 0 && len(windowsPath) != 0 && windowsPath[0] != '/' && windowsAnchor[len(windowsAnchor)-1] != '/' {
-			windowsAnchor += windowsPathSeparator
-		}
-
-		pathString := windowsAnchor + windowsPath
-		return strings.ReplaceAll(pathString, canonicalPathSeparator, windowsPathSeparator)
+		return anchorWindows + strings.ReplaceAll(p.path, canonicalPathSeparator, windowsPathSeparator)
 	}
 
-	pathString := strings.ReplaceAll(p.stripEncodings(), canonicalPathSeparator, windowsPathSeparator)
+	fullPath := p.windowsAnchor + p.path
+	pathString := strings.ReplaceAll(fullPath, canonicalPathSeparator, windowsPathSeparator)
 	return multipleWindowsPathSeparatorsRegex.ReplaceAllString(pathString, windowsPathSeparator)
 }
 
@@ -597,7 +612,7 @@ normalizePath creates a canonical representation of the passed path string.
 It abstracts filesystem-specific specialties so that they can be easily compared or
 extracted.
 
-This function assumes that the passed path's part separator is "/".
+This function assumes that the passed path's part separator is "/" and uses path.Clean.
 
 This function ensures:
 - Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
@@ -613,198 +628,174 @@ Defined edge cases:
 
 The path is not lowercased, because the path might be used on a case-sensitive filesystem.
 Functions that are case-insensitive must additionally lowercase this representation.
-
-filepath.Clean is not used because it causes ambiguous behavior for creating a canonical representation.
 */
 func normalizePath(p string) string {
-	// Check for edge cases.
-	// This also ensures that len(p) is always >= 1.
-	if p == "" || p == "." || p == "./" {
-		return "."
-	}
-
-	if p == ".." {
-		return ".."
-	}
-
-	if p == "/" || p == "/." || p == "/.." {
-		return "/"
-	}
-
-	// Start cleaning
-	dirty := p
-	anchor := ""
-
-	// Remove anchor for traversal cleanup. It's readded later.
-	if dirty[0] == '/' {
-		anchor = canonicalPathSeparator
-	}
-
-	hasAnchor := len(anchor) != 0
-
-	var noAnchor string
-	if hasAnchor {
-		noAnchor = dirty[len(anchor):]
-	} else {
-		noAnchor = dirty
-	}
-
-	// Clean path parts
-	var pathParts []string
-	splitParts := strings.Split(noAnchor, canonicalPathSeparator)
-
-	// directoryDepth counts the depth within the directory without a possible anchor
-	directoryDepth := 0
-
-	// anchorDepth counts the depth of a possible anchor. It will always be >= 0
-	// and can lexically not be incremented
-	anchorDepth := 0
-
-	for _, part := range splitParts {
-		// Ignore zero-length parts or current directory references.
-		// This also leads to the removal of multiple and trailing slashes.
-		if len(part) == 0 || part == "." {
-			continue
-		}
-
-		// Parent directory references cause the current depth to be decremented
-		if part == ".." {
-			if hasAnchor {
-				// If the original path had an anchor, cap the minimum depth at 0.
-				directoryDepth = max(directoryDepth-1, 0)
-			} else if len(pathParts) != 0 {
-				// If there are enumerated parts, decrement the directory depth
-				directoryDepth--
-			} else {
-				// Decrement the anchor
-				anchorDepth--
-			}
-
-			continue
-		}
-
-		// Strip path parts that are not relevant anymore through a previous parent directory reference
-		if len(pathParts) > directoryDepth {
-			pathParts = append(pathParts[:max(directoryDepth, 0)], part)
-
-			// Reset directory depth as it has been applied to the parts.
-			// If directory depth was negative, add them to the anchor depth.
-			if directoryDepth < 0 {
-				anchorDepth = anchorDepth + directoryDepth
-			}
-
-			// Set directory depth to 0
-			directoryDepth = 0
-		} else {
-			pathParts = append(pathParts, part)
-		}
-
-		// Increment the current directory depth, because we added a new part to the path
-		directoryDepth++
-	}
-
-	// Strip path parts in case of directory depth changes after a first part addition
-	if len(pathParts) > directoryDepth {
-		pathParts = pathParts[:max(directoryDepth, 0)]
-	}
-
-	// Recombine cleaned path parts
-	cleanPathNoAnchor := strings.Join(pathParts, canonicalPathSeparator)
-
-	if !hasAnchor {
-		// If the original did not have an anchor and the directory depth is below zero,
-		// set anchor to (directory depth * parent directory indicator)
-		repeatString := ".." + canonicalPathSeparator
-
-		finalDepth := mathAbsInt(anchorDepth)
-
-		if directoryDepth < 0 {
-			finalDepth = finalDepth + mathAbsInt(directoryDepth)
-		}
-
-		if finalDepth > 0 {
-			anchor = strings.Repeat(repeatString, finalDepth)
-		}
-	}
-
-	// Right-trim path separators if the cleaned path is empty and
-	// the anchor is not a single path separator
-	if cleanPathNoAnchor == "" && len(anchor) > 1 {
-		anchor = strings.TrimRight(anchor, canonicalPathSeparator)
-	}
-
-	cleanPath := anchor + cleanPathNoAnchor
-
-	if cleanPath == "" {
-		cleanPath = "."
-	}
-
-	return cleanPath
+	return path.Clean(p)
 }
 
-/*
-normalizedWindowsPath is a Windows path style-specific wrapper function for normalizePath.
+// normalizeWindowsPath processes a Windows-style path string into a normalized Path.
+// It handles volume paths (e.g. "C:\foo"), UNC paths (e.g. "\\host\share\foo"),
+// and relative/absolute paths without a Windows-specific anchor.
+func normalizeWindowsPath(p string) *Path {
+	dirty := strings.ReplaceAll(p, windowsPathSeparator, canonicalPathSeparator)
 
-It replaces all "\\" with "/".
+	// Volume anchor: "C:\" (rooted) or "C:" (drive-relative).
+	if match := windowsVolumeNameRegex.FindString(dirty); match != "" {
+		anchor := match[:2]        // "C:" (letter + colon)
+		hasRoot := len(match) == 3 // true when match includes the trailing "/"
 
-If a Windows volume or network drive naming pattern is detected, backward slashes
-until the first valid path separator are not replaced and prefixed with "/w\\", as this pattern
-won't exist because of previous filters.
-*/
-func normalizeWindowsPath(p string) string {
-	dirty := p
+		rest := dirty[len(match):]
+		cleanedRest := normalizePath(rest)
 
-	dirty = strings.ReplaceAll(dirty, windowsPathSeparator, canonicalPathSeparator)
+		// Strip any leading slashes that normalizePath may have returned.
+		cleanedRest = strings.TrimLeft(cleanedRest, canonicalPathSeparator)
 
-	var (
-		hasWindowsAnchor        = false
-		windowsAnchor           = ""
-		normalizedWindowsAnchor = ""
-	)
+		// Remove ".." traversals that cannot go above the drive root.
+		for {
+			if cleanedRest == ".." {
+				cleanedRest = ""
+				break
+			}
+			if strings.HasPrefix(cleanedRest, "../") {
+				cleanedRest = cleanedRest[3:]
+				continue
+			}
+			if cleanedRest == "." {
+				cleanedRest = ""
+				break
+			}
+			break
+		}
 
-	// Check for Windows volume name anchor
-	windowsAnchor = windowsVolumeNameRegex.FindString(dirty)
+		var pathField string
+		if hasRoot {
+			if cleanedRest == "" {
+				pathField = canonicalPathSeparator
+			} else {
+				pathField = canonicalPathSeparator + cleanedRest
+			}
+		} else {
+			pathField = cleanedRest
+		}
 
-	if len(windowsAnchor) == 0 {
-		// Check for Windows network path anchor
-		windowsAnchor = windowsNetworkPathRegex.FindString(dirty)
-	}
-
-	if len(windowsAnchor) == 0 {
-		// A leading path separator is also considered a valid anchor, as it points
-		// to the root of the current volume.
-		if strings.HasPrefix(dirty, canonicalPathSeparator) {
-			windowsAnchor = canonicalPathSeparator
+		return &Path{
+			path:                 pathField,
+			windowsAnchor:        anchor,
+			windowsPathEncodings: windowsPathStateVolume,
 		}
 	}
 
-	hasWindowsAnchor = len(windowsAnchor) != 0
-
-	if hasWindowsAnchor {
-		// Normalize anchor. Replaces slashes with backslashes to prevent issues in
-		// lexical parsing later on. Also prepend Windows anchor encoding prefix.
-		normalizedWindowsAnchor = windowsAnchorCanonicalEncodingPrefix + strings.ReplaceAll(windowsAnchor, canonicalPathSeparator, windowsPathSeparator)
+	// UNC anchor: "//host/share".
+	if match := windowsNetworkPathRegex.FindString(dirty); match != "" {
+		rest := dirty[len(match):]
+		if rest == "" || rest == canonicalPathSeparator {
+			return &Path{
+				path:                 canonicalPathSeparator,
+				windowsAnchor:        match,
+				windowsPathEncodings: windowsPathStateUNC,
+			}
+		}
+		cleanedRest := normalizePath(rest)
+		if cleanedRest == "." {
+			cleanedRest = canonicalPathSeparator
+		}
+		return &Path{
+			path:                 cleanedRest,
+			windowsAnchor:        match,
+			windowsPathEncodings: windowsPathStateUNC,
+		}
 	}
 
-	if !hasWindowsAnchor {
-		// Remove leading path separators of no anchor exists
-		dirty = strings.TrimLeft(dirty, canonicalPathSeparator)
+	// No Windows-specific anchor: treat as a regular path.
+	return &Path{
+		path:                 normalizePath(dirty),
+		windowsPathEncodings: 0,
+	}
+}
+
+// isLocalDirectory returns whether the current path is "."
+func (p *Path) isLocalDirectory() bool {
+	return p.path == "."
+}
+
+// relPath returns a relative path that is lexically equivalent to targPath when
+// joined to basePath with an intervening separator. Both paths must use forward
+// slashes and be already normalized.
+//
+// This function is inspired by filepath.Rel.
+func relPath(basePath, targPath string) (string, error) {
+	if basePath == targPath {
+		return ".", nil
 	}
 
-	// Perform regular normalization without the anchor
-	dirtyNoAnchor := dirty[len(windowsAnchor):]
-	cleanedNoAnchor := normalizePath(dirtyNoAnchor)
+	base := basePath
+	targ := targPath
 
-	// Prepend anchor to the cleaned path
-	if hasWindowsAnchor {
-		// Remove any parent directory indicators
-		cleanedNoAnchor = strings.TrimLeft(cleanedNoAnchor, "."+canonicalPathSeparator)
-
-		// normalized anchor always has appended "/"
-		normalizedWindowsAnchor += canonicalPathSeparator
+	if base == "." {
+		base = ""
+	}
+	if targ == "." {
+		targ = ""
 	}
 
-	return normalizedWindowsAnchor + cleanedNoAnchor
+	baseSlashed := len(base) > 0 && base[0] == '/'
+	targSlashed := len(targ) > 0 && targ[0] == '/'
+	if baseSlashed != targSlashed {
+		return "", errors.New("Rel: can't make " + targPath + " relative to " + basePath)
+	}
+
+	bl := len(base)
+	tl := len(targ)
+	var b0, bi, t0, ti int
+	for {
+		for bi < bl && base[bi] != '/' {
+			bi++
+		}
+		for ti < tl && targ[ti] != '/' {
+			ti++
+		}
+		if base[b0:bi] != targ[t0:ti] {
+			break
+		}
+		if bi < bl {
+			bi++
+		}
+		if ti < tl {
+			ti++
+		}
+		b0 = bi
+		t0 = ti
+	}
+
+	if base[b0:bi] == ".." {
+		return "", errors.New("Rel: can't make " + targPath + " relative to " + basePath)
+	}
+
+	if b0 != bl {
+		seps := strings.Count(base[b0:bl], "/")
+		size := 2 + seps*3
+		if tl != t0 {
+			size += 1 + tl - t0
+		}
+		buf := make([]byte, size)
+		n := copy(buf, "..")
+		for i := 0; i < seps; i++ {
+			buf[n] = '/'
+			copy(buf[n+1:], "..")
+			n += 3
+		}
+		if t0 != tl {
+			buf[n] = '/'
+			copy(buf[n+1:], targ[t0:])
+		}
+		return string(buf), nil
+	}
+
+	result := targ[t0:]
+	if result == "" {
+		return ".", nil
+	}
+	return result, nil
 }
 
 // matchPattern is the internal implementation that handles ** expansion.
