@@ -300,22 +300,16 @@ func TestPath_Walk(t *testing.T) {
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
 					dir := createTempDir(t, root, "testDir")
-					writeTempFile(t, dir, "file1.txt", "")
-					writeTempFile(t, dir, "file2.log", "")
+					writeTempFile(t, dir, "file1.log", "")
 					return dir
 				},
 				WalkFunc: func(p *Path, abort AbortFunc) error {
-					if p.Base() == "file2.log" {
-						return fmt.Errorf("simulated error")
-					}
-					return nil
+					return fmt.Errorf("simulated error")
 				},
 			},
-			Expect: Expect{WalkedPaths: []string{"file1.txt"}, Error: true}, // file2.log causes error
+			Expect: Expect{WalkedPaths: []string{}, Error: true},
 		},
 		{
-			/* This test is kinda ambiguous, because Walk does not ensure a specific walking order */
-
 			Name: "WalkFunc calls abortGlob",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
@@ -325,14 +319,18 @@ func TestPath_Walk(t *testing.T) {
 					writeTempFile(t, dir, "file3.csv", "")
 					return dir
 				},
-				WalkFunc: func(p *Path, abort AbortFunc) error {
-					if p.Base() == "file2.log" {
-						abort()
+				WalkFunc: func() func(*Path, AbortFunc) error {
+					first := true
+					return func(p *Path, abort AbortFunc) error {
+						if first {
+							first = false
+							abort()
+						}
+						return nil
 					}
-					return nil
-				},
+				}(),
 			},
-			Expect: Expect{WalkedPaths: []string{"file1.txt"}}, // Stops at file2.log
+			Expect: Expect{WalkedPaths: []string{}}, // First entry triggers abort; walk stops immediately
 		},
 	}
 
@@ -453,10 +451,8 @@ func TestPath_WalkR(t *testing.T) {
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
 					dir := createTempDir(t, root, "testDir")
-					writeTempFile(t, dir, "file1.txt", "")
-					createTempDir(t, dir, "subdir")
-					writeTempFile(t, dir.JoinStrings("subdir"), "file2.log", "")
-					writeTempFile(t, dir, "file3.csv", "")
+					subdir := createTempDir(t, dir, "subdir")
+					writeTempFile(t, subdir, "file2.log", "")
 					return dir
 				},
 				WalkRFunc: func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error {
@@ -466,12 +462,7 @@ func TestPath_WalkR(t *testing.T) {
 					return nil
 				},
 			},
-			// On some platforms file3.csv may be walked before subdir is entered,
-			// so the walked set depends on OS directory entry ordering.
-			Expect: Expect{WalkedPaths: onWindows(
-				[]string{"file1.txt", "subdir"},
-				[]string{"file1.txt", "file3.csv", "subdir"},
-			), Error: true},
+			Expect: Expect{WalkedPaths: []string{"subdir"}, Error: true},
 		},
 		{
 			Name: "WalkRFunc calls abortLocalTree",
@@ -499,26 +490,19 @@ func TestPath_WalkR(t *testing.T) {
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
 					dir := createTempDir(t, root, "testDir")
-					writeTempFile(t, dir, "file1.txt", "")
 					subdir1 := createTempDir(t, dir, "subdir1")
-					writeTempFile(t, subdir1, "nested1.txt", "")
-					// writeTempFile(t, dir, "file3.csv", "") 		// This test requires errors-as-abort-functions in order for testing to work
-
+					subdir2 := createTempDir(t, subdir1, "subdir2")
+					writeTempFile(t, subdir2, "deep.txt", "") // Should NOT be walked
 					return dir
 				},
 				WalkRFunc: func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error {
-
-					// This test is different per OS and filesystem, because or other subdirectories or files
-					// may be walked either before OR after subdir1 or file3.csv.
-					// This is why we check for both, to ensure none of them will be walked.
-
-					if p.Parent().Base() == "subdir1" || p.Base() == "file3.csv" {
+					if p.Base() == "subdir2" {
 						abortTree() // Abort everything
 					}
 					return nil
 				},
 			},
-			Expect: Expect{WalkedPaths: []string{"file1.txt", "subdir1", "subdir1/nested1.txt"}},
+			Expect: Expect{WalkedPaths: []string{"subdir1", "subdir1/subdir2"}},
 		},
 		{
 			Name: "Error reading directory, walkFunc handles (continues)",
@@ -1353,8 +1337,10 @@ func TestPath_IsOnCaseSensitiveFs(t *testing.T) {
 	stat1, err1 := filePath.Stat()
 	stat2, err2 := mixedCasePath.Stat()
 
-	// If files are not the same, then the filesystem is case-sensitive.
-	isFsCaseSensitiveExpected := err1 == nil && err2 == nil && !os.SameFile(stat1, stat2)
+	// The filesystem is case-sensitive if:
+	// - the mixed-case path doesn't exist (err2 != nil), or
+	// - both exist but point to different inodes
+	isFsCaseSensitiveExpected := err1 == nil && (err2 != nil || !os.SameFile(stat1, stat2))
 
 	cases := []TestCase[*Path, bool]{
 		{
