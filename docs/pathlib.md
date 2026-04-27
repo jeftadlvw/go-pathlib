@@ -23,7 +23,6 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
 
 ## Index
 
-- [Constants](<#constants>)
 - [Variables](<#variables>)
 - [func AppendBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#AppendBytes>)
 - [func AppendString\(path \*Path, data string\) \(int, error\)](<#AppendString>)
@@ -66,8 +65,7 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func NewPathFromWindows\(path string\) \*Path](<#NewPathFromWindows>)
   - [func PathFromParts\(parts ...string\) \*Path](<#PathFromParts>)
   - [func TempBaseDir\(\) \*Path](<#TempBaseDir>)
-  - [func \(p \*Path\) Absolute\(\) \(\*Path, error\)](<#Path.Absolute>)
-  - [func \(p \*Path\) AbsoluteTo\(o \*Path\) \(\*Path, error\)](<#Path.AbsoluteTo>)
+  - [func \(p \*Path\) AbsoluteFrom\(o \*Path\) \(\*Path, error\)](<#Path.AbsoluteFrom>)
   - [func \(p \*Path\) Anchor\(\) string](<#Path.Anchor>)
   - [func \(p \*Path\) Base\(\) string](<#Path.Base>)
   - [func \(p \*Path\) Copy\(\) \*Path](<#Path.Copy>)
@@ -100,12 +98,14 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func \(p \*Path\) ListDirs\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListDirs>)
   - [func \(p \*Path\) ListFiles\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListFiles>)
   - [func \(p \*Path\) Lstat\(\) \(os.FileInfo, error\)](<#Path.Lstat>)
+  - [func \(p \*Path\) MakeAbsolute\(\) \(\*Path, error\)](<#Path.MakeAbsolute>)
   - [func \(p \*Path\) MarshalText\(\) \(text \[\]byte, err error\)](<#Path.MarshalText>)
   - [func \(p \*Path\) MatchesPattern\(pattern string, opts ...CompareOption\) bool](<#Path.MatchesPattern>)
   - [func \(p \*Path\) MatchesPatternE\(pattern string, opts ...CompareOption\) \(bool, error\)](<#Path.MatchesPatternE>)
   - [func \(p \*Path\) Parent\(\) \*Path](<#Path.Parent>)
   - [func \(p \*Path\) Parts\(\) \[\]string](<#Path.Parts>)
   - [func \(p \*Path\) ReadSymlinkTarget\(\) \(\*Path, error\)](<#Path.ReadSymlinkTarget>)
+  - [func \(p \*Path\) RelativeFrom\(o \*Path\) \(\*Path, error\)](<#Path.RelativeFrom>)
   - [func \(p \*Path\) RelativeTo\(o \*Path\) \(\*Path, error\)](<#Path.RelativeTo>)
   - [func \(p \*Path\) Resolve\(\) \(\*Path, error\)](<#Path.Resolve>)
   - [func \(p \*Path\) Split\(\) \(\*Path, string\)](<#Path.Split>)
@@ -115,6 +115,7 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func \(p \*Path\) SymlinkTo\(linkPath \*Path\) error](<#Path.SymlinkTo>)
   - [func \(p \*Path\) ToPosix\(\) string](<#Path.ToPosix>)
   - [func \(p \*Path\) ToWindows\(\) string](<#Path.ToWindows>)
+  - [func \(p \*Path\) TrimWindowsAnchor\(\) \*Path](<#Path.TrimWindowsAnchor>)
   - [func \(p \*Path\) UnmarshalText\(text \[\]byte\) error](<#Path.UnmarshalText>)
   - [func \(p \*Path\) Walk\(walkFunc WalkFunc\) error](<#Path.Walk>)
   - [func \(p \*Path\) WalkR\(walkFunc WalkRFunc\) error](<#Path.WalkR>)
@@ -132,21 +133,19 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
 - [type WalkRFunc](<#WalkRFunc>)
 
 
-## Constants
-
-<a name="DefaultDirMode"></a>DefaultDirMode is the default directory permission mode \(rwxr\-xr\-x\)
-
-```go
-const DefaultDirMode fs.FileMode = 0755
-```
-
-<a name="DefaultFileMode"></a>DefaultFileMode is the default file permission mode \(rw\-r\-\-r\-\-\)
-
-```go
-const DefaultFileMode fs.FileMode = 0644
-```
-
 ## Variables
+
+<a name="DefaultDirMode"></a>DefaultDirMode is the default directory permission mode. On Unix this is 0755 \(rwxr\-xr\-x\). On Windows this is 0777 since Windows does not support Unix\-style permission granularity for directories.
+
+```go
+var DefaultDirMode = effectiveDirMode(0755)
+```
+
+<a name="DefaultFileMode"></a>DefaultFileMode is the default file permission mode. On Unix this is 0644 \(rw\-r\-\-r\-\-\). On Windows this is 0666 since Windows does not support Unix\-style permission granularity.
+
+```go
+var DefaultFileMode = effectiveFileMode(0644)
+```
 
 <a name="PrintBackslashWarningOnPosix"></a>PrintBackslashWarningOnPosix is a toggle for printing a warning on Posix if a path string contains a backslash.
 
@@ -631,9 +630,19 @@ func NewPathFromPosix(path string) *Path
 
 NewPathFromPosix is the constructor function for a new Path struct instance.
 
-The passed path string is automatically cleaned and ready for further use using the following rules: \- Parts can include whitespaces wherever they want \(leading, somewhere in between and ending\). \- Parts are separated by a single forward slash \("/"\). \- Multiple forward slashes are replaced by one single slash. \- Trailing forward slashes are removed.
+The passed path string is automatically cleaned and ready for further use using the following rules:
 
-Defined edge cases: \- an empty string, "." and "./" results into "." \- if all rules result into an empty string, the path also result into "." \- ".." stays ".." \- "/", "/.", and "/.." result into "/"
+- Parts can include whitespaces wherever they want \(leading, somewhere in between and ending\).
+- Parts are separated by a single forward slash \("/"\).
+- Multiple forward slashes are replaced by one single slash.
+- Trailing forward slashes are removed.
+
+Defined edge cases:
+
+- an empty string, "." and "./" results into "."
+- if all rules result into an empty string, the path also result into "."
+- ".." stays ".."
+- "/", "/.", and "/.." result into "/"
 
 The path is not lowercased, because the path might be used on a case\-sensitive filesystem. Functions that are case\-insensitive must additionally lowercase this representation.
 
@@ -666,23 +675,14 @@ func TempBaseDir() *Path
 
 
 
-<a name="Path.Absolute"></a>
-### func \(\*Path\) Absolute
+<a name="Path.AbsoluteFrom"></a>
+### func \(\*Path\) AbsoluteFrom
 
 ```go
-func (p *Path) Absolute() (*Path, error)
+func (p *Path) AbsoluteFrom(o *Path) (*Path, error)
 ```
 
-Absolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
-
-<a name="Path.AbsoluteTo"></a>
-### func \(\*Path\) AbsoluteTo
-
-```go
-func (p *Path) AbsoluteTo(o *Path) (*Path, error)
-```
-
-AbsoluteTo returns an absolute representation of this Path towards another.
+AbsoluteFrom returns an absolute representation of this Path towards another.
 
 If the Path is relative, it will be joined with the provided Path, else a copy of this Path is returned.
 
@@ -1034,6 +1034,15 @@ Lstat returns file info for this Path, not following symbolic links.
 
 This function uses os.Lstat.
 
+<a name="Path.MakeAbsolute"></a>
+### func \(\*Path\) MakeAbsolute
+
+```go
+func (p *Path) MakeAbsolute() (*Path, error)
+```
+
+MakeAbsolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
+
 <a name="Path.MarshalText"></a>
 ### func \(\*Path\) MarshalText
 
@@ -1100,6 +1109,32 @@ ReadSymlinkTarget reads the target path for this Path.
 
 This Path must be a symlink.
 
+<a name="Path.RelativeFrom"></a>
+### func \(\*Path\) RelativeFrom
+
+```go
+func (p *Path) RelativeFrom(o *Path) (*Path, error)
+```
+
+RelativeFrom returns this Path relative from another, so that joining this Path with the returned Path results in the other:
+
+```
+relativeFrom := a.RelativeFrom(b)	// what to apply on a to get to b
+assert a.Join(relativeFrom) == b
+```
+
+The returned Path is always relative from this Path.
+
+The operation is lexically. An error is returned if the other Path can't be made relative from this Path or if knowing the current working directory would be necessary to compute it.
+
+- /a/b RelativeFrom / → a/b
+- /a/b RelativeFrom /a → b
+- ../b RelativeFrom a/b → error, other path escapes working directory
+- a/x/y RelativeFrom a/b/c → ../../x/y
+- /a/b/c RelativeFrom / → ../../..
+
+If one path has a Windows anchor, the other also needs one. Else an error is returned. If the Windows anchor for both paths do not match, an error is returned.
+
 <a name="Path.RelativeTo"></a>
 ### func \(\*Path\) RelativeTo
 
@@ -1107,9 +1142,25 @@ This Path must be a symlink.
 func (p *Path) RelativeTo(o *Path) (*Path, error)
 ```
 
-RelativeTo returns this Path relative to another.
+RelativeTo returns this Path relative to another, so that joining the other Path with the returned Path results in this Path:
 
-On Windows, paths cannot be made relative across different anchors. This function does not enforce it and selects this Path's anchor.
+```
+relativeTo := a.RelativeTo(b)	// what to apply on b to get to a
+assert b.Join(relativeTo) == a
+```
+
+The returned Path is always relative to this Path.
+
+The operation is lexically. An error is returned if the other Path can't be made relative to this Path or if knowing the current working directory would be necessary to compute it.
+
+- / RelativeTo /a/b → ../..
+- /a RelativeTo /b → ../a
+- /a RelativeTo /a/b → ..
+- a/b RelativeTo ../b → error, other path escapes working directory
+- a/b/c RelativeTo a/x/y → ../../b/c
+- /a/b/c RelativeTo / → a/b/c
+
+If one path has a Windows anchor, the other also needs one. Else an error is returned. If the Windows anchor for both paths do not match, an error is returned.
 
 <a name="Path.Resolve"></a>
 ### func \(\*Path\) Resolve
@@ -1120,7 +1171,7 @@ func (p *Path) Resolve() (*Path, error)
 
 Resolve resolves all symbolic links and ensures an absolute path representation.
 
-This function uses filepath.EvalSymlinks and Absolute.
+This function uses filepath.EvalSymlinks and MakeAbsolute.
 
 <a name="Path.Split"></a>
 ### func \(\*Path\) Split
@@ -1191,7 +1242,16 @@ ToPosix returns a string representation with forward slashes.
 func (p *Path) ToWindows() string
 ```
 
+ToWindows returns a string representation with backward slashes.
 
+<a name="Path.TrimWindowsAnchor"></a>
+### func \(\*Path\) TrimWindowsAnchor
+
+```go
+func (p *Path) TrimWindowsAnchor() *Path
+```
+
+TrimWindowsAnchor returns a copy of this Path with stripped Windows anchor encoding information.
 
 <a name="Path.UnmarshalText"></a>
 ### func \(\*Path\) UnmarshalText
