@@ -92,11 +92,16 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 			// On Windows, O_CREATE|O_RDONLY either fails for existing read-only files
 			// (O_CREATE requires write access) or returns a writable handle for new files.
 			// Separate creation from opening to guarantee a read-only handle.
-			if !path.Exists() {
+			_, err := os.Stat(path.String())
+			pathExists := err == nil
+
+			if !pathExists {
 				f, createErr := os.OpenFile(path.String(), os.O_CREATE|os.O_WRONLY, opts.Permission)
+
 				if createErr != nil {
 					return nil, createErr
 				}
+
 				_ = f.Close()
 			}
 		} else {
@@ -112,7 +117,8 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 	// Fun fact: Unix-based operating systems support opening a file descriptor
 	// on directory paths in readonly mode. Fuck that inconsistency and return an error
 	// if the path is a directory.
-	stat, err := file.Stat()
+	stat, err := os.Stat(path.String())
+
 	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("could not read file stat to determine if path is a directory: %w", err)
