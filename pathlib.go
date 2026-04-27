@@ -53,8 +53,7 @@ const windowsPathSeparator = "\\"
 var windowsVolumeNameRegex = regexp.MustCompile("^[A-Za-z]:(/|$)")
 var windowsNetworkPathRegex = regexp.MustCompile("^//[a-zA-Z0-9]+/[a-zA-Z0-9]+")
 
-var multipleCanonicalPathSeparatorsRegex = regexp.MustCompile(`//+`)
-var multipleWindowsPathSeparatorsRegex = regexp.MustCompile(`\\+`)
+var multipleWindowsPathSeparatorsRegex = regexp.MustCompile(`\\{2,}`)
 
 // PrintBackslashWarningOnPosix is a toggle for printing a warning on Posix
 // if a path string contains a backslash.
@@ -572,7 +571,7 @@ Use ToPosix or ToWindows for an explicit representation.
 */
 func (p *Path) String() string {
 	if runningOnWindows {
-		return p.toWindows()
+		return p.ToWindows()
 	}
 
 	return p.ToPosix()
@@ -582,14 +581,27 @@ func (p *Path) String() string {
 ToPosix returns a string representation with forward slashes.
 */
 func (p *Path) ToPosix() string {
-	pathStr := p.pathWithWindowsAnchor()
-	pathStr = multipleCanonicalPathSeparatorsRegex.ReplaceAllString(pathStr, canonicalPathSeparator)
+	return p.pathWithWindowsAnchor()
+}
 
-	if len(pathStr) > 1 {
-		pathStr = strings.TrimRight(pathStr, canonicalPathSeparator)
+func (p *Path) ToWindows() string {
+	pathWindows := multipleWindowsPathSeparatorsRegex.ReplaceAllString(
+		toWindowsSeparators(p.path), windowsPathSeparator,
+	)
+
+	if p.isWindowsUNCAnchoredPath() {
+		anchorWindows := toWindowsSeparators(p.windowsAnchor)
+		if p.path == canonicalPathSeparator {
+			return anchorWindows
+		}
+		return anchorWindows + pathWindows
 	}
 
-	return pathStr
+	if p.isWindowsVolumeAnchoredPath() {
+		return p.windowsAnchor + pathWindows
+	}
+
+	return pathWindows
 }
 
 /*
@@ -630,20 +642,6 @@ func (p *Path) isWindowsVolumeAnchoredPath() bool {
 // isWindowsUNCAnchoredPath reports whether the path is a Windows UNC path (e.g. "\\server\share").
 func (p *Path) isWindowsUNCAnchoredPath() bool {
 	return p.windowsPathEncodings&windowsPathStateUNC != 0
-}
-
-func (p *Path) toWindows() string {
-	if p.isWindowsUNCAnchoredPath() {
-		anchorWindows := toWindowsSeparators(p.windowsAnchor)
-		if p.path == canonicalPathSeparator {
-			return anchorWindows
-		}
-
-		return anchorWindows + toWindowsSeparators(p.path)
-	}
-
-	pathString := toWindowsSeparators(p.pathWithWindowsAnchor())
-	return multipleWindowsPathSeparatorsRegex.ReplaceAllString(pathString, windowsPathSeparator)
 }
 
 func toWindowsSeparators(s string) string {
