@@ -14,7 +14,9 @@ This library is developed and tested on Unix-based operating systems. Windows sh
 
 Minimum tested Go version: `1.22`
 
-## Getting started 🚀
+**Current State:** stabilizing API, tested across multiple platforms (Linux, macOS and Windows), API scope is not expected to be reduced. More see [Roadmap](#roadmap-).
+
+## Getting Started 🚀
 ```shell
 go get github.com/jeftadlvw/go-pathlib@latest
 ```
@@ -44,31 +46,26 @@ Repository-local documentation can be found at [docs/go-pathlib.md](docs/pathlib
 The file is updated regularly and gives a good general overview on the API. Up-to-date documentation can be found in the source code.
 
 ## Roadmap 📋
-Although the core API exists, I'd like to test the look and feel of this library in some other projects before committing to a major release.
 
-🔖 Current version: **0.0.2**
+🔖 Current version: **0.0.3**
 
-The following features are planned and fixed on the roadmap. They extend the API and improve the integration into other ecosystems. Because _go-pathlib_ should stay a single-file library, new features are categorized into optional extensions.
+The API stabilized and is covered by many test cases. Tests are run on Linux, macOS and Windows, although no test automation exists yet. The current API scope is not expected to be modified or reduced. However, future releases might tighten up semantics regarding returned errors.
 
-**0.0.3**
+Still the project needs to be tested in real-world use. Test automation is also required. This is mainly why there is no v1.0.0 yet. When the library has been tested and evaluated in other projects, a v1 release is more likely.
 
-_The APIs are nearly complete but still need testing._
+`Next` features are planned and fixed on the roadmap for the next release(s). They extend and improve API semantics and internals and make the library more mature. `Future` features are planned, but not focussed on being implemented next per sé. They might, but are not prioritized.
 
-- [x] `pathlib_fs.go`: filesystem operations (create, move, delete or rename files and directories, get stats, filesystem-level equality check, ...)
-- [x] `pathlib_io.go`: open files, read, write
-- [x] `pathlib_temp.go`: API for temporary files and directories
-
-_0.0.3 also adds support for Windows-style path strings, which still need testing for every core function._
-
-**Future**
-- [x] extend globbing to not include directories
+**Next**
 - [ ] custom error structs and fitting error handling
 - [ ] context.Context support for filesystem walking and globbing
-- [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
-- [ ] Improve DX for file walking by returning abort errors instead of calling abort functions
-- [ ] implement "range over function" for globbing (requires newer go versions)
+- [ ] parallelize recursive filesystem walking and globbing
 - [ ] function to check if a file is (semantically) hidden
-- [ ] fully tested Windows path support
+- [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
+- [ ] (?) Improve DX for file walking by returning abort errors instead of calling abort functions
+
+**Future**
+- [ ] Move away from single-file development strategy and release single-file source code files instead
+- [ ] implement "range over function" for globbing (requires newer go versions)
 
 **Planned extensions**
 - [ ] integration into [go-validator](https://github.com/go-playground/validator) (custom field types and validators)
