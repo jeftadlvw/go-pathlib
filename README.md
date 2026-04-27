@@ -75,13 +75,21 @@ _0.0.3 also adds support for Windows-style path strings, which still need testin
 
 This is a non-exhaustive list. Feel free to suggest other features and integrations!
 
-## Intended usage and gotcha's 🌚
+## Guides and Rationales 🌚
 ### Posix vs. Windows path representation
-Posix first, Windows derived.
+Internally, all paths are stored in a canonical Posix form (forward slashes, Windows anchors separated out). This keeps the core logic simple and platform-independent.
 
-The default constructor `NewPath()` assumes a Posix path. If you know that your path string is a Windows path representation, use `NewPathFromWindows()`. This constructor ensures correct handling of existing volume names or UNC-path roots.
+**Constructors**:
+- `NewPath()` is the safe default. It detects the current platform and handles Windows volume names and UNC roots automatically by branching to either `NewPathFromPosix()` or `NewPathFromWindows()`. Use it for path strings from any source, including OS APIs (e.g. `os.Getwd()`, `filepath.EvalSymlinks()`).
+- `NewPathFromPosix()` assumes a Posix path and performs no Windows anchor parsing.
+- `NewPathFromWindows()` always applies separator replacement (`\\` → `/`) and Windows anchor parsing regardless of the platform. If no Windows anchor is detected, paths behave like regular canonical posix paths.
 
-Windows paths are transformed to Posix (including some encoding) and transformed back if needed (like `String()` on Windows runtimes).
+**Output** follows the principle of **platform-native by default, explicit when needed**:
+- `String()` returns the platform-native representation (backslashes on Windows, forward slashes on Posix) by branching to either `ToPosix()` or `ToWindows()`. This is what you pass to OS APIs like `os.Open()`.
+- `ToPosix()` always returns forward slashes. Use this for serialization and cross-platform storage. Windows anchors are included (including the double slash for UNC paths), but formatted as forward slashes.
+- `ToWindows()` always returns backslashes. Use this when generating Windows paths on any platform.
+
+Methods that return path components (`Anchor()`, `Base()`, `Parts()`, `Split()`, etc.) follow the same platform-native convention where separators are visible (e.g. `Anchor()` returns `\\host\share` on Windows, `//host/share` on Posix).
 
 
 ### `\` on Posix vs `\` on Windows
