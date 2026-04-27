@@ -88,7 +88,20 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 	}
 
 	if opts.CreateIfNotExists {
-		fileOpenMode = fileOpenMode | os.O_CREATE
+		if fileOpenMode == os.O_RDONLY && runningOnWindows {
+			// On Windows, O_CREATE|O_RDONLY either fails for existing read-only files
+			// (O_CREATE requires write access) or returns a writable handle for new files.
+			// Separate creation from opening to guarantee a read-only handle.
+			if !path.Exists() {
+				f, createErr := os.OpenFile(path.String(), os.O_CREATE|os.O_WRONLY, opts.Permission)
+				if createErr != nil {
+					return nil, createErr
+				}
+				_ = f.Close()
+			}
+		} else {
+			fileOpenMode = fileOpenMode | os.O_CREATE
+		}
 	}
 
 	file, err := os.OpenFile(path.String(), fileOpenMode, opts.Permission)

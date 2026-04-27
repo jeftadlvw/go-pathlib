@@ -42,7 +42,7 @@ func TestOpenFile(t *testing.T) {
 		stats, err := file.Stat()
 		require.NoError(t, err, "could not call stat()")
 
-		require.Equal(t, uint32(defaultOpenPermission), uint32(stats.Mode().Perm()), "file permission mismatch")
+		require.Equal(t, uint32(effectiveFileMode(defaultOpenPermission)), uint32(stats.Mode().Perm()), "file permission mismatch")
 	}
 
 	fileWritableTest := func(t *testing.T, file *os.File) {
@@ -276,9 +276,12 @@ func TestOpenFileWithOptions(t *testing.T) {
 					}()
 
 					t.Run("file existed", func(t *testing.T) {
-						if expectedMode.Ok && ((isMode(localModeCaseValue, "r") && localPermissionCase < 0400) ||
-							(isMode(localModeCaseValue, "w") && (localPermissionCase < 0200 || (localPermissionCase >= 0400 && localPermissionCase < 0600))) ||
-							(isMode(localModeCaseValue, "rw") && localPermissionCase < 0600)) {
+						effectivePerm := effectiveFileMode(localPermissionCase)
+						expectPermissionError := expectedMode.Ok &&
+							((isMode(localModeCaseValue, "r") && effectivePerm&0400 == 0) ||
+								(isMode(localModeCaseValue, "w") && effectivePerm&0200 == 0) ||
+								(isMode(localModeCaseValue, "rw") && effectivePerm&0600 != 0600))
+						if expectPermissionError {
 							require.Error(t, err)
 							require.Nil(t, file)
 							return

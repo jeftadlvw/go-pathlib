@@ -622,18 +622,18 @@ func TestPath_Anchor(t *testing.T) {
 		{Input: NewPath("."), Expect: ""},
 		{Input: NewPath(".."), Expect: ""},
 		{Input: NewPath("/"), Expect: "/"},
-		{Input: NewPath("c:/"), Expect: ""},
-		{Input: NewPath("c:/foo"), Expect: ""},
-		{Input: NewPath("c://"), Expect: ""},
-		{Input: NewPath("c:\\"), Expect: ""},
-		{Input: NewPath("c:\\foo"), Expect: ""},
-		{Input: NewPath("c:\\\\"), Expect: ""},
-		{Input: NewPath("//host/share"), Expect: "/"},
-		{Input: NewPath("//host/share/"), Expect: "/"},
-		{Input: NewPath("//host/share/foo"), Expect: "/"},
-		{Input: NewPath("\\\\host\\share"), Expect: ""},
-		{Input: NewPath("\\\\host\\share\\"), Expect: ""},
-		{Input: NewPath("\\\\host\\share\\foo"), Expect: ""},
+		{Input: NewPath("c:/"), Expect: onWindows("", "c:")},
+		{Input: NewPath("c:/foo"), Expect: onWindows("", "c:")},
+		{Input: NewPath("c://"), Expect: onWindows("", "c:")},
+		{Input: NewPath("c:\\"), Expect: onWindows("", "c:")},
+		{Input: NewPath("c:\\foo"), Expect: onWindows("", "c:")},
+		{Input: NewPath("c:\\\\"), Expect: onWindows("", "c:")},
+		{Input: NewPath("//host/share"), Expect: onWindows("/", platformNativeUNC("//host/share"))},
+		{Input: NewPath("//host/share/"), Expect: onWindows("/", platformNativeUNC("//host/share"))},
+		{Input: NewPath("//host/share/foo"), Expect: onWindows("/", platformNativeUNC("//host/share"))},
+		{Input: NewPath("\\\\host\\share"), Expect: onWindows("", platformNativeUNC("//host/share"))},
+		{Input: NewPath("\\\\host\\share\\"), Expect: onWindows("", platformNativeUNC("//host/share"))},
+		{Input: NewPath("\\\\host\\share\\foo"), Expect: onWindows("", platformNativeUNC("//host/share"))},
 		{Input: NewPathFromWindows("\\\\host\\share"), Expect: platformNativeUNC("//host/share")},
 		{Input: NewPathFromWindows("\\\\host\\share\\"), Expect: platformNativeUNC("//host/share")},
 		{Input: NewPathFromWindows("\\\\host\\share\\foo"), Expect: platformNativeUNC("//host/share")},
@@ -711,10 +711,10 @@ func TestPath_AbsoluteAndRelative(t *testing.T) {
 		{Input: NewPath(".."), Expect: false},
 		{Input: NewPath("/"), Expect: true},
 		{Input: NewPath("c:"), Expect: false},
-		{Input: NewPath("c:/"), Expect: false},
-		{Input: NewPath("c://"), Expect: false},
-		{Input: NewPath("c:\\"), Expect: false},
-		{Input: NewPath("c:\\\\"), Expect: false},
+		{Input: NewPath("c:/"), Expect: onWindows(false, true)},
+		{Input: NewPath("c://"), Expect: onWindows(false, true)},
+		{Input: NewPath("c:\\"), Expect: onWindows(false, true)},
+		{Input: NewPath("c:\\\\"), Expect: onWindows(false, true)},
 		{Input: NewPath("foo/bar"), Expect: false},
 		{Input: NewPath("/foo/bar.js"), Expect: true},
 		{Input: NewPath("bar.js"), Expect: false},
@@ -987,6 +987,14 @@ func platformNativeUNC(posixForm string) string {
 		return toWindowsSeparators(posixForm)
 	}
 	return posixForm
+}
+
+// onWindows returns windowsVal on Windows, posixVal on other platforms.
+func onWindows[T any](posixVal, windowsVal T) T {
+	if runningOnWindows {
+		return windowsVal
+	}
+	return posixVal
 }
 
 func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, expectError bool)) {

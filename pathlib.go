@@ -427,7 +427,12 @@ func (p *Path) RelativeTo(o *Path) (*Path, error) {
 		return nil, err
 	}
 
-	return p.copyWithNewPath(rp), nil
+	result := p.copyWithNewPath(rp)
+	if !path.IsAbs(rp) {
+		result.windowsAnchor = ""
+		result.windowsPathEncodings = 0
+	}
+	return result, nil
 }
 
 /*

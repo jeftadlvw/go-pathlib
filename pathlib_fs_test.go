@@ -456,7 +456,7 @@ func TestPath_WalkR(t *testing.T) {
 					writeTempFile(t, dir, "file1.txt", "")
 					createTempDir(t, dir, "subdir")
 					writeTempFile(t, dir.JoinStrings("subdir"), "file2.log", "")
-					writeTempFile(t, dir, "file3.csv", "") // This should not be reached
+					writeTempFile(t, dir, "file3.csv", "")
 					return dir
 				},
 				WalkRFunc: func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error {
@@ -466,7 +466,12 @@ func TestPath_WalkR(t *testing.T) {
 					return nil
 				},
 			},
-			Expect: Expect{WalkedPaths: []string{"file1.txt", "subdir"}, Error: true},
+			// On some platforms file3.csv may be walked before subdir is entered,
+			// so the walked set depends on OS directory entry ordering.
+			Expect: Expect{WalkedPaths: onWindows(
+				[]string{"file1.txt", "subdir"},
+				[]string{"file1.txt", "file3.csv", "subdir"},
+			), Error: true},
 		},
 		{
 			Name: "WalkRFunc calls abortLocalTree",
@@ -519,6 +524,9 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Error reading directory, walkFunc handles (continues)",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					if runtime.GOOS == "windows" {
+						t.Skip("chmod 0000 does not restrict access on Windows")
+					}
 					dir := createTempDir(t, root, "root")
 					createTempDir(t, dir, "readable_dir")
 					writeTempFile(t, dir, "readable_dir/file.txt", "")
@@ -526,23 +534,18 @@ func TestPath_WalkR(t *testing.T) {
 					unreadableDir := createTempDir(t, dir, "unreadable_dir")
 					writeTempFile(t, unreadableDir, "secret.log", "")
 
-					// Set unreadable permissions for group/other to simulate error
-					if runtime.GOOS != "windows" { // Chmod 0000 might not work reliably on Windows
-						err := os.Chmod(unreadableDir.String(), 0000)
-						require.NoError(t, err)
-					}
+					err := os.Chmod(unreadableDir.String(), 0000)
+					require.NoError(t, err)
 
 					createTempDir(t, dir, "another_dir")
 					writeTempFile(t, dir, "another_dir/another_file.txt", "")
 					return dir
 				},
 				CleanupFunc: func(t *testing.T, root *Path) {
-					// os.RemoveAll might fail when not resetting permissions
 					os.Chmod(root.JoinStrings("root", "unreadable_dir").String(), 0755)
 				},
 				WalkRFunc: func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error {
 					if localDirError != nil {
-						// We're handling the error here, so return nil to continue
 						return nil
 					}
 					return nil
@@ -554,7 +557,7 @@ func TestPath_WalkR(t *testing.T) {
 					"another_dir/another_file.txt",
 					"readable_dir",
 					"readable_dir/file.txt",
-					"unreadable_dir", // The directory itself is walked even if it's unreadable
+					"unreadable_dir",
 				},
 			},
 		},
@@ -562,19 +565,19 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Error reading directory, walkFunc returns error (stops)",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					if runtime.GOOS == "windows" {
+						t.Skip("chmod 0000 does not restrict access on Windows")
+					}
 					dir := createTempDir(t, root, "root")
 					createTempDir(t, dir, "readable_dir")
 					unreadableDir := createTempDir(t, dir, "unreadable_dir")
-					if runtime.GOOS != "windows" {
-						err := os.Chmod(unreadableDir.String(), 0000)
-						require.NoError(t, err)
-					}
+					err := os.Chmod(unreadableDir.String(), 0000)
+					require.NoError(t, err)
 					createTempDir(t, dir, "another_dir")
 					return dir
 				},
 				WalkRFunc: func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error {
 					if localDirError != nil {
-						// Return error (bubbling the error or creating a new one doesn't matter)
 						return fmt.Errorf("custom error in %s: %w", p.ToPosix(), localDirError)
 					}
 					return nil
@@ -589,7 +592,7 @@ func TestPath_WalkR(t *testing.T) {
 
 					"another_dir",
 				},
-				Error: true, // Expect error from unreadable_dir
+				Error: true,
 			},
 		},
 	}
@@ -732,8 +735,7 @@ func TestCreateFileWithOptions(t *testing.T) {
 				if expectedMode == 0 {
 					expectedMode = DefaultFileMode
 				}
-				// Compare with os.FileMode.Perm() to ignore setuid/setgid/sticky bits
-				require.Equal(t, expectedMode.Perm(), info.Mode().Perm())
+				require.Equal(t, effectiveFileMode(expectedMode).Perm(), info.Mode().Perm())
 
 				if expect.Content != "" || (input.RelPath == "truncate_me.txt") {
 					// Check content for truncation test, or if specific content is expected
@@ -822,14 +824,13 @@ func TestMkDirWithOptions(t *testing.T) {
 			require.True(t, targetPath.Exists())
 			require.True(t, targetPath.IsDir())
 
-			// Check permissions
 			info, err := targetPath.Stat()
 			require.NoError(t, err)
 			expectedMode := input.Options.Mode
 			if expectedMode == 0 {
 				expectedMode = DefaultDirMode
 			}
-			require.Equal(t, expectedMode.Perm(), info.Mode().Perm()) // Compare only permission bits
+			require.Equal(t, effectiveDirMode(expectedMode).Perm(), info.Mode().Perm())
 		}
 	})
 }
@@ -1900,16 +1901,17 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Input: Input{
 				Pattern: "**/*", Options: GlobOptions{SkipOnDirError: true},
 				Setup: func(t *testing.T, root *Path) *Path {
+					if runtime.GOOS == "windows" {
+						t.Skip("chmod 0000 does not restrict access on Windows")
+					}
 					setupComplexDir(t, root)
 					unreadableDir := createTempDir(t, root, "data/unreadable_logs")
 					writeTempFile(t, unreadableDir, "secret.log", "")
-					if runtime.GOOS != "windows" {
-						err := os.Chmod(unreadableDir.String(), 0000)
-						require.NoError(t, err)
-						t.Cleanup(func() {
-							os.Chmod(unreadableDir.String(), 0755)
-						})
-					}
+					err := os.Chmod(unreadableDir.String(), 0000)
+					require.NoError(t, err)
+					t.Cleanup(func() {
+						os.Chmod(unreadableDir.String(), 0755)
+					})
 					return root
 				},
 			},
@@ -1921,21 +1923,22 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Input: Input{
 				Pattern: "**/*", Options: GlobOptions{SkipOnDirError: false},
 				Setup: func(t *testing.T, root *Path) *Path {
+					if runtime.GOOS == "windows" {
+						t.Skip("chmod 0000 does not restrict access on Windows")
+					}
 					setupComplexDir(t, root)
 					unreadableDir := createTempDir(t, root, "data/unreadable_logs")
-					writeTempFile(t, unreadableDir, "secret.log", "") // Create file BEFORE chmod
-					if runtime.GOOS != "windows" {
-						err := os.Chmod(unreadableDir.String(), 0000)
-						require.NoError(t, err)
-						t.Cleanup(func() {
-							os.Chmod(unreadableDir.String(), 0755)
-						})
-					}
+					writeTempFile(t, unreadableDir, "secret.log", "")
+					err := os.Chmod(unreadableDir.String(), 0000)
+					require.NoError(t, err)
+					t.Cleanup(func() {
+						os.Chmod(unreadableDir.String(), 0755)
+					})
 					return root
 				},
 			},
 			Expect: Expect{
-				FoundPaths: nil, // Partial results before error
+				FoundPaths: nil,
 			},
 			Error: true,
 		},

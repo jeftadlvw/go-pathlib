@@ -14,14 +14,39 @@ import (
 )
 
 /*
-DefaultFileMode is the default file permission mode (rw-r--r--)
+DefaultFileMode is the default file permission mode.
+On Unix this is 0644 (rw-r--r--). On Windows this is 0666 since Windows
+does not support Unix-style permission granularity.
 */
-const DefaultFileMode fs.FileMode = 0644
+var DefaultFileMode = effectiveFileMode(0644)
 
 /*
-DefaultDirMode is the default directory permission mode (rwxr-xr-x)
+DefaultDirMode is the default directory permission mode.
+On Unix this is 0755 (rwxr-xr-x). On Windows this is 0777 since Windows
+does not support Unix-style permission granularity for directories.
 */
-const DefaultDirMode fs.FileMode = 0755
+var DefaultDirMode = effectiveDirMode(0755)
+
+// effectiveFileMode returns the permission mode the OS will actually apply to a file.
+// On Windows, files are either read-write (0666) or read-only (0444).
+func effectiveFileMode(mode fs.FileMode) fs.FileMode {
+	if !runningOnWindows {
+		return mode
+	}
+	if mode&0200 != 0 {
+		return 0666
+	}
+	return 0444
+}
+
+// effectiveDirMode returns the permission mode the OS will actually apply to a directory.
+// On Windows, directories always have 0777.
+func effectiveDirMode(mode fs.FileMode) fs.FileMode {
+	if !runningOnWindows {
+		return mode
+	}
+	return 0777
+}
 
 /*
 FileOptions contains options for file and directory creation and deletion operations
