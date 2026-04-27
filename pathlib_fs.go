@@ -230,7 +230,7 @@ func (p *Path) Exists() bool {
 /*
 Resolve resolves all symbolic links and ensures an absolute path representation.
 
-This function uses filepath.EvalSymlinks and Absolute.
+This function uses filepath.EvalSymlinks and MakeAbsolute.
 */
 func (p *Path) Resolve() (*Path, error) {
 	if !p.Exists() {
@@ -242,7 +242,7 @@ func (p *Path) Resolve() (*Path, error) {
 		return nil, err
 	}
 
-	return NewPath(ep).Absolute()
+	return NewPath(ep).MakeAbsolute()
 }
 
 /*
@@ -1054,7 +1054,7 @@ func copySymlink(source *Path, destination *Path) error {
 
 	// The original target might be relative to source. If so, make it relative to destination.
 	if originalSymlinkTarget.IsRelative() {
-		originalSymlinkTarget, err = originalSymlinkTarget.AbsoluteTo(source.Parent())
+		originalSymlinkTarget, err = originalSymlinkTarget.AbsoluteFrom(source.Parent())
 		if err != nil {
 			return err
 		}

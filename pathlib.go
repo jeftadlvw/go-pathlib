@@ -113,16 +113,16 @@ func NewPath(path string) *Path {
 NewPathFromPosix is the constructor function for a new Path struct instance.
 
 The passed path string is automatically cleaned and ready for further use using the following rules:
-- Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
-- Parts are separated by a single forward slash ("/").
-- Multiple forward slashes are replaced by one single slash.
-- Trailing forward slashes are removed.
+  - Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
+  - Parts are separated by a single forward slash ("/").
+  - Multiple forward slashes are replaced by one single slash.
+  - Trailing forward slashes are removed.
 
 Defined edge cases:
-- an empty string, "." and "./" results into "."
-- if all rules result into an empty string, the path also result into "."
-- ".." stays ".."
-- "/", "/.", and "/.." result into "/"
+  - an empty string, "." and "./" results into "."
+  - if all rules result into an empty string, the path also result into "."
+  - ".." stays ".."
+  - "/", "/.", and "/.." result into "/"
 
 The path is not lowercased, because the path might be used on a case-sensitive filesystem.
 Functions that are case-insensitive must additionally lowercase this representation.
@@ -415,32 +415,89 @@ func (p *Path) IsRelative() bool {
 }
 
 /*
-RelativeTo returns this Path relative to another.
+RelativeTo returns this Path relative to another, so that
+joining the other Path with the returned Path results in this Path:
 
-On Windows, paths cannot be made relative across different anchors.
-This function does not enforce it and selects this Path's anchor.
+	relativeTo := a.RelativeTo(b)	// what to apply on b to get to a
+	assert b.Join(relativeTo) == a
+
+The returned Path is always relative to this Path.
+
+The operation is lexically. An error is returned if the other Path
+can't be made relative to this Path or if knowing the current working directory
+would be necessary to compute it.
+
+  - / RelativeTo /a/b → ../..
+  - /a RelativeTo /b → ../a
+  - /a RelativeTo /a/b → ..
+  - a/b RelativeTo ../b → error, other path escapes working directory
+  - a/b/c RelativeTo a/x/y → ../../b/c
+  - /a/b/c RelativeTo / → a/b/c
+
+If one path has a Windows anchor, the other also needs one. Else an error is returned.
+If the Windows anchor for both paths do not match, an error is returned.
 */
 func (p *Path) RelativeTo(o *Path) (*Path, error) {
+	if p.isWindowsAnchoredPath() || o.isWindowsAnchoredPath() {
+		if p.windowsAnchor != o.windowsAnchor {
+			return nil, errors.New("an equal anchor for both paths is required if one path has a Windows anchor")
+		}
+	}
+
 	rp, err := relPath(o.path, p.path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	result := p.copyWithNewPath(rp)
-	if !path.IsAbs(rp) {
-		result.windowsAnchor = ""
-		result.windowsPathEncodings = 0
-	}
-	return result, nil
+	return NewPath(rp), nil
 }
 
 /*
-Absolute returns an absolute representation of this Path.
+RelativeFrom returns this Path relative from another, so that
+joining this Path with the returned Path results in the other:
+
+	relativeFrom := a.RelativeFrom(b)	// what to apply on a to get to b
+	assert a.Join(relativeFrom) == b
+
+The returned Path is always relative from this Path.
+
+The operation is lexically. An error is returned if the other Path
+can't be made relative from this Path or if knowing the current working directory
+would be necessary to compute it.
+
+  - /a/b RelativeFrom / → a/b
+  - /a/b RelativeFrom /a → b
+  - ../b RelativeFrom a/b → error, other path escapes working directory
+  - a/x/y RelativeFrom a/b/c → ../../x/y
+  - /a/b/c RelativeFrom / → ../../..
+
+If one path has a Windows anchor, the other also needs one. Else an error is returned.
+If the Windows anchor for both paths do not match, an error is returned.
+*/
+func (p *Path) RelativeFrom(o *Path) (*Path, error) {
+	if p.isWindowsAnchoredPath() || o.isWindowsAnchoredPath() {
+		if p.windowsAnchor != o.windowsAnchor {
+			return nil, errors.New("an equal anchor for both paths is required if one path has a Windows anchor")
+		}
+	}
+
+	rp, err := relPath(p.path, o.path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Use posix here as rp will be relative and already posix style
+	return NewPathFromPosix(rp), nil
+}
+
+/*
+MakeAbsolute returns an absolute representation of this Path.
 If the Path is relative, it will be joined with the current working directory.
 If the Path is already absolute, a copy of the Path is returned.
 */
-func (p *Path) Absolute() (*Path, error) {
+func (p *Path) MakeAbsolute() (*Path, error) {
 	// If already absolute, return a copy
 	if p.IsAbsolute() {
 		return p.Copy(), nil
@@ -455,7 +512,7 @@ func (p *Path) Absolute() (*Path, error) {
 }
 
 /*
-AbsoluteTo returns an absolute representation of this Path towards another.
+AbsoluteFrom returns an absolute representation of this Path towards another.
 
 If the Path is relative, it will be joined with the provided Path,
 else a copy of this Path is returned.
@@ -464,7 +521,7 @@ The other path must be absolute.
 
 Requires the other Path to be absolute.
 */
-func (p *Path) AbsoluteTo(o *Path) (*Path, error) {
+func (p *Path) AbsoluteFrom(o *Path) (*Path, error) {
 
 	// If this path is already absolute, return a copy
 	if p.IsAbsolute() {
@@ -589,6 +646,9 @@ func (p *Path) ToPosix() string {
 	return p.pathWithWindowsAnchor()
 }
 
+/*
+ToWindows returns a string representation with backward slashes.
+*/
 func (p *Path) ToWindows() string {
 	pathWindows := multipleWindowsPathSeparatorsRegex.ReplaceAllString(
 		toWindowsSeparators(p.path), windowsPathSeparator,
@@ -607,6 +667,14 @@ func (p *Path) ToWindows() string {
 	}
 
 	return pathWindows
+}
+
+/*
+TrimWindowsAnchor returns a copy of this Path with stripped
+Windows anchor encoding information.
+*/
+func (p *Path) TrimWindowsAnchor() *Path {
+	return NewPath(p.path)
 }
 
 /*

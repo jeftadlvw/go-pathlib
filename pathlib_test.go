@@ -733,6 +733,53 @@ func TestPath_AbsoluteAndRelative(t *testing.T) {
 }
 
 func TestPath_RelativeTo(t *testing.T) {
+	// what to apply on b to get to a
+
+	cases := []TestCase[[]*Path, *Path]{
+		{Input: []*Path{NewPath("/"), NewPath("/a/b")}, Expect: NewPath("../../")},
+		{Input: []*Path{NewPath("/a"), NewPath("/a/b")}, Expect: NewPath("../")},
+		{Input: []*Path{NewPath("a"), NewPath("a/b")}, Expect: NewPath("../")},
+		{Input: []*Path{NewPath("a/b"), NewPath("a")}, Expect: NewPath("b")},
+		{Input: []*Path{NewPath("a/b/c"), NewPath("a/b/d")}, Expect: NewPath("../c")},
+		{Input: []*Path{NewPath("/a"), NewPath("/b")}, Expect: NewPath("../a")},
+		{Input: []*Path{NewPath("/a/c"), NewPath("/b/d")}, Expect: NewPath("../../a/c")},
+		{Input: []*Path{NewPath("/a/b"), NewPath("/")}, Expect: NewPath("a/b")},
+		{Input: []*Path{NewPath("/a/b"), NewPath("")}, Error: true},
+		{Input: []*Path{NewPath("/a/b"), NewPath("../")}, Error: true},
+		{Input: []*Path{NewPath("a/b"), NewPath("../b")}, Error: true},
+		{Input: []*Path{NewPathFromPosix("a/d"), NewPathFromPosix("a/b\\ whitespace/c")}, Expect: NewPathFromPosix("../../d")},
+
+		{Input: []*Path{NewPathFromWindows(`C:\a\b`), NewPathFromWindows(``)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:\a\b`), NewPathFromWindows(`..\`)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:\a`), NewPathFromWindows(`D:\b`)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:\a`), NewPathFromWindows(`\\server\share:\b`)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:/a/c`), NewPathFromWindows(`C:/b/d`)}, Expect: NewPathFromWindows(`..\..\a\c`)},
+		{Input: []*Path{NewPathFromWindows(`\\server\share\a`), NewPathFromWindows(`\\server\share\b`)}, Expect: NewPathFromWindows(`..\a`)},
+		{Input: []*Path{NewPathFromWindows(`\\server\share\a\b`), NewPathFromWindows(`\\server\share\a`)}, Expect: NewPathFromWindows(`b`)},
+		{Input: []*Path{NewPathFromWindows("a/d"), NewPathFromWindows("a/b\\ whitespace/c")}, Expect: NewPathFromWindows("../../../d")},
+	}
+
+	for i := range cases {
+		cases[i].Name = fmt.Sprintf("[%d]", i+1)
+	}
+
+	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
+		require.Equal(t, len(input), 2)
+
+		a := input[0]
+		b := input[1]
+		relativePath, err := a.RelativeTo(b)
+
+		require.Equal(t, expectError, err != nil)
+		if !expectError {
+			require.Equal(t, expect, relativePath)
+		}
+	})
+}
+
+func TestPath_RelativeFrom(t *testing.T) {
+	// what to apply on a to get to b
+
 	cases := []TestCase[[]*Path, *Path]{
 		{Input: []*Path{NewPath("/"), NewPath("/a/b")}, Expect: NewPath("a/b")},
 		{Input: []*Path{NewPath("/a"), NewPath("/a/b")}, Expect: NewPath("b")},
@@ -745,7 +792,16 @@ func TestPath_RelativeTo(t *testing.T) {
 		{Input: []*Path{NewPath("/a/b"), NewPath("")}, Error: true},
 		{Input: []*Path{NewPath("/a/b"), NewPath("../")}, Error: true},
 		{Input: []*Path{NewPath("a/b"), NewPath("../b")}, Expect: NewPath("../../../b")},
-		{Input: []*Path{NewPath("a/d"), NewPath("a/b\\ whitespace/c")}, Expect: NewPath("../b\\ whitespace/c")},
+		{Input: []*Path{NewPathFromPosix("a/d"), NewPathFromPosix("a/b\\ whitespace/c")}, Expect: NewPathFromPosix("../b\\ whitespace/c")},
+
+		{Input: []*Path{NewPathFromWindows(`C:\a\b`), NewPathFromWindows(``)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:\a\b`), NewPathFromWindows(`..\`)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:\a`), NewPathFromWindows(`D:\b`)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:\a`), NewPathFromWindows(`\\server\share:\b`)}, Error: true},
+		{Input: []*Path{NewPathFromWindows(`C:/a/c`), NewPathFromWindows(`C:/b/d`)}, Expect: NewPathFromWindows(`..\..\b\d`)},
+		{Input: []*Path{NewPathFromWindows(`\\server\share\a`), NewPathFromWindows(`\\server\share\b`)}, Expect: NewPathFromWindows(`..\b`)},
+		{Input: []*Path{NewPathFromWindows(`\\server\share\a\b`), NewPathFromWindows(`\\server\share\a`)}, Expect: NewPathFromWindows(`..`)},
+		{Input: []*Path{NewPathFromWindows("a/d"), NewPathFromWindows("a/b\\ whitespace/c")}, Expect: NewPathFromWindows("../b/ whitespace/c")},
 	}
 
 	for i := range cases {
@@ -755,9 +811,9 @@ func TestPath_RelativeTo(t *testing.T) {
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
 		require.Equal(t, len(input), 2)
 
-		basePath := input[0]
-		originalPath := input[1]
-		relativePath, err := originalPath.RelativeTo(basePath)
+		a := input[0]
+		b := input[1]
+		relativePath, err := a.RelativeFrom(b)
 
 		require.Equal(t, expectError, err != nil)
 		if !expectError {
@@ -783,14 +839,14 @@ func TestPath_Absolute(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect *Path) {
-		absolutePath, err := input.Absolute()
+		absolutePath, err := input.MakeAbsolute()
 		require.NoError(t, err)
 
 		require.Equal(t, expect, absolutePath)
 	})
 }
 
-func TestPath_AbsoluteTo(t *testing.T) {
+func TestPath_AbsoluteFrom(t *testing.T) {
 	cases := []TestCase[[]*Path, *Path]{
 		{Input: []*Path{NewPath("."), NewPath(".")}, Error: true},
 		{Input: []*Path{NewPath("/"), NewPath(".")}, Expect: NewPath("/")},
@@ -809,7 +865,7 @@ func TestPath_AbsoluteTo(t *testing.T) {
 
 		base := input[0]
 		other := input[1]
-		absolutePath, err := base.AbsoluteTo(other)
+		absolutePath, err := base.AbsoluteFrom(other)
 		require.Equal(t, expectError, err != nil)
 
 		if !expectError {

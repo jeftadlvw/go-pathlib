@@ -1053,12 +1053,12 @@ func TestCopy(t *testing.T) {
 				// Test both targets target same file
 				originalTarget, err := srcPath.ReadSymlinkTarget()
 				require.NoError(t, err)
-				originalTarget, err = originalTarget.AbsoluteTo(srcPath.Parent())
+				originalTarget, err = originalTarget.AbsoluteFrom(srcPath.Parent())
 				require.NoError(t, err)
 
 				copiedTarget, err := dstPath.ReadSymlinkTarget()
 				require.NoError(t, err)
-				copiedTarget, err = copiedTarget.AbsoluteTo(dstPath.Parent())
+				copiedTarget, err = copiedTarget.AbsoluteFrom(dstPath.Parent())
 				require.NoError(t, err)
 
 				require.Equal(t, originalTarget.ToPosix(), copiedTarget.ToPosix(), "Copied symlink target should match original")
