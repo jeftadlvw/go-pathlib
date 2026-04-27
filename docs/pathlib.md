@@ -62,7 +62,7 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
   - [func NewHome\(\) \(\*Path, error\)](<#NewHome>)
   - [func NewPath\(path string\) \*Path](<#NewPath>)
-  - [func NewPathFromOs\(path string\) \*Path](<#NewPathFromOs>)
+  - [func NewPathFromPosix\(path string\) \*Path](<#NewPathFromPosix>)
   - [func NewPathFromWindows\(path string\) \*Path](<#NewPathFromWindows>)
   - [func PathFromParts\(parts ...string\) \*Path](<#PathFromParts>)
   - [func TempBaseDir\(\) \*Path](<#TempBaseDir>)
@@ -114,9 +114,12 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func \(p \*Path\) String\(\) string](<#Path.String>)
   - [func \(p \*Path\) SymlinkTo\(linkPath \*Path\) error](<#Path.SymlinkTo>)
   - [func \(p \*Path\) ToPosix\(\) string](<#Path.ToPosix>)
+  - [func \(p \*Path\) ToWindows\(\) string](<#Path.ToWindows>)
   - [func \(p \*Path\) UnmarshalText\(text \[\]byte\) error](<#Path.UnmarshalText>)
   - [func \(p \*Path\) Walk\(walkFunc WalkFunc\) error](<#Path.Walk>)
   - [func \(p \*Path\) WalkR\(walkFunc WalkRFunc\) error](<#Path.WalkR>)
+  - [func \(p \*Path\) WindowsUncRoot\(\) string](<#Path.WindowsUncRoot>)
+  - [func \(p \*Path\) WindowsVolume\(\) string](<#Path.WindowsVolume>)
   - [func \(p \*Path\) WithName\(name string\) \*Path](<#Path.WithName>)
 - [type TempPath](<#TempPath>)
   - [func CreateTempDir\(\) \(\*TempPath, error\)](<#CreateTempDir>)
@@ -574,7 +577,9 @@ type OpenOptions struct {
 
 Path is a struct that represents a filesystem path.
 
-Create a new instance using NewPath\(\). Other constructor functions are prefixed with 'New'.
+Create a new instance using NewPathFromPosix\(\). Other constructor functions are prefixed with 'New'.
+
+Implements the fmt.Stringer interface.
 
 ```go
 type Path struct {
@@ -611,24 +616,26 @@ This function uses os.UserHomeDir.
 func NewPath(path string) *Path
 ```
 
-NewPath is the constructor function for a new Path struct instance.
+NewPath ensure correct internal state and behavior depending on the current operating system.
+
+It is meant to be used when handling file paths received by the operating system by system calls or subprocesses.
+
+It branches to either NewPathFromPosix or NewPathFromWindows.
+
+<a name="NewPathFromPosix"></a>
+### func NewPathFromPosix
+
+```go
+func NewPathFromPosix(path string) *Path
+```
+
+NewPathFromPosix is the constructor function for a new Path struct instance.
 
 The passed path string is automatically cleaned and ready for further use using the following rules: \- Parts can include whitespaces wherever they want \(leading, somewhere in between and ending\). \- Parts are separated by a single forward slash \("/"\). \- Multiple forward slashes are replaced by one single slash. \- Trailing forward slashes are removed.
 
 Defined edge cases: \- an empty string, "." and "./" results into "." \- if all rules result into an empty string, the path also result into "." \- ".." stays ".." \- "/", "/.", and "/.." result into "/"
 
 The path is not lowercased, because the path might be used on a case\-sensitive filesystem. Functions that are case\-insensitive must additionally lowercase this representation.
-
-<a name="NewPathFromOs"></a>
-### func NewPathFromOs
-
-```go
-func NewPathFromOs(path string) *Path
-```
-
-NewPathFromOs ensure correct internal state and behavior depending on the current operating system.
-
-It is meant to be used when handling file paths received by the operating system by system calls or subprocesses.
 
 <a name="NewPathFromWindows"></a>
 ### func NewPathFromWindows
@@ -639,7 +646,7 @@ func NewPathFromWindows(path string) *Path
 
 NewPathFromWindows applies preprocessing to the passed path string to ensure a correct internal state and behavior for Windows\-styled path strings.
 
-The same normalization rules as NewPath apply, with additional handling for Windows volume names \(e.g. "C:"\) and UNC paths \(e.g. "\\\\\\\\host\\\\share"\).
+The same normalization rules as NewPathFromPosix apply, with additional handling for Windows volume names \(e.g. "C:"\) and UNC paths \(e.g. "\\\\\\\\host\\\\share"\).
 
 <a name="PathFromParts"></a>
 ### func PathFromParts
@@ -668,8 +675,6 @@ func (p *Path) Absolute() (*Path, error)
 
 Absolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
 
-This function uses filepath.Abs.
-
 <a name="Path.AbsoluteTo"></a>
 ### func \(\*Path\) AbsoluteTo
 
@@ -692,9 +697,9 @@ Requires the other Path to be absolute.
 func (p *Path) Anchor() string
 ```
 
-Anchor returns the first part of the path.
+Anchor returns the first part of the path in platform\-native form.
 
-On absolute paths this is the filesystem root \("/"\). For Windows paths the raw volume name is returned \(e.g. "C:" or "//host/share"\)
+On absolute paths this is the filesystem root \("/"\). For Windows paths the volume name or UNC root is returned \(e.g. "C:" or "//host/share" on Posix, "C:" or "\\\\host\\share" on Windows\).
 
 Relative paths don't have a defined anchor, "" is returned.
 
@@ -707,7 +712,7 @@ func (p *Path) Base() string
 
 Base returns the last element of this Path.
 
-This function uses filepath.Base.
+This function uses path.Base.
 
 <a name="Path.Copy"></a>
 ### func \(\*Path\) Copy
@@ -853,7 +858,7 @@ func (p *Path) IsAbsolute() bool
 
 IsAbsolute returns whether this Path is absolute.
 
-This function uses filepath.IsAbs.
+This function uses path.IsAbs.
 
 <a name="Path.IsBlockDevice"></a>
 ### func \(\*Path\) IsBlockDevice
@@ -970,7 +975,7 @@ Join returns a new Path with all passed Path structs joined together. Paths are 
 
 Use JoinStrings to join strings with this Path.
 
-This function uses filepath.Join.
+This function uses path.Join.
 
 <a name="Path.JoinStrings"></a>
 ### func \(\*Path\) JoinStrings
@@ -980,8 +985,6 @@ func (p *Path) JoinStrings(paths ...string) *Path
 ```
 
 JoinStrings returns a new Path with all passed strings joined together.
-
-This function uses filepath.Join.
 
 <a name="Path.List"></a>
 ### func \(\*Path\) List
@@ -1075,7 +1078,7 @@ func (p *Path) Parent() *Path
 
 Parent returns a copy of this Path in the parent directory.
 
-This function uses filepath.Dir.
+This function uses path.Dir.
 
 <a name="Path.Parts"></a>
 ### func \(\*Path\) Parts
@@ -1084,7 +1087,7 @@ This function uses filepath.Dir.
 func (p *Path) Parts() []string
 ```
 
-Parts returns all single parts of the Path. It uses filepath.Separator to split the path string.
+Parts returns all single parts of the Path.
 
 <a name="Path.ReadSymlinkTarget"></a>
 ### func \(\*Path\) ReadSymlinkTarget
@@ -1106,7 +1109,7 @@ func (p *Path) RelativeTo(o *Path) (*Path, error)
 
 RelativeTo returns this Path relative to another.
 
-This function uses filepath.Rel.
+On Windows, paths cannot be made relative across different anchors. This function does not enforce it and selects this Path's anchor.
 
 <a name="Path.Resolve"></a>
 ### func \(\*Path\) Resolve
@@ -1155,7 +1158,9 @@ Stem returns the base of this Path without all extensions.
 func (p *Path) String() string
 ```
 
-String returns this Path as a string.
+String returns this Path in platform\-native form.
+
+On Windows this uses backslashes and prepends the anchor; on Posix it uses forward slashes. Use ToPosix or ToWindows for an explicit representation.
 
 <a name="Path.SymlinkTo"></a>
 ### func \(\*Path\) SymlinkTo
@@ -1179,6 +1184,15 @@ func (p *Path) ToPosix() string
 
 ToPosix returns a string representation with forward slashes.
 
+<a name="Path.ToWindows"></a>
+### func \(\*Path\) ToWindows
+
+```go
+func (p *Path) ToWindows() string
+```
+
+
+
 <a name="Path.UnmarshalText"></a>
 ### func \(\*Path\) UnmarshalText
 
@@ -1186,7 +1200,9 @@ ToPosix returns a string representation with forward slashes.
 func (p *Path) UnmarshalText(text []byte) error
 ```
 
-UnmarshalText unmarshalls any byte array into a Path type using the NewPath constructor. Implements the encoding.TextUnmarshaler interface.
+UnmarshalText unmarshalls any byte array into a Path type. Implements the encoding.TextUnmarshaler interface.
+
+Uses NewPathFromWindows to ensure Windows anchors survive a marshal/unmarshal round\-trip, since MarshalText serializes them in forward\-slash form \(e.g. "c:/" or "//host/share"\).
 
 <a name="Path.Walk"></a>
 ### func \(\*Path\) Walk
@@ -1211,6 +1227,28 @@ WalkR walks this directory recursively and calls walkFunc for every entry. This 
 walkFunc receives paths that are already joined with this Path.
 
 walkFunc takes the current entry, a function to abort walking the entire tree and a function to abort walking the current branch.
+
+<a name="Path.WindowsUncRoot"></a>
+### func \(\*Path\) WindowsUncRoot
+
+```go
+func (p *Path) WindowsUncRoot() string
+```
+
+WindowsUncRoot returns the UNC root of a Windows network path \(e.g. "//host/share" on Posix, "\\\\host\\share" on Windows\) in platform\-native form.
+
+Returns "" if this is not a UNC\-anchored path.
+
+<a name="Path.WindowsVolume"></a>
+### func \(\*Path\) WindowsVolume
+
+```go
+func (p *Path) WindowsVolume() string
+```
+
+WindowsVolume returns the drive letter anchor of a Windows volume path \(e.g. "C:"\) in platform\-native form.
+
+Returns "" if this is not a volume\-anchored path.
 
 <a name="Path.WithName"></a>
 ### func \(\*Path\) WithName
