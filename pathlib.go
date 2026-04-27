@@ -613,11 +613,14 @@ func (p *Path) MarshalText() (text []byte, err error) {
 }
 
 /*
-UnmarshalText unmarshalls any byte array into a Path type using the NewPathFromPosix constructor.
+UnmarshalText unmarshalls any byte array into a Path type.
 Implements the encoding.TextUnmarshaler interface.
+
+Uses NewPathFromWindows to ensure Windows anchors survive a marshal/unmarshal round-trip,
+since MarshalText serializes them in forward-slash form (e.g. "c:/" or "//host/share").
 */
 func (p *Path) UnmarshalText(text []byte) error {
-	*p = *NewPath(string(text))
+	*p = *NewPathFromWindows(string(text))
 	return nil
 }
 
