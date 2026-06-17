@@ -23,6 +23,9 @@ type TempPath struct {
 	dispose func() error
 }
 
+/*
+Dispose disposes the temporary directory.
+*/
 func (p *TempPath) Dispose() error {
 	if p.dispose == nil {
 		return errors.New("dispose function is nil")
