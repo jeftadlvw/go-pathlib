@@ -3,7 +3,6 @@ package pathlib
 import (
 	"cmp"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -11,6 +10,61 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+)
+
+// Error sentinels raised by pathlib_fs.go (filesystem operations). They are
+// matched with errors.Is and exposed through PathlibError.Kind.
+var (
+	// ErrNotExist is the broad group for "a required path does not exist".
+	// Match it with errors.Is to catch every not-exist case below.
+	ErrNotExist = errors.New("path does not exist")
+
+	// ErrParentNotExist is raised when a required parent directory is missing.
+	// It is a member of the ErrNotExist group.
+	ErrParentNotExist = subKind(ErrNotExist, "parent directory does not exist")
+
+	// ErrExist is the broad group for "a path already exists and would be
+	// overwritten". Match it with errors.Is to catch every exist case below.
+	ErrExist = errors.New("path already exists")
+
+	// ErrFileExist is raised when the conflicting path is a file.
+	// It is a member of the ErrExist group.
+	ErrFileExist = subKind(ErrExist, "file already exists")
+
+	// ErrDirExist is raised when the conflicting path is a directory.
+	// It is a member of the ErrExist group.
+	ErrDirExist = subKind(ErrExist, "directory already exists")
+
+	// ErrNotFile is returned when a path is expected to be a regular file but is not.
+	ErrNotFile = errors.New("path is not a file")
+
+	// ErrNotDir is returned when a path is expected to be a directory but is not.
+	ErrNotDir = errors.New("path is not a directory")
+
+	// ErrNotSymlink is returned when a path is expected to be a symlink but is not.
+	ErrNotSymlink = errors.New("path is not a symlink")
+
+	// ErrNotEmptyDir is returned when a directory is expected to be empty but is not.
+	ErrNotEmptyDir = errors.New("directory is not empty")
+
+	// ErrCopyType is returned when a path's file type cannot be copied.
+	ErrCopyType = errors.New("no copy operation defined for this file type")
+
+	// ErrTypeMismatch is returned when the source and destination of a copy or
+	// move have incompatible file types.
+	ErrTypeMismatch = errors.New("source and destination types are incompatible")
+
+	// ErrOpen is returned when a path could not be opened; wraps the os cause.
+	ErrOpen = errors.New("could not open path")
+
+	// ErrReadDir is returned when a directory entry could not be read; wraps the os cause.
+	ErrReadDir = errors.New("could not read directory entry")
+
+	// ErrWalk is returned when walking a path fails; wraps the underlying cause.
+	ErrWalk = errors.New("error walking path")
+
+	// errInvalidFilterOption is an internal guard for an unknown glob filter option.
+	errInvalidFilterOption = errors.New("invalid filter option")
 )
 
 /*
@@ -234,7 +288,7 @@ This function uses filepath.EvalSymlinks and MakeAbsolute.
 */
 func (p *Path) Resolve() (*Path, error) {
 	if !p.Exists() {
-		return nil, errors.New("this path does not exist")
+		return nil, pathErr(ErrNotExist, *p)
 	}
 
 	ep, err := filepath.EvalSymlinks(p.String())
@@ -253,12 +307,12 @@ walkFunc receives a path joined with this Path.
 */
 func (p *Path) Walk(walkFunc WalkFunc) error {
 	if !p.IsDir() {
-		return errors.New("path must be an existing directory")
+		return pathErr(ErrNotDir, *p)
 	}
 
 	file, err := os.Open(p.String())
 	if err != nil {
-		return fmt.Errorf("error opening file: %w", err)
+		return wrapErr(ErrOpen, err, *p)
 	}
 
 	defer file.Close()
@@ -276,7 +330,7 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 			if errors.Is(err, io.EOF) {
 				break
 			} else {
-				return fmt.Errorf("error reading next dir name: %w", err)
+				return wrapErr(ErrReadDir, err, *p)
 			}
 		}
 
@@ -285,7 +339,7 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 
 		err = walkFunc(dirNamePath, abortGlobFunc)
 		if err != nil {
-			return fmt.Errorf("error processing file at '%s' : %w", dirNamePath, err)
+			return wrapErr(ErrWalk, err, *dirNamePath)
 		}
 
 		if abortGlob {
@@ -328,7 +382,7 @@ func walkR(initialDir *Path, currentDir *Path, abortWalking *bool, abortWalkFunc
 	}
 
 	if !currentDir.IsDir() {
-		return errors.New("path must be an existing directory")
+		return pathErr(ErrNotDir, *currentDir)
 	}
 
 	abortThis := false
@@ -346,7 +400,7 @@ func walkR(initialDir *Path, currentDir *Path, abortWalking *bool, abortWalkFunc
 	file, err := os.Open(currentDir.String())
 
 	if err != nil {
-		errWrapped := fmt.Errorf("error opening item: %w", err)
+		errWrapped := wrapErr(ErrOpen, err, *currentDir)
 		var evaluatedError = evaluateError(errWrapped)
 
 		// We need to return because we currently are on a directory-level
@@ -380,7 +434,7 @@ func walkR(initialDir *Path, currentDir *Path, abortWalking *bool, abortWalkFunc
 			if errors.Is(err, io.EOF) {
 				break
 			} else {
-				errWrapped := fmt.Errorf("error reading next dir name: %w", err)
+				errWrapped := wrapErr(ErrReadDir, err, *currentDir)
 				return evaluateError(errWrapped)
 			}
 		}
@@ -440,11 +494,11 @@ This Path must be a directory.
 */
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
 	if !p.IsDir() {
-		return nil, errors.New("path must be an existing directory")
+		return nil, pathErr(ErrNotDir, *p)
 	}
 
 	if pattern == "" {
-		return nil, errors.New("pattern cannot be empty")
+		return nil, pathErr(ErrEmptyPattern, *p)
 	}
 
 	var entries []*Path
@@ -466,7 +520,7 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 			case GlobOptionFilterAll:
 				addToEntries = true
 			default:
-				return errors.New("invalid filter option")
+				return pathErr(errInvalidFilterOption, *entry)
 			}
 		} else {
 			// Handle GlobOptions.FilterFunc option
@@ -481,7 +535,7 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 			// the pattern is matched starting from the original path.
 			entryForMatching, err := entry.RelativeTo(p)
 			if err != nil {
-				return fmt.Errorf("unable to make entry path relative to initial path: %w ", err)
+				return wrapErr(ErrRelImpossible, err, *entry, *p)
 			}
 
 			// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
@@ -822,7 +876,7 @@ This function uses CreateSymlink.
 */
 func (p *Path) SymlinkTo(linkPath *Path) error {
 	if !p.Exists() {
-		return errors.New("this path must exist")
+		return pathErr(ErrNotExist, *p)
 	}
 
 	return CreateSymlink(p, linkPath)
@@ -835,7 +889,7 @@ This Path must be a symlink.
 */
 func (p *Path) ReadSymlinkTarget() (*Path, error) {
 	if !p.IsSymlink() {
-		return nil, errors.New("path is not a symlink")
+		return nil, pathErr(ErrNotSymlink, *p)
 	}
 
 	target, err := os.Readlink(p.String())
@@ -878,12 +932,12 @@ Returns true if a new file was created, false otherwise.
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 	if path.Exists() {
 		if !path.IsFile() {
-			return false, errors.New("path exists and is not a file")
+			return false, pathErr(ErrNotFile, *path)
 		}
 		if options.ExistOk {
 			return false, nil
 		}
-		return false, errors.New("file already exists")
+		return false, pathErr(ErrFileExist, *path)
 	}
 
 	if options.Mode == 0 {
@@ -921,12 +975,12 @@ Returns true if a new directory was created, false otherwise.
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	if path.Exists() {
 		if !path.IsDir() {
-			return false, errors.New("path exists and is not a directory")
+			return false, pathErr(ErrNotDir, *path)
 		}
 		if options.ExistOk {
 			return false, nil
 		}
-		return false, errors.New("directory already exists")
+		return false, pathErr(ErrDirExist, *path)
 	}
 
 	if options.Mode == 0 {
@@ -956,11 +1010,11 @@ symlinkPath may not exist, but parent directory should.
 */
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 	if symlinkPath.Exists() {
-		return errors.New("symlink path already exists")
+		return pathErr(ErrExist, *symlinkPath)
 	}
 
 	if !symlinkPath.Parent().Exists() {
-		return errors.New("parent directory of link path does not exist")
+		return pathErr(ErrParentNotExist, *symlinkPath)
 	}
 
 	return os.Symlink(symlinkTarget.String(), symlinkPath.String())
@@ -978,12 +1032,12 @@ The source path must exist. Destination parent directories must exist.
 */
 func Copy(src *Path, destination *Path) error {
 	if !src.Exists() {
-		return errors.New("source path does not exist")
+		return pathErr(ErrNotExist, *src)
 	}
 
 	// Ensure parent directories exist
 	if !destination.Parent().Exists() {
-		return errors.New("destination parent directory does not exist")
+		return pathErr(ErrParentNotExist, *destination)
 	}
 
 	if src.IsSymlink() { // A symlink is a special file, thus checking that first
@@ -993,7 +1047,7 @@ func Copy(src *Path, destination *Path) error {
 	} else if src.IsDir() {
 		return copyDir(src, destination)
 	} else {
-		return errors.New("cannot copy path: no copy operation defined for file type")
+		return pathErr(ErrCopyType, *src)
 	}
 }
 
@@ -1012,11 +1066,11 @@ func copyFile(source *Path, destination *Path) error {
 	// Ensure the target file does not exist
 	if destination.Exists() {
 		if destination.IsFile() {
-			return errors.New("destination file already exists")
+			return pathErr(ErrFileExist, *destination)
 		} else if destination.IsDir() {
-			return errors.New("destination path is a directory, but source path is a file")
+			return pathErr(ErrTypeMismatch, *source, *destination)
 		} else {
-			return errors.New("destination path already exists")
+			return pathErr(ErrExist, *destination)
 		}
 	}
 
@@ -1083,7 +1137,7 @@ func copyDir(src *Path, dst *Path) error {
 	if dst.Exists() {
 		if dst.IsFile() {
 			// Ensure the target directory is not a file
-			return errors.New("destination path is a file, but source path is a directory")
+			return pathErr(ErrTypeMismatch, *src, *dst)
 
 		} else if dst.IsDir() {
 			// Ensure destination directory is empty
@@ -1100,10 +1154,10 @@ func copyDir(src *Path, dst *Path) error {
 			}
 
 			if len(entries) != 0 {
-				return errors.New("destination path is a non-empty directory")
+				return pathErr(ErrNotEmptyDir, *dst)
 			}
 		} else {
-			return errors.New("destination path already exists")
+			return pathErr(ErrExist, *dst)
 		}
 
 	} else {
@@ -1143,7 +1197,7 @@ Destination parent directories must exist.
 */
 func Move(src *Path, dst *Path) error {
 	if !src.Exists() {
-		return errors.New("source path does not exist")
+		return pathErr(ErrNotExist, *src)
 	}
 
 	// Destination path may not exist, except if source is a directory
@@ -1151,7 +1205,7 @@ func Move(src *Path, dst *Path) error {
 	if src.IsDir() && dst.IsEmptyDir() {
 		// do nothing
 	} else if dst.Exists() {
-		return errors.New("destination path already exists")
+		return pathErr(ErrExist, *dst)
 	}
 
 	// Try renaming first (works if on same filesystem)
@@ -1206,7 +1260,7 @@ func RemoveAll(path *Path) error {
 	}
 
 	if !path.IsDir() {
-		return errors.New("path is not a directory")
+		return pathErr(ErrNotDir, *path)
 	}
 
 	return os.RemoveAll(path.String())

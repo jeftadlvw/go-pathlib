@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -1312,7 +1313,7 @@ func TestRemoveAll(t *testing.T) {
 		if expectError {
 			require.Error(t, err)
 			// For RemoveAll, if it errors because it's not a directory, the path *should* still exist.
-			if err.Error() == "path is not a directory" {
+			if errors.Is(err, ErrNotDir) {
 				require.True(t, targetPath.Exists())
 			}
 		} else {

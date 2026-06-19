@@ -5,6 +5,9 @@ import (
 	"os"
 )
 
+// ErrDisposeNil is returned when a TempPath has no dispose function set.
+var ErrDisposeNil = errors.New("dispose function is nil")
+
 /*
 Disposable interface shows that a struct has resources that must be disposed manually.
 */
@@ -28,7 +31,7 @@ Dispose disposes the temporary directory.
 */
 func (p *TempPath) Dispose() error {
 	if p.dispose == nil {
-		return errors.New("dispose function is nil")
+		return pathErr(ErrDisposeNil, p.Path)
 	}
 
 	return p.dispose()
@@ -62,7 +65,7 @@ func (t *TempPathOptions) toUsableValues() (string, string, error) {
 
 	if t.BaseDir != nil {
 		if !t.BaseDir.IsDir() {
-			return "", "", errors.New("BaseDir in option struct is not a directory")
+			return "", "", pathErr(ErrNotDir, *t.BaseDir)
 		}
 
 		tempBaseDir = t.BaseDir.String()
