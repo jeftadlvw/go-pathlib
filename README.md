@@ -104,8 +104,9 @@ Don't assume the underlying filesystem is case-insensitive. This is the case for
 
 Whether you design the paths in your application to be case-sensitive or not is your decision. But keep in mind that **case sensitivity also comes with path ambiguity** (e.g.: should `file.txt` and `FILE.txt` be treated equally?).
 
-Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default while allowing flexibility explicitly**. We provide two functions to check for path equality:
+Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default, while allowing flexibility explicitly**. We provide functions to check for path equality:
 - `Equals`: default, lexical, case-sensitive by default, but switchable with flag
+- `EqualsString`: convenience wrapper for `Equals`, where the argument is interpreted as a canonical Posix string. Reserve it for strings you control, such as `ToPosix()` output or serialized config, not OS-native strings like `String()`. For those, parse first: `p.Equals(NewPath(s))`.
 - `EqualsFs`: filesystem equality (only in `pathlib_fs.go`)
 
 ## Contributing 👥

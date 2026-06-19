@@ -71,7 +71,9 @@ const (
 /*
 Path is a struct that represents a filesystem path.
 
-Create a new instance using NewPathFromPosix().
+Create a new instance using NewPath() for paths coming from the operating
+system, or NewPathFromPosix() / NewPathFromWindows() to interpret a string in a
+specific format regardless of the runtime OS.
 Other constructor functions are prefixed with 'New'.
 
 Implements the fmt.Stringer interface.
@@ -93,13 +95,21 @@ type Path struct {
 }
 
 /*
-NewPath ensure correct internal state and behavior depending on the current
-operating system.
+NewPath ensures correct internal state and behavior depending on the current
+operating system. It is OS-adaptive: the same input may produce a different Path
+on Windows than on Posix, so its result is platform-dependent by design.
 
 It is meant to be used when handling file paths received by the operating system by
 system calls or subprocesses.
 
-It branches to either NewPathFromPosix or NewPathFromWindows.
+It branches to either NewPathFromPosix or NewPathFromWindows. When the input
+format is known ahead of time (serialization, cross-platform handling, tests),
+prefer those format-explicit constructors so the result is deterministic across
+platforms.
+
+Rule of thumb: reach for NewPath only for strings handed to you by the operating
+system. If you already hold a path in a known format (including the library's own
+canonical posix form), use the format-explicit constructor instead.
 */
 func NewPath(path string) *Path {
 	if runningOnWindows {
@@ -110,7 +120,9 @@ func NewPath(path string) *Path {
 }
 
 /*
-NewPathFromPosix is the constructor function for a new Path struct instance.
+NewPathFromPosix interprets the passed string as a Posix path, independent of the
+runtime OS. A backslash is treated as an ordinary filename character, not a
+separator. On Posix, a warning is printed to flag the cross-platform ambiguity.
 
 The passed path string is automatically cleaned and ready for further use using the following rules:
   - Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
@@ -134,11 +146,14 @@ func NewPathFromPosix(path string) *Path {
 }
 
 /*
-NewPathFromWindows applies preprocessing to the passed path string to
-ensure a correct internal state and behavior for Windows-styled path strings.
+NewPathFromWindows interprets the passed string as a Windows path, independent of
+the runtime OS. Use it to parse Windows-formatted strings on any platform (e.g.
+when reading serialized paths on a Posix server).
 
-The same normalization rules as NewPathFromPosix apply, with additional handling for
-Windows volume names (e.g. "C:") and UNC paths (e.g. "\\\\host\\share").
+It is effectively a superset of NewPathFromPosix. Backslashes are converted to the
+canonical separator and Windows volume names (e.g. "C:") and UNC anchors (e.g.
+"\\\\host\\share") are split off, after which the same normalization rules as
+NewPathFromPosix apply to the remainder.
 */
 func NewPathFromWindows(path string) *Path {
 	warnForBackslashesOnPosix(path)
@@ -450,7 +465,8 @@ func (p *Path) RelativeTo(o *Path) (*Path, error) {
 		return nil, err
 	}
 
-	return NewPath(rp), nil
+	// Use posix here as rp is relative and already posix style.
+	return NewPathFromPosix(rp), nil
 }
 
 /*
@@ -554,6 +570,10 @@ func (p *Path) Join(paths ...*Path) *Path {
 
 /*
 JoinStrings returns a new Path with all passed strings joined together.
+
+Each segment is interpreted as a Posix string (the library's canonical string
+form). To join a Windows-formatted or OS-native string, parse it first and use Join, e.g.
+p.Join(NewPathFromWindows(s)) or p.Join(NewPath(s)).
 */
 func (p *Path) JoinStrings(paths ...string) *Path {
 	for _, localPath := range paths {
@@ -581,26 +601,24 @@ func (p *Path) Equals(other *Path, opts ...CompareOption) bool {
 }
 
 /*
-EqualsString returns whether this and the passed string match lexically.
+EqualsString reports whether other denotes the same path as this Path.
 By default, comparison is case-sensitive.
+
+other is interpreted as a Posix path. Pair this with ToPosix(), not String().
+String() returns the OS-native form and is a portability trap on Windows. To compare
+against an OS-native string, or a Windows-formatted one, construct the operand
+explicitly and use Equals(NewPath(s)) for an OS path, or Equals(NewPathFromWindows(s))
+for a Windows path.
 */
 func (p *Path) EqualsString(other string, opts ...CompareOption) bool {
-	caseSensitive := true
-	if len(opts) > 0 {
-		caseSensitive = bool(opts[0])
-	}
-
-	otherCanonical := normalizePath(other)
-
-	if caseSensitive {
-		return p.pathWithWindowsAnchor() == otherCanonical
-	}
-
-	return strings.EqualFold(p.pathWithWindowsAnchor(), otherCanonical)
+	return p.Equals(NewPathFromPosix(other), opts...)
 }
 
 /*
 WithName returns this Path but with another base.
+
+name is interpreted as a Posix string, like JoinStrings: a backslash is an ordinary
+filename character, not a separator, and passing one on Posix logs a warning.
 */
 func (p *Path) WithName(name string) *Path {
 	return p.Parent().JoinStrings(name)
@@ -674,7 +692,9 @@ TrimWindowsAnchor returns a copy of this Path with stripped
 Windows anchor encoding information.
 */
 func (p *Path) TrimWindowsAnchor() *Path {
-	return NewPath(p.path)
+	// p.path is already canonical posix (the anchor is held separately), so
+	// interpret it as posix rather than re-running OS-dependent detection.
+	return NewPathFromPosix(p.path)
 }
 
 /*

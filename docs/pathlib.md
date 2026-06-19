@@ -154,7 +154,7 @@ var PrintBackslashWarningOnPosix = true
 ```
 
 <a name="AppendBytes"></a>
-## func AppendBytes
+## func [AppendBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L173>)
 
 ```go
 func AppendBytes(path *Path, data []byte) (int, error)
@@ -165,7 +165,7 @@ AppendBytes appends byte data to the defined file.
 The file is not created.
 
 <a name="AppendString"></a>
-## func AppendString
+## func [AppendString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L182>)
 
 ```go
 func AppendString(path *Path, data string) (int, error)
@@ -176,7 +176,7 @@ AppendString appends a string to the defined file.
 The file is not created.
 
 <a name="Copy"></a>
-## func Copy
+## func [Copy](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L979>)
 
 ```go
 func Copy(src *Path, destination *Path) error
@@ -191,7 +191,7 @@ Copying a directory requires the target directory to be empty.
 The source path must exist. Destination parent directories must exist.
 
 <a name="CreateFile"></a>
-## func CreateFile
+## func [CreateFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L862>)
 
 ```go
 func CreateFile(path *Path) error
@@ -202,7 +202,7 @@ CreateFile creates the file at the defined path with mode 0644. If the file alre
 Parent directories must exist.
 
 <a name="CreateFileWithOptions"></a>
-## func CreateFileWithOptions
+## func [CreateFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L878>)
 
 ```go
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error)
@@ -217,7 +217,7 @@ FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the
 Returns true if a new file was created, false otherwise.
 
 <a name="CreateSymlink"></a>
-## func CreateSymlink
+## func [CreateSymlink](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L957>)
 
 ```go
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error
@@ -230,7 +230,7 @@ symlinkTarget may be relative or absolute.
 symlinkPath may not exist, but parent directory should.
 
 <a name="MkDir"></a>
-## func MkDir
+## func [MkDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L907>)
 
 ```go
 func MkDir(path *Path) error
@@ -239,7 +239,7 @@ func MkDir(path *Path) error
 MkDir creates the directory at the defined path with mode 0755. Parent directories must exist.
 
 <a name="MkDirWithOptions"></a>
-## func MkDirWithOptions
+## func [MkDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L921>)
 
 ```go
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error)
@@ -252,7 +252,7 @@ DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the 
 Returns true if a new directory was created, false otherwise.
 
 <a name="Move"></a>
-## func Move
+## func [Move](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L1144>)
 
 ```go
 func Move(src *Path, dst *Path) error
@@ -265,7 +265,7 @@ Fails if destination already exists, except if the source path is a directory, a
 Destination parent directories must exist.
 
 <a name="OpenFile"></a>
-## func OpenFile
+## func [OpenFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L42>)
 
 ```go
 func OpenFile(path *Path) (*os.File, error)
@@ -276,7 +276,7 @@ OpenFile opens a file for reading and writing. If the file does not exist, it is
 It's the caller's responsibility to close the returned os.File.
 
 <a name="OpenFileWithOptions"></a>
-## func OpenFileWithOptions
+## func [OpenFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L57>)
 
 ```go
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error)
@@ -291,7 +291,7 @@ The order for OpenOptions.Mode is enforced as follows: "r" \(read\), "w" \(write
 It's the caller's responsibility to close the returned os.File.
 
 <a name="ReadFile"></a>
-## func ReadFile
+## func [ReadFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L138>)
 
 ```go
 func ReadFile(path *Path) ([]byte, error)
@@ -300,7 +300,7 @@ func ReadFile(path *Path) ([]byte, error)
 ReadFile reads the passed file and returns read bytes.
 
 <a name="ReadFileToString"></a>
-## func ReadFileToString
+## func [ReadFileToString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L145>)
 
 ```go
 func ReadFileToString(path *Path) (string, error)
@@ -309,7 +309,7 @@ func ReadFileToString(path *Path) (string, error)
 ReadFileToString reads the passed file and returns its content as a string.
 
 <a name="Remove"></a>
-## func Remove
+## func [Remove](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L1190>)
 
 ```go
 func Remove(path *Path) error
@@ -320,7 +320,7 @@ Remove removes the file at the specified path or removes an empty directory.
 Nothing happens if the given path does not exist.
 
 <a name="RemoveAll"></a>
-## func RemoveAll
+## func [RemoveAll](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L1203>)
 
 ```go
 func RemoveAll(path *Path) error
@@ -331,7 +331,7 @@ RemoveAll recursively removes the directory and all its entries at the specified
 Nothing happens if the given path does not exist.
 
 <a name="Rename"></a>
-## func Rename
+## func [Rename](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L1180>)
 
 ```go
 func Rename(src *Path, name string) error
@@ -340,7 +340,7 @@ func Rename(src *Path, name string) error
 Rename renames the file at the source path to the destination path. This is a convenience wrapper for Move.
 
 <a name="SetPermission"></a>
-## func SetPermission
+## func [SetPermission](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L852>)
 
 ```go
 func SetPermission(path *Path, mode fs.FileMode) error
@@ -349,7 +349,7 @@ func SetPermission(path *Path, mode fs.FileMode) error
 SetPermission sets the permission mode for the specified path.
 
 <a name="WriteBytes"></a>
-## func WriteBytes
+## func [WriteBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L155>)
 
 ```go
 func WriteBytes(path *Path, data []byte) (int, error)
@@ -360,7 +360,7 @@ WriteBytes writes raw byte data to the defined file.
 The file is not created. Preexisting content is truncated.
 
 <a name="WriteString"></a>
-## func WriteString
+## func [WriteString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L164>)
 
 ```go
 func WriteString(path *Path, data string) (int, error)
@@ -371,7 +371,7 @@ WriteString writes a string to the defined file.
 The file is not created. Preexisting content is truncated.
 
 <a name="AbortFunc"></a>
-## type AbortFunc
+## type [AbortFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L100>)
 
 AbortFunc defines a function that sets a state in a lower function in the stacktrace.
 
@@ -380,7 +380,7 @@ type AbortFunc func()
 ```
 
 <a name="CompareOption"></a>
-## type CompareOption
+## type [CompareOption](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L26>)
 
 
 
@@ -398,7 +398,7 @@ const (
 ```
 
 <a name="DirOptions"></a>
-## type DirOptions
+## type [DirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L75-L84>)
 
 DirOptions contains options for file and directory creation and deletion operations
 
@@ -416,7 +416,7 @@ type DirOptions struct {
 ```
 
 <a name="DefaultDirOptions"></a>
-### func DefaultDirOptions
+### func [DefaultDirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L89>)
 
 ```go
 func DefaultDirOptions() DirOptions
@@ -425,7 +425,7 @@ func DefaultDirOptions() DirOptions
 DefaultDirOptions returns the default options for directory operations.
 
 <a name="Disposable"></a>
-## type Disposable
+## type [Disposable](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L11-L14>)
 
 Disposable interface shows that a struct has resources that must be disposed manually.
 
@@ -437,7 +437,7 @@ type Disposable interface {
 ```
 
 <a name="FileOptions"></a>
-## type FileOptions
+## type [FileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L54-L60>)
 
 FileOptions contains options for file and directory creation and deletion operations
 
@@ -452,7 +452,7 @@ type FileOptions struct {
 ```
 
 <a name="DefaultFileOptions"></a>
-### func DefaultFileOptions
+### func [DefaultFileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L65>)
 
 ```go
 func DefaultFileOptions() FileOptions
@@ -461,7 +461,7 @@ func DefaultFileOptions() FileOptions
 DefaultFileOptions returns the default options for file operations.
 
 <a name="FilterFunc"></a>
-## type FilterFunc
+## type [FilterFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L120>)
 
 
 
@@ -470,7 +470,7 @@ type FilterFunc func(path *Path) bool
 ```
 
 <a name="GlobOptionFilterType"></a>
-## type GlobOptionFilterType
+## type [GlobOptionFilterType](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L122>)
 
 
 
@@ -489,7 +489,7 @@ const (
 ```
 
 <a name="GlobOptions"></a>
-## type GlobOptions
+## type [GlobOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L133-L164>)
 
 GlobOptions contains options for file globbing.
 
@@ -523,7 +523,7 @@ type GlobOptions struct {
 ```
 
 <a name="DefaultGlobOptions"></a>
-### func DefaultGlobOptions
+### func [DefaultGlobOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L169>)
 
 ```go
 func DefaultGlobOptions() GlobOptions
@@ -532,7 +532,7 @@ func DefaultGlobOptions() GlobOptions
 DefaultGlobOptions returns the default options for directory operations.
 
 <a name="ListOptions"></a>
-## type ListOptions
+## type [ListOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L182-L185>)
 
 ListOptions is a type derivative for GlobOptions.
 
@@ -544,7 +544,7 @@ type ListOptions struct {
 ```
 
 <a name="DefaultListOptions"></a>
-### func DefaultListOptions
+### func [DefaultListOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L190>)
 
 ```go
 func DefaultListOptions() ListOptions
@@ -553,7 +553,7 @@ func DefaultListOptions() ListOptions
 DefaultListOptions returns the same as DefaultGlobOptions, but type cast to ListOptions.
 
 <a name="OpenOptions"></a>
-## type OpenOptions
+## type [OpenOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_io.go#L15-L25>)
 
 OpenOptions is a configuration struct for opening files.
 
@@ -572,11 +572,11 @@ type OpenOptions struct {
 ```
 
 <a name="Path"></a>
-## type Path
+## type [Path](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L81-L95>)
 
 Path is a struct that represents a filesystem path.
 
-Create a new instance using NewPathFromPosix\(\). Other constructor functions are prefixed with 'New'.
+Create a new instance using NewPath\(\) for paths coming from the operating system, or NewPathFromPosix\(\) / NewPathFromWindows\(\) to interpret a string in a specific format regardless of the runtime OS. Other constructor functions are prefixed with 'New'.
 
 Implements the fmt.Stringer interface.
 
@@ -587,7 +587,7 @@ type Path struct {
 ```
 
 <a name="NewCwd"></a>
-### func NewCwd
+### func [NewCwd](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L168>)
 
 ```go
 func NewCwd() (*Path, error)
@@ -598,7 +598,7 @@ NewCwd returns a new Path instance pointing to the application's current working
 This function uses os.Getwd.
 
 <a name="NewHome"></a>
-### func NewHome
+### func [NewHome](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L182>)
 
 ```go
 func NewHome() (*Path, error)
@@ -609,26 +609,28 @@ NewHome returns a new Path instance pointing to the user's home directory.
 This function uses os.UserHomeDir.
 
 <a name="NewPath"></a>
-### func NewPath
+### func [NewPath](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L114>)
 
 ```go
 func NewPath(path string) *Path
 ```
 
-NewPath ensure correct internal state and behavior depending on the current operating system.
+NewPath ensures correct internal state and behavior depending on the current operating system. It is OS\-adaptive: the same input may produce a different Path on Windows than on Posix, so its result is platform\-dependent by design.
 
 It is meant to be used when handling file paths received by the operating system by system calls or subprocesses.
 
-It branches to either NewPathFromPosix or NewPathFromWindows.
+It branches to either NewPathFromPosix or NewPathFromWindows. When the input format is known ahead of time \(serialization, cross\-platform handling, tests\), prefer those format\-explicit constructors so the result is deterministic across platforms.
+
+Rule of thumb: reach for NewPath only for strings handed to you by the operating system. If you already hold a path in a known format \(including the library's own canonical posix form\), use the format\-explicit constructor instead.
 
 <a name="NewPathFromPosix"></a>
-### func NewPathFromPosix
+### func [NewPathFromPosix](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L142>)
 
 ```go
 func NewPathFromPosix(path string) *Path
 ```
 
-NewPathFromPosix is the constructor function for a new Path struct instance.
+NewPathFromPosix interprets the passed string as a Posix path, independent of the runtime OS. A backslash is treated as an ordinary filename character, not a separator. On Posix, a warning is printed to flag the cross\-platform ambiguity.
 
 The passed path string is automatically cleaned and ready for further use using the following rules:
 
@@ -647,18 +649,18 @@ Defined edge cases:
 The path is not lowercased, because the path might be used on a case\-sensitive filesystem. Functions that are case\-insensitive must additionally lowercase this representation.
 
 <a name="NewPathFromWindows"></a>
-### func NewPathFromWindows
+### func [NewPathFromWindows](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L158>)
 
 ```go
 func NewPathFromWindows(path string) *Path
 ```
 
-NewPathFromWindows applies preprocessing to the passed path string to ensure a correct internal state and behavior for Windows\-styled path strings.
+NewPathFromWindows interprets the passed string as a Windows path, independent of the runtime OS. Use it to parse Windows\-formatted strings on any platform \(e.g. when reading serialized paths on a Posix server\).
 
-The same normalization rules as NewPathFromPosix apply, with additional handling for Windows volume names \(e.g. "C:"\) and UNC paths \(e.g. "\\\\\\\\host\\\\share"\).
+It is effectively a superset of NewPathFromPosix. Backslashes are converted to the canonical separator and Windows volume names \(e.g. "C:"\) and UNC anchors \(e.g. "\\\\\\\\host\\\\share"\) are split off, after which the same normalization rules as NewPathFromPosix apply to the remainder.
 
 <a name="PathFromParts"></a>
-### func PathFromParts
+### func [PathFromParts](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L194>)
 
 ```go
 func PathFromParts(parts ...string) *Path
@@ -667,7 +669,7 @@ func PathFromParts(parts ...string) *Path
 PathFromParts combines passed parts into a new Path.
 
 <a name="TempBaseDir"></a>
-### func TempBaseDir
+### func [TempBaseDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L188>)
 
 ```go
 func TempBaseDir() *Path
@@ -676,7 +678,7 @@ func TempBaseDir() *Path
 
 
 <a name="Path.AbsoluteFrom"></a>
-### func \(\*Path\) AbsoluteFrom
+### func \(\*Path\) [AbsoluteFrom](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L540>)
 
 ```go
 func (p *Path) AbsoluteFrom(o *Path) (*Path, error)
@@ -691,7 +693,7 @@ The other path must be absolute.
 Requires the other Path to be absolute.
 
 <a name="Path.Anchor"></a>
-### func \(\*Path\) Anchor
+### func \(\*Path\) [Anchor](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L322>)
 
 ```go
 func (p *Path) Anchor() string
@@ -704,7 +706,7 @@ On absolute paths this is the filesystem root \("/"\). For Windows paths the vol
 Relative paths don't have a defined anchor, "" is returned.
 
 <a name="Path.Base"></a>
-### func \(\*Path\) Base
+### func \(\*Path\) [Base](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L243>)
 
 ```go
 func (p *Path) Base() string
@@ -715,7 +717,7 @@ Base returns the last element of this Path.
 This function uses path.Base.
 
 <a name="Path.Copy"></a>
-### func \(\*Path\) Copy
+### func \(\*Path\) [Copy](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L630>)
 
 ```go
 func (p *Path) Copy() *Path
@@ -724,7 +726,7 @@ func (p *Path) Copy() *Path
 Copy creates a copy of this Path.
 
 <a name="Path.Equals"></a>
-### func \(\*Path\) Equals
+### func \(\*Path\) [Equals](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L590>)
 
 ```go
 func (p *Path) Equals(other *Path, opts ...CompareOption) bool
@@ -733,7 +735,7 @@ func (p *Path) Equals(other *Path, opts ...CompareOption) bool
 Equals returns whether this and another Path match lexically. By default, comparison is case\-sensitive.
 
 <a name="Path.EqualsFs"></a>
-### func \(\*Path\) EqualsFs
+### func \(\*Path\) [EqualsFs](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L687>)
 
 ```go
 func (p *Path) EqualsFs(other *Path) bool
@@ -744,16 +746,18 @@ EqualsFs returns whether this Path and another Path point to the same file syste
 Symlinks are resolved.
 
 <a name="Path.EqualsString"></a>
-### func \(\*Path\) EqualsString
+### func \(\*Path\) [EqualsString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L613>)
 
 ```go
 func (p *Path) EqualsString(other string, opts ...CompareOption) bool
 ```
 
-EqualsString returns whether this and the passed string match lexically. By default, comparison is case\-sensitive.
+EqualsString reports whether other denotes the same path as this Path. By default, comparison is case\-sensitive.
+
+other is interpreted as a Posix path. Pair this with ToPosix\(\), not String\(\). String\(\) returns the OS\-native form and is a portability trap on Windows. To compare against an OS\-native string, or a Windows\-formatted one, construct the operand explicitly and use Equals\(NewPath\(s\)\) for an OS path, or Equals\(NewPathFromWindows\(s\)\) for a Windows path.
 
 <a name="Path.Exists"></a>
-### func \(\*Path\) Exists
+### func \(\*Path\) [Exists](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L226>)
 
 ```go
 func (p *Path) Exists() bool
@@ -764,7 +768,7 @@ Exists returns whether this Path exists.
 If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
 
 <a name="Path.Extension"></a>
-### func \(\*Path\) Extension
+### func \(\*Path\) [Extension](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L292>)
 
 ```go
 func (p *Path) Extension() string
@@ -775,7 +779,7 @@ Extension returns the complete extension of this Path. Any prefixed dots are inc
 Everything starting from the first non\-leading dot in this Path's Stem\(\) is considered to be an extension.
 
 <a name="Path.ExtensionCount"></a>
-### func \(\*Path\) ExtensionCount
+### func \(\*Path\) [ExtensionCount](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L281>)
 
 ```go
 func (p *Path) ExtensionCount() int
@@ -784,7 +788,7 @@ func (p *Path) ExtensionCount() int
 ExtensionCount returns the number of extensions this Path has.
 
 <a name="Path.ExtensionParts"></a>
-### func \(\*Path\) ExtensionParts
+### func \(\*Path\) [ExtensionParts](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L308>)
 
 ```go
 func (p *Path) ExtensionParts() []string
@@ -795,7 +799,7 @@ ExtensionParts returns all this Path's extensions.
 See Extension for what is considered an extension.
 
 <a name="Path.Glob"></a>
-### func \(\*Path\) Glob
+### func \(\*Path\) [Glob](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L430>)
 
 ```go
 func (p *Path) Glob(pattern string) ([]*Path, error)
@@ -808,7 +812,7 @@ If an error is returned, all entries until that error are returned.
 This Path must be a directory.
 
 <a name="Path.GlobWithOptions"></a>
-### func \(\*Path\) GlobWithOptions
+### func \(\*Path\) [GlobWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L441>)
 
 ```go
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error)
@@ -821,7 +825,7 @@ If an error is returned, all entries until that error are returned.
 This Path must be a directory.
 
 <a name="Path.HasExtensions"></a>
-### func \(\*Path\) HasExtensions
+### func \(\*Path\) [HasExtensions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L274>)
 
 ```go
 func (p *Path) HasExtensions() bool
@@ -830,7 +834,7 @@ func (p *Path) HasExtensions() bool
 HasExtensions returns whether this Path has file extensions.
 
 <a name="Path.HasGlobMatch"></a>
-### func \(\*Path\) HasGlobMatch
+### func \(\*Path\) [HasGlobMatch](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L549>)
 
 ```go
 func (p *Path) HasGlobMatch(pattern string) bool
@@ -839,7 +843,7 @@ func (p *Path) HasGlobMatch(pattern string) bool
 HasGlobMatch returns whether the passed pattern exists within this Path's directory. It wraps HasGlobMatchE and returns the boolean success value or false in case of an error.
 
 <a name="Path.HasGlobMatchE"></a>
-### func \(\*Path\) HasGlobMatchE
+### func \(\*Path\) [HasGlobMatchE](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L536>)
 
 ```go
 func (p *Path) HasGlobMatchE(pattern string) (bool, error)
@@ -850,7 +854,7 @@ HasGlobMatchE returns whether the passed pattern exists within this Path's direc
 This function uses filepath.Glob.
 
 <a name="Path.IsAbsolute"></a>
-### func \(\*Path\) IsAbsolute
+### func \(\*Path\) [IsAbsolute](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L415>)
 
 ```go
 func (p *Path) IsAbsolute() bool
@@ -861,7 +865,7 @@ IsAbsolute returns whether this Path is absolute.
 This function uses path.IsAbs.
 
 <a name="Path.IsBlockDevice"></a>
-### func \(\*Path\) IsBlockDevice
+### func \(\*Path\) [IsBlockDevice](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L656>)
 
 ```go
 func (p *Path) IsBlockDevice() bool
@@ -870,7 +874,7 @@ func (p *Path) IsBlockDevice() bool
 IsBlockDevice returns whether this Path is a block device.
 
 <a name="Path.IsCharDevice"></a>
-### func \(\*Path\) IsCharDevice
+### func \(\*Path\) [IsCharDevice](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L663>)
 
 ```go
 func (p *Path) IsCharDevice() bool
@@ -879,7 +883,7 @@ func (p *Path) IsCharDevice() bool
 IsCharDevice returns whether this Path is a character device.
 
 <a name="Path.IsDir"></a>
-### func \(\*Path\) IsDir
+### func \(\*Path\) [IsDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L208>)
 
 ```go
 func (p *Path) IsDir() bool
@@ -890,7 +894,7 @@ IsDir returns whether this Path is an existing directory.
 If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
 
 <a name="Path.IsEmptyDir"></a>
-### func \(\*Path\) IsEmptyDir
+### func \(\*Path\) [IsEmptyDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L217>)
 
 ```go
 func (p *Path) IsEmptyDir() bool
@@ -901,7 +905,7 @@ IsEmptyDir returns whether this Path is an empty existing directory.
 If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
 
 <a name="Path.IsFiFoPipe"></a>
-### func \(\*Path\) IsFiFoPipe
+### func \(\*Path\) [IsFiFoPipe](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L670>)
 
 ```go
 func (p *Path) IsFiFoPipe() bool
@@ -910,7 +914,7 @@ func (p *Path) IsFiFoPipe() bool
 IsFiFoPipe returns whether this Path is a FIFO/pipe.
 
 <a name="Path.IsFile"></a>
-### func \(\*Path\) IsFile
+### func \(\*Path\) [IsFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L199>)
 
 ```go
 func (p *Path) IsFile() bool
@@ -921,7 +925,7 @@ IsFile returns whether this Path is an existing file.
 If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
 
 <a name="Path.IsOnCaseSensitiveFs"></a>
-### func \(\*Path\) IsOnCaseSensitiveFs
+### func \(\*Path\) [IsOnCaseSensitiveFs](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L715>)
 
 ```go
 func (p *Path) IsOnCaseSensitiveFs() bool
@@ -936,7 +940,7 @@ If no letter exists within the path's base, a temporary file is created in the s
 If both attempts result in an invalid state, false is returned.
 
 <a name="Path.IsRelative"></a>
-### func \(\*Path\) IsRelative
+### func \(\*Path\) [IsRelative](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L428>)
 
 ```go
 func (p *Path) IsRelative() bool
@@ -947,7 +951,7 @@ IsRelative returns whether this Path is relative.
 This function returns the inverse of IsAbsolute.
 
 <a name="Path.IsSocket"></a>
-### func \(\*Path\) IsSocket
+### func \(\*Path\) [IsSocket](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L677>)
 
 ```go
 func (p *Path) IsSocket() bool
@@ -956,7 +960,7 @@ func (p *Path) IsSocket() bool
 IsSocket returns whether this Path is a socket.
 
 <a name="Path.IsSymlink"></a>
-### func \(\*Path\) IsSymlink
+### func \(\*Path\) [IsSymlink](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L648>)
 
 ```go
 func (p *Path) IsSymlink() bool
@@ -965,7 +969,7 @@ func (p *Path) IsSymlink() bool
 IsSymlink returns whether this Path is a symbolic link.
 
 <a name="Path.Join"></a>
-### func \(\*Path\) Join
+### func \(\*Path\) [Join](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L562>)
 
 ```go
 func (p *Path) Join(paths ...*Path) *Path
@@ -978,7 +982,7 @@ Use JoinStrings to join strings with this Path.
 This function uses path.Join.
 
 <a name="Path.JoinStrings"></a>
-### func \(\*Path\) JoinStrings
+### func \(\*Path\) [JoinStrings](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L578>)
 
 ```go
 func (p *Path) JoinStrings(paths ...string) *Path
@@ -986,8 +990,10 @@ func (p *Path) JoinStrings(paths ...string) *Path
 
 JoinStrings returns a new Path with all passed strings joined together.
 
+Each segment is interpreted as a Posix string \(the library's canonical string form\). To join a Windows\-formatted or OS\-native string, parse it first and use Join, e.g. p.Join\(NewPathFromWindows\(s\)\) or p.Join\(NewPath\(s\)\).
+
 <a name="Path.List"></a>
-### func \(\*Path\) List
+### func \(\*Path\) [List](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L568>)
 
 ```go
 func (p *Path) List(options ListOptions) ([]*Path, error)
@@ -1002,7 +1008,7 @@ Use Walk or WalkR for more fine\-grained control.
 This function uses GlobWithOptions.
 
 <a name="Path.ListDirs"></a>
-### func \(\*Path\) ListDirs
+### func \(\*Path\) [ListDirs](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L605>)
 
 ```go
 func (p *Path) ListDirs(recursive bool) ([]*Path, error)
@@ -1013,7 +1019,7 @@ ListDirs returns all directories in the Path's directory, sorted by Posix repres
 This function uses List. The same requirements and behaviors apply.
 
 <a name="Path.ListFiles"></a>
-### func \(\*Path\) ListFiles
+### func \(\*Path\) [ListFiles](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L591>)
 
 ```go
 func (p *Path) ListFiles(recursive bool) ([]*Path, error)
@@ -1024,7 +1030,7 @@ ListFiles returns all files in the Path's directory, sorted by Posix representat
 This function uses List. The same requirements and behaviors apply.
 
 <a name="Path.Lstat"></a>
-### func \(\*Path\) Lstat
+### func \(\*Path\) [Lstat](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L641>)
 
 ```go
 func (p *Path) Lstat() (os.FileInfo, error)
@@ -1035,7 +1041,7 @@ Lstat returns file info for this Path, not following symbolic links.
 This function uses os.Lstat.
 
 <a name="Path.MakeAbsolute"></a>
-### func \(\*Path\) MakeAbsolute
+### func \(\*Path\) [MakeAbsolute](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L516>)
 
 ```go
 func (p *Path) MakeAbsolute() (*Path, error)
@@ -1044,7 +1050,7 @@ func (p *Path) MakeAbsolute() (*Path, error)
 MakeAbsolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
 
 <a name="Path.MarshalText"></a>
-### func \(\*Path\) MarshalText
+### func \(\*Path\) [MarshalText](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L704>)
 
 ```go
 func (p *Path) MarshalText() (text []byte, err error)
@@ -1053,7 +1059,7 @@ func (p *Path) MarshalText() (text []byte, err error)
 MarshalText marshals this Path's Posix representation into a byte array. Implements the encoding.TextMarshaler interface.
 
 <a name="Path.MatchesPattern"></a>
-### func \(\*Path\) MatchesPattern
+### func \(\*Path\) [MatchesPattern](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L405>)
 
 ```go
 func (p *Path) MatchesPattern(pattern string, opts ...CompareOption) bool
@@ -1064,7 +1070,7 @@ MatchesPattern matches this Path against the provided pattern.
 It wraps MatchesPatternE and returns the boolean success return value or false in case of an error.
 
 <a name="Path.MatchesPatternE"></a>
-### func \(\*Path\) MatchesPatternE
+### func \(\*Path\) [MatchesPatternE](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L380>)
 
 ```go
 func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error)
@@ -1079,7 +1085,7 @@ By default, matching is case\-sensitive. Pass CaseInsensitive to ignore casing.
 Empty patterns cause an error.
 
 <a name="Path.Parent"></a>
-### func \(\*Path\) Parent
+### func \(\*Path\) [Parent](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L203>)
 
 ```go
 func (p *Path) Parent() *Path
@@ -1090,7 +1096,7 @@ Parent returns a copy of this Path in the parent directory.
 This function uses path.Dir.
 
 <a name="Path.Parts"></a>
-### func \(\*Path\) Parts
+### func \(\*Path\) [Parts](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L210>)
 
 ```go
 func (p *Path) Parts() []string
@@ -1099,7 +1105,7 @@ func (p *Path) Parts() []string
 Parts returns all single parts of the Path.
 
 <a name="Path.ReadSymlinkTarget"></a>
-### func \(\*Path\) ReadSymlinkTarget
+### func \(\*Path\) [ReadSymlinkTarget](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L836>)
 
 ```go
 func (p *Path) ReadSymlinkTarget() (*Path, error)
@@ -1110,7 +1116,7 @@ ReadSymlinkTarget reads the target path for this Path.
 This Path must be a symlink.
 
 <a name="Path.RelativeFrom"></a>
-### func \(\*Path\) RelativeFrom
+### func \(\*Path\) [RelativeFrom](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L494>)
 
 ```go
 func (p *Path) RelativeFrom(o *Path) (*Path, error)
@@ -1136,7 +1142,7 @@ The operation is lexically. An error is returned if the other Path can't be made
 If one path has a Windows anchor, the other also needs one. Else an error is returned. If the Windows anchor for both paths do not match, an error is returned.
 
 <a name="Path.RelativeTo"></a>
-### func \(\*Path\) RelativeTo
+### func \(\*Path\) [RelativeTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L455>)
 
 ```go
 func (p *Path) RelativeTo(o *Path) (*Path, error)
@@ -1163,7 +1169,7 @@ The operation is lexically. An error is returned if the other Path can't be made
 If one path has a Windows anchor, the other also needs one. Else an error is returned. If the Windows anchor for both paths do not match, an error is returned.
 
 <a name="Path.Resolve"></a>
-### func \(\*Path\) Resolve
+### func \(\*Path\) [Resolve](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L235>)
 
 ```go
 func (p *Path) Resolve() (*Path, error)
@@ -1174,7 +1180,7 @@ Resolve resolves all symbolic links and ensures an absolute path representation.
 This function uses filepath.EvalSymlinks and MakeAbsolute.
 
 <a name="Path.Split"></a>
-### func \(\*Path\) Split
+### func \(\*Path\) [Split](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L233>)
 
 ```go
 func (p *Path) Split() (*Path, string)
@@ -1183,7 +1189,7 @@ func (p *Path) Split() (*Path, string)
 Split splits this Path into its parent and base.
 
 <a name="Path.Stat"></a>
-### func \(\*Path\) Stat
+### func \(\*Path\) [Stat](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L632>)
 
 ```go
 func (p *Path) Stat() (os.FileInfo, error)
@@ -1194,7 +1200,7 @@ Stat returns file info for this Path.
 This function uses os.Stat.
 
 <a name="Path.Stem"></a>
-### func \(\*Path\) Stem
+### func \(\*Path\) [Stem](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L254>)
 
 ```go
 func (p *Path) Stem() string
@@ -1203,7 +1209,7 @@ func (p *Path) Stem() string
 Stem returns the base of this Path without all extensions.
 
 <a name="Path.String"></a>
-### func \(\*Path\) String
+### func \(\*Path\) [String](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L652>)
 
 ```go
 func (p *Path) String() string
@@ -1214,7 +1220,7 @@ String returns this Path in platform\-native form.
 On Windows this uses backslashes and prepends the anchor; on Posix it uses forward slashes. Use ToPosix or ToWindows for an explicit representation.
 
 <a name="Path.SymlinkTo"></a>
-### func \(\*Path\) SymlinkTo
+### func \(\*Path\) [SymlinkTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L823>)
 
 ```go
 func (p *Path) SymlinkTo(linkPath *Path) error
@@ -1227,7 +1233,7 @@ This path must exist.
 This function uses CreateSymlink.
 
 <a name="Path.ToPosix"></a>
-### func \(\*Path\) ToPosix
+### func \(\*Path\) [ToPosix](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L663>)
 
 ```go
 func (p *Path) ToPosix() string
@@ -1236,7 +1242,7 @@ func (p *Path) ToPosix() string
 ToPosix returns a string representation with forward slashes.
 
 <a name="Path.ToWindows"></a>
-### func \(\*Path\) ToWindows
+### func \(\*Path\) [ToWindows](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L670>)
 
 ```go
 func (p *Path) ToWindows() string
@@ -1245,7 +1251,7 @@ func (p *Path) ToWindows() string
 ToWindows returns a string representation with backward slashes.
 
 <a name="Path.TrimWindowsAnchor"></a>
-### func \(\*Path\) TrimWindowsAnchor
+### func \(\*Path\) [TrimWindowsAnchor](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L694>)
 
 ```go
 func (p *Path) TrimWindowsAnchor() *Path
@@ -1254,7 +1260,7 @@ func (p *Path) TrimWindowsAnchor() *Path
 TrimWindowsAnchor returns a copy of this Path with stripped Windows anchor encoding information.
 
 <a name="Path.UnmarshalText"></a>
-### func \(\*Path\) UnmarshalText
+### func \(\*Path\) [UnmarshalText](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L715>)
 
 ```go
 func (p *Path) UnmarshalText(text []byte) error
@@ -1265,7 +1271,7 @@ UnmarshalText unmarshalls any byte array into a Path type. Implements the encodi
 Uses NewPathFromWindows to ensure Windows anchors survive a marshal/unmarshal round\-trip, since MarshalText serializes them in forward\-slash form \(e.g. "c:/" or "//host/share"\).
 
 <a name="Path.Walk"></a>
-### func \(\*Path\) Walk
+### func \(\*Path\) [Walk](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L254>)
 
 ```go
 func (p *Path) Walk(walkFunc WalkFunc) error
@@ -1276,7 +1282,7 @@ Walk walks this directory and calls walkFunc for every entry \(files, directorie
 walkFunc receives a path joined with this Path.
 
 <a name="Path.WalkR"></a>
-### func \(\*Path\) WalkR
+### func \(\*Path\) [WalkR](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L308>)
 
 ```go
 func (p *Path) WalkR(walkFunc WalkRFunc) error
@@ -1289,7 +1295,7 @@ walkFunc receives paths that are already joined with this Path.
 walkFunc takes the current entry, a function to abort walking the entire tree and a function to abort walking the current branch.
 
 <a name="Path.WindowsUncRoot"></a>
-### func \(\*Path\) WindowsUncRoot
+### func \(\*Path\) [WindowsUncRoot](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L357>)
 
 ```go
 func (p *Path) WindowsUncRoot() string
@@ -1300,7 +1306,7 @@ WindowsUncRoot returns the UNC root of a Windows network path \(e.g. "//host/sha
 Returns "" if this is not a UNC\-anchored path.
 
 <a name="Path.WindowsVolume"></a>
-### func \(\*Path\) WindowsVolume
+### func \(\*Path\) [WindowsVolume](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L343>)
 
 ```go
 func (p *Path) WindowsVolume() string
@@ -1311,7 +1317,7 @@ WindowsVolume returns the drive letter anchor of a Windows volume path \(e.g. "C
 Returns "" if this is not a volume\-anchored path.
 
 <a name="Path.WithName"></a>
-### func \(\*Path\) WithName
+### func \(\*Path\) [WithName](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib.go#L623>)
 
 ```go
 func (p *Path) WithName(name string) *Path
@@ -1319,8 +1325,10 @@ func (p *Path) WithName(name string) *Path
 
 WithName returns this Path but with another base.
 
+name is interpreted as a Posix string, like JoinStrings: a backslash is an ordinary filename character, not a separator, and passing one on Posix logs a warning.
+
 <a name="TempPath"></a>
-## type TempPath
+## type [TempPath](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L19-L24>)
 
 TempPath is a container for a temporary path.
 
@@ -1332,7 +1340,7 @@ type TempPath struct {
 ```
 
 <a name="CreateTempDir"></a>
-### func CreateTempDir
+### func [CreateTempDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L145>)
 
 ```go
 func CreateTempDir() (*TempPath, error)
@@ -1351,7 +1359,7 @@ defer func() { _ = tempDir.Dispose() }()
 ```
 
 <a name="CreateTempDirWithOptions"></a>
-### func CreateTempDirWithOptions
+### func [CreateTempDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L167>)
 
 ```go
 func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error)
@@ -1377,7 +1385,7 @@ defer func() { _ = tempDir.Dispose() }()
 ```
 
 <a name="CreateTempFile"></a>
-### func CreateTempFile
+### func [CreateTempFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L87>)
 
 ```go
 func CreateTempFile() (*TempPath, error)
@@ -1398,7 +1406,7 @@ defer func() { _ = tempFile.Dispose() }()
 ```
 
 <a name="CreateTempFileWithOptions"></a>
-### func CreateTempFileWithOptions
+### func [CreateTempFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L109>)
 
 ```go
 func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error)
@@ -1424,16 +1432,16 @@ defer func() { _ = tempFile.Dispose() }()
 ```
 
 <a name="TempPath.Dispose"></a>
-### func \(\*TempPath\) Dispose
+### func \(\*TempPath\) [Dispose](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L29>)
 
 ```go
 func (p *TempPath) Dispose() error
 ```
 
-
+Dispose disposes the temporary directory.
 
 <a name="TempPathOptions"></a>
-## type TempPathOptions
+## type [TempPathOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_temp.go#L41-L54>)
 
 TempPathOptions is a struct that contains options for more control over the creation of a temporary path.
 
@@ -1455,7 +1463,7 @@ type TempPathOptions struct {
 ```
 
 <a name="WalkFunc"></a>
-## type WalkFunc
+## type [WalkFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L106>)
 
 WalkFunc defines a function that takes a Path to perform actions with the Path. If no more walking is allowed, call abortGlobFunc.
 
@@ -1464,7 +1472,7 @@ type WalkFunc func(p *Path, abortGlob AbortFunc) error
 ```
 
 <a name="WalkRFunc"></a>
-## type WalkRFunc
+## type [WalkRFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib_fs.go#L118>)
 
 WalkRFunc is the equivalent of WalkFunc, but for recursive globbing. It takes a Path to perform actions with the Path. It also takes an error which is non\-nil if there was an error for the currently passed Path.
 
