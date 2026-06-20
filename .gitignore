@@ -6,3 +6,9 @@
 
 # MacOS
 .DS_STORE
+
+# compiled bundler binary (use `go run ./tools/bundle`)
+/bundle
+
+# generated single-file bundles (build on demand via `make bundle`)
+/dist/

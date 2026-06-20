@@ -1,7 +1,10 @@
-.PHONY: test doc-gen
+.PHONY: test doc-gen bundle
 
 test:
-	@go test
+	@go test ./...
+
+bundle:
+	@go run ./tools/bundle
 
 doc-gen:
 	@go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest

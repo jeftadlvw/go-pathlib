@@ -1,0 +1,20 @@
+{
+  "package": "pathlib",
+  "source_dir": "pathlib",
+  "dist_dir": "dist",
+  "license": "Apache-2.0",
+  "license_mode": "full",
+  "license_file": "LICENSE",
+
+  "groups": {
+    "core": "core",
+    "fs": "fs",
+    "io": "io",
+    "temp": "temp"
+  },
+
+  "artifacts": [
+    { "name": "core", "groups": ["core"] },
+    { "name": "full", "groups": ["core", "fs", "io", "temp"] }
+  ]
+}
