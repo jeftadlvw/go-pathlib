@@ -56,7 +56,7 @@ Still the project needs to be tested in real-world use. Test automation is also 
 `Next` features are planned and fixed on the roadmap for the next release(s). They extend and improve API semantics and internals and make the library more mature. `Future` features are planned, but not focussed on being implemented next per sé. They might, but are not prioritized.
 
 **Next**
-- [ ] Move away from single-file development strategy and release single-file source code files instead
+- [x] Move away from single-file development strategy and release single-file source code files instead
 - [ ] parallelize recursive filesystem walking and globbing
 - [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
 
