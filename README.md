@@ -18,7 +18,7 @@ Minimum tested Go version: `1.22`
 
 ## Getting Started 🚀
 ```shell
-go get github.com/jeftadlvw/go-pathlib/pathlib@latest
+go get github.com/jeftadlvw/go-pathlib@latest
 ```
 
 ```go
@@ -49,18 +49,16 @@ The file is updated regularly and gives a good general overview on the API. Up-t
 
 🔖 Current version: **0.0.4**
 
-The API stabilized and is covered by many test cases. Tests are run on Linux, macOS and Windows, although no test automation exists yet. The current API scope is not expected to be modified or reduced. However, future releases might tighten up semantics regarding returned errors.
-
-Still the project needs to be tested in real-world use. Test automation is also required. This is mainly why there is no v1.0.0 yet. When the library has been tested and evaluated in other projects, a v1 release is more likely.
+The API stabilized and is covered by many test cases. Tests are run on Linux, macOS and Windows. The current API scope is not expected to be modified or reduced.
+The only thing the library needs now is real-world usage in projects to catch missed cross-platform errors and refine the look-and-feel of the APIs. When the library has been tested and evaluated in other projects over a longer time, a v1 release is more likely.
 
 `Next` features are planned and fixed on the roadmap for the next release(s). They extend and improve API semantics and internals and make the library more mature. `Future` features are planned, but not focussed on being implemented next per sé. They might, but are not prioritized.
 
 **Next**
-- [x] Move away from single-file development strategy and release single-file source code files instead
-- [ ] parallelize recursive filesystem walking and globbing
 - [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
 
 **Future**
+- [ ] parallelize recursive filesystem walking and globbing
 - [ ] implement "range over function" for globbing (requires newer go versions)
 
 **Planned extensions**
