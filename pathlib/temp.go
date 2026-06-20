@@ -124,7 +124,7 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
 	return &TempPath{
 		Path: tempFilePath,
 		dispose: func() error {
-			return os.Remove(pathName)
+			return Remove(NewPath(pathName))
 		},
 	}, nil
 }
@@ -179,7 +179,7 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 	return &TempPath{
 		Path: tempDirPath,
 		dispose: func() error {
-			return os.RemoveAll(dirName)
+			return RemoveAll(NewPath(dirName))
 		},
 	}, nil
 }
