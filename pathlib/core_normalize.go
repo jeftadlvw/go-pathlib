@@ -104,7 +104,8 @@ func normalizeWindowsPath(p string) *Path {
 	dirty := toCanonicalSeparators(p)
 
 	// Volume anchor: "C:\" (rooted) or "C:" (drive-relative).
-	if match := windowsVolumeNameRegex.FindString(dirty); match != "" {
+	match := windowsVolumeNameRegex.FindString(dirty)
+	if match != "" {
 		anchor := match[:2]        // "C:" (letter + colon)
 		hasRoot := len(match) == 3 // true when match includes the trailing "/"
 
@@ -150,7 +151,8 @@ func normalizeWindowsPath(p string) *Path {
 	}
 
 	// UNC anchor: "//host/share".
-	if match := windowsNetworkPathRegex.FindString(dirty); match != "" {
+	match = windowsNetworkPathRegex.FindString(dirty)
+	if match != "" {
 		rest := dirty[len(match):]
 		if rest == "" || rest == canonicalPathSeparator {
 			return &Path{

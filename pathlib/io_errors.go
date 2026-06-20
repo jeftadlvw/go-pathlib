@@ -20,7 +20,7 @@ var (
 	// It is a member of the ErrPermission group and is carried by a *PermissionError.
 	ErrUnsupportedMode = subKind(ErrPermission, "unsupported open mode")
 
-	// ErrStat is returned when a path could not be stat'ed; wraps the os cause.
+	// ErrStat is returned when a path could not be stat'ed. The os cause is wrapped.
 	ErrStat = errors.New("could not stat path")
 
 	// ErrIsDir is returned when a file operation targets a directory.
@@ -63,7 +63,8 @@ func (e *PermissionError) Error() string {
 // As lets errors.As(err, **PathlibError) reach the embedded base error, keeping
 // the "every error is a *PathlibError" catch-all intact for this typed superset.
 func (e *PermissionError) As(target any) bool {
-	if t, ok := target.(**PathlibError); ok {
+	t, ok := target.(**PathlibError)
+	if ok {
 		*t = e.PathlibError
 		return true
 	}

@@ -12,7 +12,8 @@ import (
 // matchPattern is the internal implementation that handles ** expansion.
 func matchPattern(pattern, name string) (bool, error) {
 	// Validate pattern for bad syntax (check each segment)
-	if err := validatePattern(pattern); err != nil {
+	err := validatePattern(pattern)
+	if err != nil {
 		return false, err
 	}
 

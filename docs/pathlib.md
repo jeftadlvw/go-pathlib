@@ -207,13 +207,22 @@ var (
     // move have incompatible file types.
     ErrTypeMismatch = errors.New("source and destination types are incompatible")
 
-    // ErrOpen is returned when a path could not be opened; wraps the os cause.
-    ErrOpen = errors.New("could not open path")
+    // ErrAccess is the broad group for "a directory's contents could not be
+    // accessed", covering both the open and the read failures below. Walk and WalkR
+    // surface these failures (as localDirError, in WalkR's case). Match it with
+    // errors.Is to catch every directory-access failure without distinguishing the
+    // exact cause.
+    ErrAccess = errors.New("could not access path")
 
-    // ErrReadDir is returned when a directory entry could not be read; wraps the os cause.
-    ErrReadDir = errors.New("could not read directory entry")
+    // ErrOpen is returned when a path could not be opened. The os cause is wrapped.
+    // It is a member of the ErrDirAccess group.
+    ErrOpen = subKind(ErrAccess, "could not open path")
 
-    // ErrWalk is returned when walking a path fails; wraps the underlying cause.
+    // ErrReadDir is returned when a directory entry could not be read. The os cause is wrapped.
+    // It is a member of the ErrDirAccess group.
+    ErrReadDir = subKind(ErrAccess, "could not read directory entry")
+
+    // ErrWalk is returned when walking a path fails. The underlying cause is wrapped.
     ErrWalk = errors.New("error walking path")
 )
 ```
@@ -260,7 +269,7 @@ var (
     // It is a member of the ErrPermission group and is carried by a *PermissionError.
     ErrUnsupportedMode = subKind(ErrPermission, "unsupported open mode")
 
-    // ErrStat is returned when a path could not be stat'ed; wraps the os cause.
+    // ErrStat is returned when a path could not be stat'ed. The os cause is wrapped.
     ErrStat = errors.New("could not stat path")
 
     // ErrIsDir is returned when a file operation targets a directory.
@@ -391,7 +400,7 @@ DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the 
 Returns true if a new directory was created, false otherwise.
 
 <a name="Move"></a>
-## func [Move](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L183>)
+## func [Move](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L185>)
 
 ```go
 func Move(src *Path, dst *Path) error
@@ -448,7 +457,7 @@ func ReadFileToString(path *Path) (string, error)
 ReadFileToString reads the passed file and returns its content as a string.
 
 <a name="Remove"></a>
-## func [Remove](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L229>)
+## func [Remove](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L231>)
 
 ```go
 func Remove(path *Path) error
@@ -459,7 +468,7 @@ Remove removes the file at the specified path or removes an empty directory.
 Nothing happens if the given path does not exist.
 
 <a name="RemoveAll"></a>
-## func [RemoveAll](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L242>)
+## func [RemoveAll](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L244>)
 
 ```go
 func RemoveAll(path *Path) error
@@ -470,7 +479,7 @@ RemoveAll recursively removes the directory and all its entries at the specified
 Nothing happens if the given path does not exist.
 
 <a name="Rename"></a>
-## func [Rename](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L219>)
+## func [Rename](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L221>)
 
 ```go
 func Rename(src *Path, name string) error
@@ -1374,7 +1383,7 @@ func (p *Path) String() string
 
 String returns this Path in platform\-native form.
 
-On Windows this uses backslashes and prepends the anchor; on Posix it uses forward slashes. Use ToPosix or ToWindows for an explicit representation.
+On Windows this uses backslashes and prepends the anchor. On Posix it uses forward slashes. Use ToPosix or ToWindows for an explicit representation.
 
 <a name="Path.SymlinkTo"></a>
 ### func \(\*Path\) [SymlinkTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L15>)
@@ -1428,7 +1437,7 @@ UnmarshalText unmarshalls any byte array into a Path type. Implements the encodi
 Uses NewPathFromWindows to ensure Windows anchors survive a marshal/unmarshal round\-trip, since MarshalText serializes them in forward\-slash form \(e.g. "c:/" or "//host/share"\).
 
 <a name="Path.Walk"></a>
-### func \(\*Path\) [Walk](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L65>)
+### func \(\*Path\) [Walk](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L71>)
 
 ```go
 func (p *Path) Walk(walkFunc WalkFunc) error
@@ -1436,10 +1445,12 @@ func (p *Path) Walk(walkFunc WalkFunc) error
 
 Walk walks this directory and calls walkFunc for every entry \(files, directories, etc.\). This path must be a directory. Symlinks are followed.
 
+Entries are visited in lexical order by name, making the traversal deterministic.
+
 walkFunc receives a path joined with this Path.
 
 <a name="Path.WalkContext"></a>
-### func \(\*Path\) [WalkContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L73>)
+### func \(\*Path\) [WalkContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L79>)
 
 ```go
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error
@@ -1448,7 +1459,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error
 WalkContext is Walk with support for cancellation through ctx. The walk stops and returns ctx.Err\(\) as soon as ctx is done, with cancellation checked before each entry.
 
 <a name="Path.WalkR"></a>
-### func \(\*Path\) [WalkR](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L127>)
+### func \(\*Path\) [WalkR](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L134>)
 
 ```go
 func (p *Path) WalkR(walkFunc WalkRFunc) error
@@ -1456,12 +1467,14 @@ func (p *Path) WalkR(walkFunc WalkRFunc) error
 
 WalkR walks this directory recursively and calls walkFunc for every entry. This path must be a directory. Symlinks are followed.
 
+Within each directory, entries are visited in lexical order by name, making the traversal deterministic.
+
 walkFunc receives paths that are already joined with this Path.
 
 walkFunc takes the current entry, a function to abort walking the entire tree and a function to abort walking the current branch.
 
 <a name="Path.WalkRContext"></a>
-### func \(\*Path\) [WalkRContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L136>)
+### func \(\*Path\) [WalkRContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L143>)
 
 ```go
 func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error
@@ -1507,7 +1520,7 @@ name is interpreted as a Posix string, like JoinStrings: a backslash is an ordin
 
 PathlibError is the root error type returned by every function in this library. Every error the library produces is a \*PathlibError, so a single errors.As\(err, new\(\*pathlib.PathlibError\)\) catches any of them, and errors.Is\(err, ErrX\) matches the exported sentinels by identity.
 
-The base type lives here in pathlib.go because every other file already depends on it; this keeps the library's one\-file rule intact \(no central error file\). Domain sentinels \(ErrNotExist, ErrNotDir, ...\) are declared next to the code that raises them.
+The base type lives here in pathlib.go because every other file already depends on it. This keeps the library's one\-file rule intact \(no central error file\). Domain sentinels \(ErrNotExist, ErrNotDir, ...\) are declared next to the code that raises them.
 
 ```go
 type PathlibError struct {
@@ -1721,7 +1734,7 @@ type TempPathOptions struct {
 ```
 
 <a name="WalkFunc"></a>
-## type [WalkFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L44>)
+## type [WalkFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L45>)
 
 WalkFunc is called by Walk for every entry, receiving a Path joined with the walked directory.
 
@@ -1732,13 +1745,15 @@ type WalkFunc func(p *Path) error
 ```
 
 <a name="WalkRFunc"></a>
-## type [WalkRFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L57>)
+## type [WalkRFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L61>)
 
 WalkRFunc is called by WalkR for every entry.
 
 Return SkipDir to skip the rest of the current directory or a directory's content. Return SkipAll to stop the entire walk, or return any other non\-nil error to abort and have WalkR return it.
 
 If the current directory could not be opened or read, localDirError is non\-nil. Users may inspect it and act upon it by e.g. ignoring it \(return nil\), bubbling it \(return error\) or returning a different error instead \(e.g. SkipDir\).
+
+localDirError wraps ErrOpen \(open failure\) or ErrReadDir \(read failure\). These errors can be matched either precisely, or by their shared ErrDirAccess group.
 
 ```go
 type WalkRFunc func(p *Path, localDirError error) error

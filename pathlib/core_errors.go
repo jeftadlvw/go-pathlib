@@ -12,7 +12,7 @@ errors.As(err, new(*pathlib.PathlibError)) catches any of them, and
 errors.Is(err, ErrX) matches the exported sentinels by identity.
 
 The base type lives here in pathlib.go because every other file already depends
-on it; this keeps the library's one-file rule intact (no central error file).
+on it. This keeps the library's one-file rule intact (no central error file).
 Domain sentinels (ErrNotExist, ErrNotDir, ...) are declared next to the code
 that raises them.
 */
@@ -93,7 +93,7 @@ kindError is a sentinel that belongs to a broader parent sentinel. It lets a
 specific error kind (e.g. ErrFileExist) be matched either precisely or by its
 group (e.g. ErrExist), because errors.Is walks the parent through Unwrap.
 
-Sentinels remain lightweight category markers; the per-call paths and wrapped
+Sentinels remain lightweight category markers. The per-call paths and wrapped
 cause live on the *PathlibError instance, not on the shared sentinel value.
 */
 type kindError struct {

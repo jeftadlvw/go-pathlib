@@ -164,7 +164,7 @@ func (p *Path) copyWithNewPath(newPath string) *Path {
 /*
 String returns this Path in platform-native form.
 
-On Windows this uses backslashes and prepends the anchor; on Posix it uses forward slashes.
+On Windows this uses backslashes and prepends the anchor. On Posix it uses forward slashes.
 Use ToPosix or ToWindows for an explicit representation.
 */
 func (p *Path) String() string {

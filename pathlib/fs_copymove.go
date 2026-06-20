@@ -147,7 +147,8 @@ func copyDir(src *Path, dst *Path) error {
 
 	} else {
 		// Create the destination directory if it doesn't exist
-		if err := os.Mkdir(dst.String(), srcInfo.Mode()); err != nil {
+		err := os.Mkdir(dst.String(), srcInfo.Mode())
+		if err != nil {
 			return err
 		}
 	}
@@ -163,7 +164,8 @@ func copyDir(src *Path, dst *Path) error {
 		srcEntry := src.JoinStrings(entry.Name())
 		dstEntry := dst.JoinStrings(entry.Name())
 
-		if err := Copy(srcEntry, dstEntry); err != nil {
+		err := Copy(srcEntry, dstEntry)
+		if err != nil {
 			return err
 		}
 	}
