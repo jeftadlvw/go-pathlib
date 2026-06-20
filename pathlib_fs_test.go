@@ -2912,3 +2912,21 @@ func TestDeviceMethods(t *testing.T) {
 		require.False(t, nonExistent.IsSocket(), "non-existent path is not a socket")
 	})
 }
+
+func TestPath_HasDotName(t *testing.T) {
+	cases := map[string]bool{
+		".config":      true,
+		".a":           true,
+		"/home/u/.ssh": true,
+		"a/b/.hidden":  true,
+		"visible.txt":  false,
+		"a/b/c":        false,
+		".":            false,
+		"..":           false,
+		"":             false,
+	}
+
+	for input, expected := range cases {
+		require.Equal(t, expected, NewPath(input).HasDotName(), "HasDotName(%q)", input)
+	}
+}

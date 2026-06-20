@@ -370,6 +370,22 @@ func (p *Path) Base() string {
 }
 
 /*
+HasDotName reports whether this Path's base name follows the Unix dotfile
+convention (begins with a dot but is not "." or "..").
+
+This is a purely lexical, conventional check that does not touch the filesystem
+and does not require the path to exist. It does not reflect Windows hidden-file
+attributes or macOS hidden flags.
+*/
+func (p *Path) HasDotName() bool {
+	base := p.Base()
+	if base == "" || base == "." || base == ".." {
+		return false
+	}
+	return strings.HasPrefix(base, ".")
+}
+
+/*
 Stem returns the base of this Path without all extensions.
 */
 func (p *Path) Stem() string {

@@ -59,7 +59,7 @@ Still the project needs to be tested in real-world use. Test automation is also 
 - [x] custom error structs and fitting error handling
 - [ ] context.Context support for filesystem walking and globbing
 - [ ] parallelize recursive filesystem walking and globbing
-- [ ] function to check if a file is (semantically) hidden
+- [x] function to check if a file is (semantically) hidden
 - [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
 - [ ] (?) Improve DX for file walking by returning abort errors instead of calling abort functions
 
