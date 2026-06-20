@@ -18,7 +18,7 @@ Minimum tested Go version: `1.22`
 
 ## Getting Started 🚀
 ```shell
-go get github.com/jeftadlvw/go-pathlib@latest
+go get github.com/jeftadlvw/go-pathlib/pathlib@latest
 ```
 
 ```go
@@ -26,7 +26,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/jeftadlvw/go-pathlib"
+	"github.com/jeftadlvw/go-pathlib/pathlib"
 )
 
 func main() {

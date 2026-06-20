@@ -1,12 +1,8 @@
 package pathlib
 
 import (
-	"errors"
 	"os"
 )
-
-// ErrDisposeNil is returned when a TempPath has no dispose function set.
-var ErrDisposeNil = errors.New("dispose function is nil")
 
 /*
 Disposable interface shows that a struct has resources that must be disposed manually.
