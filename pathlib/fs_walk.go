@@ -3,9 +3,10 @@ package pathlib
 import (
 	"context"
 	"errors"
-	"io"
 	"io/fs"
 	"os"
+	"slices"
+	"strings"
 )
 
 /*
@@ -53,12 +54,17 @@ and have WalkR return it.
 If the current directory could not be opened or read, localDirError is non-nil.
 Users may inspect it and act upon it by e.g. ignoring it (return nil), bubbling
 it (return error) or returning a different error instead (e.g. SkipDir).
+
+localDirError wraps ErrOpen (open failure) or ErrReadDir (read failure). These errors
+can be matched either precisely, or by their shared ErrDirAccess group.
 */
 type WalkRFunc func(p *Path, localDirError error) error
 
 /*
 Walk walks this directory and calls walkFunc for every entry (files, directories, etc.).
 This path must be a directory. Symlinks are followed.
+
+Entries are visited in lexical order by name, making the traversal deterministic.
 
 walkFunc receives a path joined with this Path.
 */
@@ -75,40 +81,38 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 		return pathErr(ErrNotDir, *p)
 	}
 
+	// Open and read are kept as separate steps so failures can be reported with
+	// distinct sentinels (ErrOpen vs ErrReadDir). See sortDirEntries for why this
+	// is preferred over os.ReadDir.
 	file, err := os.Open(p.String())
 	if err != nil {
 		return wrapErr(ErrOpen, err, *p)
 	}
 
-	defer file.Close()
+	// Read all entries up front so they can be sorted into a deterministic order.
+	entries, err := file.ReadDir(-1)
+	file.Close()
+	if err != nil {
+		return wrapErr(ErrReadDir, err, *p)
+	}
 
-	for {
+	sortDirEntries(entries)
+
+	for _, entry := range entries {
 		err := ctx.Err()
 		if err != nil {
 			return err
 		}
 
-		// os.File.ReadDir returns at most n next entries for every next call.
-		// So we call it with n = 1 to yield and process the directory entry by entry
-		dirNames, err := file.ReadDir(1)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			} else {
-				return wrapErr(ErrReadDir, err, *p)
-			}
-		}
+		entryPath := p.JoinStrings(entry.Name())
 
-		dirName := dirNames[0]
-		dirNamePath := p.JoinStrings(dirName.Name())
-
-		walkErr := walkFunc(dirNamePath)
+		walkErr := walkFunc(entryPath)
 		if walkErr != nil {
 			// Walk is not recursive, so SkipDir and SkipAll both simply stop it.
 			if errors.Is(walkErr, SkipAll) || errors.Is(walkErr, SkipDir) {
 				break
 			}
-			return wrapErr(ErrWalk, walkErr, *dirNamePath)
+			return wrapErr(ErrWalk, walkErr, *entryPath)
 		}
 	}
 
@@ -118,6 +122,9 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 /*
 WalkR walks this directory recursively and calls walkFunc for every entry.
 This path must be a directory. Symlinks are followed.
+
+Within each directory, entries are visited in lexical order by name, making the
+traversal deterministic.
 
 walkFunc receives paths that are already joined with this Path.
 
@@ -144,6 +151,26 @@ func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
 	return err
 }
 
+// sortDirEntries orders directory entries lexically by name. This gives Walk and
+// WalkR a deterministic, platform-independent traversal order that matches the
+// standard library's filepath.WalkDir (and os.ReadDir), instead of the raw,
+// filesystem-dependent order returned by os.File.ReadDir.
+//
+// Walk and WalkR deliberately open the directory and call file.ReadDir(-1)
+// themselves, then sort with this helper, rather than calling os.ReadDir (which
+// would open, read and sort in one step). The reason is error reporting, as the
+// open step and the read step are wrapped with distinct sentinels (ErrOpen and
+// ErrReadDir, both members of the ErrDirAccess group) that are handed to the walk
+// callback as localDirError. os.ReadDir collapses both into a single, unwrappable
+// error, so callers could no longer tell an open failure from a read failure.
+// Keeping the two steps separate is the only reason this helper exists instead of
+// a plain os.ReadDir call.
+func sortDirEntries(entries []os.DirEntry) {
+	slices.SortFunc(entries, func(a, b os.DirEntry) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+}
+
 /*
 walkR calls walkFunc recursively for all path entries in a given root Path.
 
@@ -166,11 +193,13 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 		return pathErr(ErrNotDir, *currentDir)
 	}
 
-	// Get file descriptor
+	// Open and read are kept as separate steps so an open failure and a read
+	// failure can be reported with distinct sentinels (ErrOpen vs ErrReadDir);
+	// see sortDirEntries for why this is preferred over os.ReadDir.
 	file, err := os.Open(currentDir.String())
 	if err != nil {
 		// Give walkFunc a chance to inspect and ignore the directory error. A nil
-		// or SkipDir result skips this directory; anything else aborts.
+		// or SkipDir result skips this directory. Anything else aborts.
 		handled := walkFunc(currentDir, wrapErr(ErrOpen, err, *currentDir))
 		if handled == nil || errors.Is(handled, SkipDir) {
 			return nil
@@ -178,7 +207,19 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 		return handled
 	}
 
-	defer file.Close()
+	// Read all entries up front so they can be sorted into a deterministic order.
+	// A read failure is surfaced through walkFunc the same way an open failure is.
+	entries, readErr := file.ReadDir(-1)
+	file.Close()
+	if readErr != nil {
+		handled := walkFunc(currentDir, wrapErr(ErrReadDir, readErr, *currentDir))
+		if handled == nil || errors.Is(handled, SkipDir) {
+			return nil
+		}
+		return handled
+	}
+
+	sortDirEntries(entries)
 
 	// Call walkFunc for the directory itself (except the initial root).
 	if !currentDir.Equals(initialDir, CaseInsensitive) {
@@ -191,46 +232,30 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 		}
 	}
 
-	for {
+	for _, entry := range entries {
 		err := ctx.Err()
 		if err != nil {
 			return err
 		}
 
-		// os.File.ReadDir returns at most n next entries for every next call.
-		// So we call it with n = 1 to yield and process the directory entry by entry
-		dirNames, err := file.ReadDir(1)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			handled := walkFunc(currentDir, wrapErr(ErrReadDir, err, *currentDir))
-			if handled == nil || errors.Is(handled, SkipDir) {
-				return nil
-			}
-			return handled
-		}
-
-		dirName := dirNames[0]
-		dirNamePath := currentDir.JoinStrings(dirName.Name())
+		entryPath := currentDir.JoinStrings(entry.Name())
 
 		// Call walkFunc for non-directory entries.
-		if !dirName.IsDir() {
-			walkErr := walkFunc(dirNamePath, nil)
+		if !entry.IsDir() {
+			walkErr := walkFunc(entryPath, nil)
 			if walkErr != nil {
 				if errors.Is(walkErr, SkipDir) {
 					return nil
 				}
 				return walkErr
 			}
+			continue
 		}
 
 		// Recurse into subdirectories.
-		if dirName.IsDir() {
-			subErr := walkR(ctx, initialDir, dirNamePath, walkFunc)
-			if subErr != nil {
-				return subErr
-			}
+		subErr := walkR(ctx, initialDir, entryPath, walkFunc)
+		if subErr != nil {
+			return subErr
 		}
 	}
 

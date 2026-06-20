@@ -2,8 +2,6 @@ package pathlib
 
 import (
 	"os"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -113,13 +111,14 @@ func TestPath_Resolve(t *testing.T) {
 		// Ensure the resolved path is absolute
 		require.True(t, resolvedPath.IsAbsolute())
 
-		// Cut "/private" from path so that RelativeTo will succeed
-		if runtime.GOOS == "darwin" {
-			resolvedPath.path = strings.TrimPrefix(resolvedPath.path, "/private")
-		}
+		// Resolve the root too so both paths are in canonical form. This handles
+		// platform-specific path rewriting that Resolve performs, e.g. /var -> /private/var
+		// on macOS, or 8.3 short names (RUNNER~1 -> runneradmin) on Windows.
+		resolvedRoot, err := root.Resolve()
+		require.NoError(t, err)
 
 		// Compare relative to root for easier testing
-		relPath, err := resolvedPath.RelativeTo(root)
+		relPath, err := resolvedPath.RelativeTo(resolvedRoot)
 		require.NoError(t, err)
 
 		require.Equal(t, expect, relPath.ToPosix())

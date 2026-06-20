@@ -46,13 +46,22 @@ var (
 	// move have incompatible file types.
 	ErrTypeMismatch = errors.New("source and destination types are incompatible")
 
-	// ErrOpen is returned when a path could not be opened; wraps the os cause.
-	ErrOpen = errors.New("could not open path")
+	// ErrAccess is the broad group for "a directory's contents could not be
+	// accessed", covering both the open and the read failures below. Walk and WalkR
+	// surface these failures (as localDirError, in WalkR's case). Match it with
+	// errors.Is to catch every directory-access failure without distinguishing the
+	// exact cause.
+	ErrAccess = errors.New("could not access path")
 
-	// ErrReadDir is returned when a directory entry could not be read; wraps the os cause.
-	ErrReadDir = errors.New("could not read directory entry")
+	// ErrOpen is returned when a path could not be opened. The os cause is wrapped.
+	// It is a member of the ErrDirAccess group.
+	ErrOpen = subKind(ErrAccess, "could not open path")
 
-	// ErrWalk is returned when walking a path fails; wraps the underlying cause.
+	// ErrReadDir is returned when a directory entry could not be read. The os cause is wrapped.
+	// It is a member of the ErrDirAccess group.
+	ErrReadDir = subKind(ErrAccess, "could not read directory entry")
+
+	// ErrWalk is returned when walking a path fails. The underlying cause is wrapped.
 	ErrWalk = errors.New("error walking path")
 
 	// errInvalidFilterOption is an internal guard for an unknown glob filter option.
