@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  attach-bundles:
+    name: Build and attach single-file bundles to release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Generate single-file bundles
+        run: go run ./tools/bundle
+
+      - name: Verify bundles compile
+        run: go build ./dist/...
+
+      - name: Prepare release assets
+        run: |
+          cp dist/core/pathlib.go pathlib.core.go
+          cp dist/full/pathlib.go pathlib.full.go
+
+      - name: Attach bundles to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" pathlib.core.go pathlib.full.go --clobber
