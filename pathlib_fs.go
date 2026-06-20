@@ -2,6 +2,7 @@ package pathlib
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -149,27 +150,52 @@ func DefaultDirOptions() DirOptions {
 }
 
 /*
-AbortFunc defines a function that sets a state in a lower function in the stacktrace.
+SkipDir and SkipAll are control signals returned from a WalkFunc or WalkRFunc.
+
+They are aliases of io/fs.SkipDir and io/fs.SkipAll, so they interoperate with
+the standard library's walk sentinels.
 */
-type AbortFunc func()
+var (
+
+	/*
+	 	SkipDir skips the remaining entries of the current directory. If it's returned
+	  	for a directory entry, it skips that directory's contents. If it's returned for a file, it
+	   	skips the remaining entries of the containing directory.
+
+	    Aliases io/fs.SkipDir.
+	*/
+	SkipDir = fs.SkipDir
+
+	/*
+	 	SkipAll stops the entire walk. Any other non-nil error aborts the walk and is returned
+	  	to the caller.
+
+	   Aliases io/fs.SkipAll.
+	*/
+	SkipAll = fs.SkipAll
+)
 
 /*
-WalkFunc defines a function that takes a Path to perform actions with the Path. If no more
-walking is allowed, call abortGlobFunc.
+WalkFunc is called by Walk for every entry, receiving a Path joined with the
+walked directory.
+
+Return SkipDir or SkipAll to stop walking. Return any other non-nil error to abort
+and have Walk return it. The error will be wrapped as ErrWalk.
 */
-type WalkFunc func(p *Path, abortGlob AbortFunc) error
+type WalkFunc func(p *Path) error
 
 /*
-WalkRFunc is the equivalent of WalkFunc, but for recursive globbing. It takes a Path to perform
-actions with the Path.
-It also takes an error which is non-nil if there was an error for the currently passed Path.
+WalkRFunc is called by WalkR for every entry.
 
-If an error is returned, the entire globbing operation is aborted.
+Return SkipDir to skip the rest of the current directory or a directory's content.
+Return SkipAll to stop the entire walk, or return any other non-nil error to abort
+and have WalkR return it.
 
-Use abortLocalTree to tell globbing to not consider this Path and all following entries in this directory
-any further.
+If the current directory could not be opened or read, localDirError is non-nil.
+Users may inspect it and act upon it by e.g. ignoring it (return nil), bubbling
+it (return error) or returning a different error instead (e.g. SkipDir).
 */
-type WalkRFunc func(p *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error
+type WalkRFunc func(p *Path, localDirError error) error
 
 type FilterFunc func(path *Path) bool
 
@@ -306,6 +332,14 @@ This path must be a directory. Symlinks are followed.
 walkFunc receives a path joined with this Path.
 */
 func (p *Path) Walk(walkFunc WalkFunc) error {
+	return p.WalkContext(context.Background(), walkFunc)
+}
+
+/*
+WalkContext is Walk with support for cancellation through ctx. The walk stops and
+returns ctx.Err() as soon as ctx is done, with cancellation checked before each entry.
+*/
+func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	if !p.IsDir() {
 		return pathErr(ErrNotDir, *p)
 	}
@@ -317,12 +351,12 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 
 	defer file.Close()
 
-	abortGlob := false
-	abortGlobFunc := func() {
-		abortGlob = true
-	}
-
 	for {
+		err := ctx.Err()
+		if err != nil {
+			return err
+		}
+
 		// os.File.ReadDir returns at most n next entries for every next call.
 		// So we call it with n = 1 to yield and process the directory entry by entry
 		dirNames, err := file.ReadDir(1)
@@ -337,13 +371,13 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 		dirName := dirNames[0]
 		dirNamePath := p.JoinStrings(dirName.Name())
 
-		err = walkFunc(dirNamePath, abortGlobFunc)
-		if err != nil {
-			return wrapErr(ErrWalk, err, *dirNamePath)
-		}
-
-		if abortGlob {
-			break
+		walkErr := walkFunc(dirNamePath)
+		if walkErr != nil {
+			// Walk is not recursive, so SkipDir and SkipAll both simply stop it.
+			if errors.Is(walkErr, SkipAll) || errors.Is(walkErr, SkipDir) {
+				break
+			}
+			return wrapErr(ErrWalk, walkErr, *dirNamePath)
 		}
 	}
 
@@ -360,113 +394,111 @@ walkFunc takes the current entry, a function to abort walking the entire tree an
 a function to abort walking the current branch.
 */
 func (p *Path) WalkR(walkFunc WalkRFunc) error {
-	abortGlob := false
-	abortGlobFunc := func() {
-		abortGlob = true
-	}
-
-	return walkR(p, nil, &abortGlob, abortGlobFunc, walkFunc)
+	return p.WalkRContext(context.Background(), walkFunc)
 }
 
-// TODO Concurrent implementation of WalkR?
+/*
+WalkRContext is WalkR with support for cancellation through ctx. The walk stops
+and returns ctx.Err() as soon as ctx is done, with cancellation checked before
+each directory and each entry.
+*/
+func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
+	err := walkR(ctx, p, nil, walkFunc)
+
+	// SkipAll is a successful early termination, not a failure.
+	if errors.Is(err, SkipAll) {
+		return nil
+	}
+
+	return err
+}
 
 /*
 walkR calls walkFunc recursively for all path entries in a given root Path.
 
-currentDir must be nil on the initial function call.
+currentDir must be nil on the initial function call. SkipDir is consumed at the
+level that raises it, so it never escapes the current function call frame. SkipAll
+is propagated up, so the whole walk unwinds.
 */
-func walkR(initialDir *Path, currentDir *Path, abortWalking *bool, abortWalkFunc AbortFunc, walkFunc WalkRFunc) error {
+func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc WalkRFunc) error {
 	// Set currentDir to initialDir if currentDir is nil (initial call)
 	if currentDir == nil {
 		currentDir = initialDir
+	}
+
+	err := ctx.Err()
+	if err != nil {
+		return err
 	}
 
 	if !currentDir.IsDir() {
 		return pathErr(ErrNotDir, *currentDir)
 	}
 
-	abortThis := false
-	abortThisFunc := func() {
-		abortThis = true
-	}
-
-	evaluateError := func(outerError error) error {
-		// Run walkFunc to check if this path should be ignored.
-		// walkFunc can decide to ignore the error by returning nil
-		return walkFunc(currentDir, outerError, abortThisFunc, abortWalkFunc)
-	}
-
 	// Get file descriptor
 	file, err := os.Open(currentDir.String())
-
 	if err != nil {
-		errWrapped := wrapErr(ErrOpen, err, *currentDir)
-		var evaluatedError = evaluateError(errWrapped)
-
-		// We need to return because we currently are on a directory-level
-		// and are for some reason unable to read the directory.
-		return evaluatedError
+		// Give walkFunc a chance to inspect and ignore the directory error. A nil
+		// or SkipDir result skips this directory; anything else aborts.
+		handled := walkFunc(currentDir, wrapErr(ErrOpen, err, *currentDir))
+		if handled == nil || errors.Is(handled, SkipDir) {
+			return nil
+		}
+		return handled
 	}
 
 	defer file.Close()
 
-	// Call walk func for directory
+	// Call walkFunc for the directory itself (except the initial root).
 	if !currentDir.Equals(initialDir, CaseInsensitive) {
-		localErr := walkFunc(currentDir, nil, abortThisFunc, abortWalkFunc)
-		if localErr != nil {
-			return localErr
-		}
-
-		if abortThis {
-			return nil
-		}
-
-		if *abortWalking {
-			return nil
+		walkErr := walkFunc(currentDir, nil)
+		if walkErr != nil {
+			if errors.Is(walkErr, SkipDir) {
+				return nil
+			}
+			return walkErr
 		}
 	}
 
 	for {
+		err := ctx.Err()
+		if err != nil {
+			return err
+		}
+
 		// os.File.ReadDir returns at most n next entries for every next call.
 		// So we call it with n = 1 to yield and process the directory entry by entry
 		dirNames, err := file.ReadDir(1)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
-			} else {
-				errWrapped := wrapErr(ErrReadDir, err, *currentDir)
-				return evaluateError(errWrapped)
 			}
+			handled := walkFunc(currentDir, wrapErr(ErrReadDir, err, *currentDir))
+			if handled == nil || errors.Is(handled, SkipDir) {
+				return nil
+			}
+			return handled
 		}
 
 		dirName := dirNames[0]
 		dirNamePath := currentDir.JoinStrings(dirName.Name())
 
-		// Call walkFunc for file
+		// Call walkFunc for non-directory entries.
 		if !dirName.IsDir() {
-			localErr := walkFunc(dirNamePath, nil, abortThisFunc, abortWalkFunc)
-			if localErr != nil {
-				return localErr
-			}
-
-			if abortThis {
-				return nil
-			}
-
-			if *abortWalking {
-				return nil
+			walkErr := walkFunc(dirNamePath, nil)
+			if walkErr != nil {
+				if errors.Is(walkErr, SkipDir) {
+					return nil
+				}
+				return walkErr
 			}
 		}
 
-		// Walk contents of directory if directory has not been aborted
-		if !abortThis && dirName.IsDir() {
-			subDirWalkErr := walkR(initialDir, dirNamePath, abortWalking, abortWalkFunc, walkFunc)
-			if subDirWalkErr != nil {
-				return subDirWalkErr
-			}
-
-			if *abortWalking {
-				return nil
+		// Recurse into subdirectories.
+		if dirName.IsDir() {
+			subErr := walkR(ctx, initialDir, dirNamePath, walkFunc)
+			if subErr != nil {
+				return subErr
 			}
 		}
 	}
@@ -482,17 +514,32 @@ If an error is returned, all entries until that error are returned.
 This Path must be a directory.
 */
 func (p *Path) Glob(pattern string) ([]*Path, error) {
-	return p.GlobWithOptions(pattern, DefaultGlobOptions())
+	return p.GlobContext(context.Background(), pattern)
+}
+
+/*
+GlobContext is Glob with support for cancellation through ctx. The entries
+collected before cancellation are returned alongside ctx.Err().
+*/
+func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error) {
+	return p.GlobWithOptionsContext(ctx, pattern, DefaultGlobOptions())
 }
 
 /*
 GlobWithOptions returns all entries matching the given pattern within this Path's Posix representation.
-
 If an error is returned, all entries until that error are returned.
 
 This Path must be a directory.
 */
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
+	return p.GlobWithOptionsContext(context.Background(), pattern, options)
+}
+
+/*
+GlobWithOptionsContext is GlobWithOptions with support for cancellation through
+ctx. The entries collected before cancellation are returned alongside ctx.Err().
+*/
+func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
 	if !p.IsDir() {
 		return nil, pathErr(ErrNotDir, *p)
 	}
@@ -507,7 +554,7 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 	limit := max(0, options.Limit)
 	limitExists := limit != 0
 
-	applyPatternFunc := func(entry *Path, abortTree AbortFunc) error {
+	applyPatternFunc := func(entry *Path) error {
 		addToEntries := false
 
 		if options.FilterFunc == nil {
@@ -553,30 +600,27 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 
 		// Handle GlobOptions.Limit option.
 		// If a limit exists and the number of entries is greater than or equal to the limit,
-		// abort any further tree walking.
+		// stop any further tree walking.
 		if limitExists && len(entries) >= limit {
-			abortTree()
-			return nil
+			return SkipAll
 		}
 
 		return nil
 	}
 
-	err := p.WalkR(func(entry *Path, localDirError error, abortLocalTree AbortFunc, abortTree AbortFunc) error {
+	err := p.WalkRContext(ctx, func(entry *Path, localDirError error) error {
 		if localDirError != nil {
-			// Handle GlobOptions.SkipOnDirError option.
-			// Abort the local tree and ignore the error by not returning it.
+			// Handle GlobOptions.SkipOnDirError option:
+			// skip the offending directory and ignore the error.
 			if options.SkipOnDirError {
-				abortLocalTree()
-				return nil
+				return SkipDir
 			}
 
-			// By default, the entire tree is aborted and the error is bubbled up.
-			abortTree()
+			// By default, abort the entire walk and bubble the error up.
 			return localDirError
 		}
 
-		return applyPatternFunc(entry, abortTree)
+		return applyPatternFunc(entry)
 	})
 
 	return entries, err
