@@ -47,7 +47,7 @@ The file is updated regularly and gives a good general overview on the API. Up-t
 
 ## Roadmap 📋
 
-🔖 Current version: **0.0.3**
+🔖 Current version: **0.0.4**
 
 The API stabilized and is covered by many test cases. Tests are run on Linux, macOS and Windows, although no test automation exists yet. The current API scope is not expected to be modified or reduced. However, future releases might tighten up semantics regarding returned errors.
 
@@ -56,15 +56,11 @@ Still the project needs to be tested in real-world use. Test automation is also 
 `Next` features are planned and fixed on the roadmap for the next release(s). They extend and improve API semantics and internals and make the library more mature. `Future` features are planned, but not focussed on being implemented next per sé. They might, but are not prioritized.
 
 **Next**
-- [x] custom error structs and fitting error handling
-- [x] context.Context support for filesystem walking and globbing
+- [ ] Move away from single-file development strategy and release single-file source code files instead
 - [ ] parallelize recursive filesystem walking and globbing
-- [x] function to check if a file is (semantically) hidden
 - [ ] doublestar (`**`) glob pattern matching using https://github.com/bmatcuk/doublestar
-- [x] (?) Improve DX for file walking by returning abort errors instead of calling abort functions
 
 **Future**
-- [ ] Move away from single-file development strategy and release single-file source code files instead
 - [ ] implement "range over function" for globbing (requires newer go versions)
 
 **Planned extensions**
