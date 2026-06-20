@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"testing"
 )
 
 // matchPattern is the internal implementation that handles ** expansion.
@@ -311,10 +312,12 @@ from a Posix environment using Path.String or Path.ToPosix will cause path trave
 when the persisted path is read and used on Windows environments.
 
 Printing the warning can be disabled by setting PrintBackslashWarningOnPosix to false.
+The warning is also suppressed automatically while running under "go test".
 */
 func warnForBackslashesOnPosix(p string) {
-	if notRunningOnWindows && PrintBackslashWarningOnPosix && strings.Contains(p, "\\") {
-		_, _ = os.Stderr.WriteString("Warning: Usage of backslashes in path string on Posix-like environments. This will break the path part structure if used on Windows: " + fmt.Sprintf(`"%s"`, p) + ".\n")
+	if notRunningOnWindows && PrintBackslashWarningOnPosix && !testing.Testing() && strings.Contains(p, "\\") {
+		_, _ = os.Stderr.WriteString("Warning: Usage of backslashes in path string on Posix-like environments. " +
+			"This will break the path part structure if used on Windows: " + fmt.Sprintf(`"%s"`, p) + ".\n")
 	}
 }
 
