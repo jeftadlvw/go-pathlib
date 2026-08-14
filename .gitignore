@@ -1,14 +1,65 @@
-# coding environments
+# Root gitignore
+# Extended from https://github.com/github/gitignore/blob/main/Go.gitignore
+
+# IDEs and editors
 .idea
+*.sln
+.fleet
 .vs
 .vscode
-.fleet
+.code
+.cursor
+.obsidian
 
-# MacOS
-.DS_STORE
+# Tools and Agents
+.claude
 
-# compiled bundler binary (use `go run ./tools/bundle`)
+# Env-files
+.env
+**/*.env
+!*.template.env
+
+# Windows cache files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# macOS system files and folders
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+# Linux cache files
+*~
+.*.swp
+*.swo
+.nfs*
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Compiled bundler binary (use `go run ./tools/bundle`)
 /bundle
 
-# generated single-file bundles (build on demand via `make bundle`)
+# Generated single-file bundles (build on demand via `make bundle`)
 /dist/
