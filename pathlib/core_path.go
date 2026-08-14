@@ -43,20 +43,20 @@ type Path struct {
 
 /*
 NewPath ensures correct internal state and behavior depending on the current
-operating system. It is OS-adaptive: the same input may produce a different Path
-on Windows than on Posix, so its result is platform-dependent by design.
+operating system. It is meant to be used when handling file paths received
+by the operating system by system calls or subprocesses.
 
-It is meant to be used when handling file paths received by the operating system by
-system calls or subprocesses.
+The result is platform-dependent, meaning the same input may produce a different
+Path on Windows than on Posix. It branches to either NewPathFromPosix or
+NewPathFromWindows.
 
-It branches to either NewPathFromPosix or NewPathFromWindows. When the input
-format is known ahead of time (serialization, cross-platform handling, tests),
-prefer those format-explicit constructors so the result is deterministic across
+When the input format is known ahead of time (serialization, cross-platform handling,
+tests), prefer those format-explicit constructors so the result is deterministic across
 platforms.
 
 Rule of thumb: reach for NewPath only for strings handed to you by the operating
-system. If you already hold a path in a known format (including the library's own
-canonical posix form), use the format-explicit constructor instead.
+system. If you already hold a path in a known format, use the format-explicit
+constructor instead.
 */
 func NewPath(path string) *Path {
 	if runningOnWindows {
@@ -110,7 +110,7 @@ func NewPathFromWindows(path string) *Path {
 /*
 NewCwd returns a new Path instance pointing to the application's current working directory.
 
-This function uses os.Getwd.
+This function wraps os.Getwd.
 */
 func NewCwd() (*Path, error) {
 	cwdPath, err := os.Getwd()
@@ -124,7 +124,7 @@ func NewCwd() (*Path, error) {
 /*
 NewHome returns a new Path instance pointing to the user's home directory.
 
-This function uses os.UserHomeDir.
+This function wraps os.UserHomeDir.
 */
 func NewHome() (*Path, error) {
 	homePath, err := os.UserHomeDir()
