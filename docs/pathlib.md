@@ -57,6 +57,8 @@ Use pathlib\_fs.go, pathlib\_io.go or pathlib\_temp.go for more interoperability
   - [func DefaultListOptions\(\) ListOptions](<#DefaultListOptions>)
 - [type OpenOptions](<#OpenOptions>)
 - [type Path](<#Path>)
+  - [func NewCache\(\) \(\*Path, error\)](<#NewCache>)
+  - [func NewConfig\(\) \(\*Path, error\)](<#NewConfig>)
   - [func NewCwd\(\) \(\*Path, error\)](<#NewCwd>)
   - [func NewHome\(\) \(\*Path, error\)](<#NewHome>)
   - [func NewPath\(path string\) \*Path](<#NewPath>)
@@ -725,6 +727,28 @@ type Path struct {
 }
 ```
 
+<a name="NewCache"></a>
+### func [NewCache](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L157>)
+
+```go
+func NewCache() (*Path, error)
+```
+
+NewCache returns a new Path instance pointing to the user's cache directory.
+
+This function wraps os.UserCacheDir.
+
+<a name="NewConfig"></a>
+### func [NewConfig](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L143>)
+
+```go
+func NewConfig() (*Path, error)
+```
+
+NewConfig returns a new Path instance pointing to the user's configuration directory.
+
+This function wraps os.UserConfigDir.
+
 <a name="NewCwd"></a>
 ### func [NewCwd](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L115>)
 
@@ -734,7 +758,7 @@ func NewCwd() (*Path, error)
 
 NewCwd returns a new Path instance pointing to the application's current working directory.
 
-This function uses os.Getwd.
+This function wraps os.Getwd.
 
 <a name="NewHome"></a>
 ### func [NewHome](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L129>)
@@ -745,7 +769,7 @@ func NewHome() (*Path, error)
 
 NewHome returns a new Path instance pointing to the user's home directory.
 
-This function uses os.UserHomeDir.
+This function wraps os.UserHomeDir.
 
 <a name="NewPath"></a>
 ### func [NewPath](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L61>)
@@ -754,13 +778,13 @@ This function uses os.UserHomeDir.
 func NewPath(path string) *Path
 ```
 
-NewPath ensures correct internal state and behavior depending on the current operating system. It is OS\-adaptive: the same input may produce a different Path on Windows than on Posix, so its result is platform\-dependent by design.
+NewPath ensures correct internal state and behavior depending on the current operating system. It is meant to be used when handling file paths received by the operating system by system calls or subprocesses.
 
-It is meant to be used when handling file paths received by the operating system by system calls or subprocesses.
+The result is platform\-dependent, meaning the same input may produce a different Path on Windows than on Posix. It branches to either NewPathFromPosix or NewPathFromWindows.
 
-It branches to either NewPathFromPosix or NewPathFromWindows. When the input format is known ahead of time \(serialization, cross\-platform handling, tests\), prefer those format\-explicit constructors so the result is deterministic across platforms.
+When the input format is known ahead of time \(serialization, cross\-platform handling, tests\), prefer those format\-explicit constructors so the result is deterministic across platforms.
 
-Rule of thumb: reach for NewPath only for strings handed to you by the operating system. If you already hold a path in a known format \(including the library's own canonical posix form\), use the format\-explicit constructor instead.
+Rule of thumb: reach for NewPath only for strings handed to you by the operating system. If you already hold a path in a known format, use the format\-explicit constructor instead.
 
 <a name="NewPathFromPosix"></a>
 ### func [NewPathFromPosix](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L89>)
@@ -799,7 +823,7 @@ NewPathFromWindows interprets the passed string as a Windows path, independent o
 It is effectively a superset of NewPathFromPosix. Backslashes are converted to the canonical separator and Windows volume names \(e.g. "C:"\) and UNC anchors \(e.g. "\\\\\\\\host\\\\share"\) are split off, after which the same normalization rules as NewPathFromPosix apply to the remainder.
 
 <a name="PathFromParts"></a>
-### func [PathFromParts](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L141>)
+### func [PathFromParts](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L169>)
 
 ```go
 func PathFromParts(parts ...string) *Path
@@ -856,7 +880,7 @@ Base returns the last element of this Path.
 This function uses path.Base.
 
 <a name="Path.Copy"></a>
-### func \(\*Path\) [Copy](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L148>)
+### func \(\*Path\) [Copy](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L176>)
 
 ```go
 func (p *Path) Copy() *Path
@@ -1216,7 +1240,7 @@ func (p *Path) MakeAbsolute() (*Path, error)
 MakeAbsolute returns an absolute representation of this Path. If the Path is relative, it will be joined with the current working directory. If the Path is already absolute, a copy of the Path is returned.
 
 <a name="Path.MarshalText"></a>
-### func \(\*Path\) [MarshalText](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L222>)
+### func \(\*Path\) [MarshalText](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L250>)
 
 ```go
 func (p *Path) MarshalText() (text []byte, err error)
@@ -1375,7 +1399,7 @@ func (p *Path) Stem() string
 Stem returns the base of this Path without all extensions.
 
 <a name="Path.String"></a>
-### func \(\*Path\) [String](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L170>)
+### func \(\*Path\) [String](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L198>)
 
 ```go
 func (p *Path) String() string
@@ -1399,7 +1423,7 @@ This path must exist.
 This function uses CreateSymlink.
 
 <a name="Path.ToPosix"></a>
-### func \(\*Path\) [ToPosix](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L181>)
+### func \(\*Path\) [ToPosix](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L209>)
 
 ```go
 func (p *Path) ToPosix() string
@@ -1408,7 +1432,7 @@ func (p *Path) ToPosix() string
 ToPosix returns a string representation with forward slashes.
 
 <a name="Path.ToWindows"></a>
-### func \(\*Path\) [ToWindows](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L188>)
+### func \(\*Path\) [ToWindows](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L216>)
 
 ```go
 func (p *Path) ToWindows() string
@@ -1417,7 +1441,7 @@ func (p *Path) ToWindows() string
 ToWindows returns a string representation with backward slashes.
 
 <a name="Path.TrimWindowsAnchor"></a>
-### func \(\*Path\) [TrimWindowsAnchor](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L212>)
+### func \(\*Path\) [TrimWindowsAnchor](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L240>)
 
 ```go
 func (p *Path) TrimWindowsAnchor() *Path
@@ -1426,7 +1450,7 @@ func (p *Path) TrimWindowsAnchor() *Path
 TrimWindowsAnchor returns a copy of this Path with stripped Windows anchor encoding information.
 
 <a name="Path.UnmarshalText"></a>
-### func \(\*Path\) [UnmarshalText](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L233>)
+### func \(\*Path\) [UnmarshalText](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L261>)
 
 ```go
 func (p *Path) UnmarshalText(text []byte) error
