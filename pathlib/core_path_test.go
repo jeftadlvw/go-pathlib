@@ -369,6 +369,28 @@ func TestNewHome(t *testing.T) {
 	require.Equal(t, localHomePath, pathlibHomePath)
 }
 
+func TestNewConfig(t *testing.T) {
+	pathlibConfigPath, err := NewConfig()
+	require.NoError(t, err)
+
+	localConfig, err := os.UserConfigDir()
+	require.NoError(t, err)
+	localConfigPath := NewPath(localConfig)
+
+	require.Equal(t, localConfigPath, pathlibConfigPath)
+}
+
+func TestNewCache(t *testing.T) {
+	pathlibCachePath, err := NewCache()
+	require.NoError(t, err)
+
+	localCache, err := os.UserCacheDir()
+	require.NoError(t, err)
+	localCachePath := NewPath(localCache)
+
+	require.Equal(t, localCachePath, pathlibCachePath)
+}
+
 func TestPathFromParts(t *testing.T) {
 	cases := []TestCase[[]string, *Path]{
 		{Input: []string{"."}, Expect: NewPath(".")},

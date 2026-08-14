@@ -136,6 +136,34 @@ func NewHome() (*Path, error) {
 }
 
 /*
+NewConfig returns a new Path instance pointing to the user's configuration directory.
+
+This function wraps os.UserConfigDir.
+*/
+func NewConfig() (*Path, error) {
+	homePath, err := os.UserConfigDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPath(homePath), nil
+}
+
+/*
+NewCache returns a new Path instance pointing to the user's cache directory.
+
+This function wraps os.UserCacheDir.
+*/
+func NewCache() (*Path, error) {
+	homePath, err := os.UserCacheDir()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPath(homePath), nil
+}
+
+/*
 PathFromParts combines passed parts into a new Path.
 */
 func PathFromParts(parts ...string) *Path {
