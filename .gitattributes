@@ -1,0 +1,12 @@
+# Root .gitattributes
+
+# Define macros
+[attr]lfs               filter=lfs diff=lfs merge=lfs -text
+
+# Binary Content types
+*.png                   lfs
+*.jpg                   lfs
+*.pdf                   lfs
+
+# Image editing softare
+*.af                    lfs
