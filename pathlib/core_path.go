@@ -249,6 +249,10 @@ Implements the encoding.TextUnmarshaler interface.
 
 Uses NewPathFromWindows to ensure Windows anchors survive a marshal/unmarshal round-trip,
 since MarshalText serializes them in forward-slash form (e.g. "c:/" or "//host/share").
+
+UnmarshalText overwrites this Path and is meant for decoders such as encoding/json,
+which call it on the field they fill. A Path is otherwise immutable, and the library
+never shares a *Path with its caller, so this only changes Paths the caller owns.
 */
 func (p *Path) UnmarshalText(text []byte) error {
 	*p = *NewPathFromWindows(string(text))
