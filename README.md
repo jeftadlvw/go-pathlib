@@ -121,8 +121,6 @@ The Go Gopher mascot was created by Renee French and is licensed under the [Crea
 
 We believe the usage of the Gopher mascot in our artwork falls within the [Go Trademark Guidelines](https://go.dev/brand).
 
-We believe the usage of the Git logo in our artwork and the usage of the term "Git" fall under the [Git Trademark Policy](https://git-scm.com/about/trademark).
-
 We license our artwork under the [Creative Commons 4.0 Attribution License](https://creativecommons.org/licenses/by/4.0/).
 
 All repository image files can be found in `docs/assets`.
