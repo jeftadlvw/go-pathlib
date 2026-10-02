@@ -37,7 +37,8 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 
 /*
 GlobWithOptionsContext is GlobWithOptions with support for cancellation through
-ctx. The entries collected before cancellation are returned alongside ctx.Err().
+ctx. The entries collected before cancellation are returned alongside ctx.Err(),
+wrapped as ErrWalk.
 */
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
 	if !p.IsDir() {
@@ -46,6 +47,15 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 
 	if pattern == "" {
 		return nil, pathErr(ErrEmptyPattern, *p)
+	}
+
+	err := validatePattern(pattern)
+	if err != nil {
+		return nil, wrapErr(ErrBadPattern, err, *p)
+	}
+
+	if options.FilterFunc == nil && options.Filter > GlobOptionFilterDirectories {
+		return nil, pathErr(ErrInvalidFilter, *p)
 	}
 
 	var entries []*Path
@@ -67,7 +77,7 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			case GlobOptionFilterAll:
 				addToEntries = true
 			default:
-				return pathErr(errInvalidFilterOption, *entry)
+				return pathErr(ErrInvalidFilter, *entry)
 			}
 		} else {
 			// Handle GlobOptions.FilterFunc option
@@ -82,7 +92,7 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			// the pattern is matched starting from the original path.
 			entryForMatching, err := entry.RelativeTo(p)
 			if err != nil {
-				return wrapErr(ErrRelImpossible, err, *entry, *p)
+				return err
 			}
 
 			// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
@@ -108,7 +118,7 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 		return nil
 	}
 
-	err := p.WalkRContext(ctx, func(entry *Path, localDirError error) error {
+	err = p.WalkRContext(ctx, func(entry *Path, localDirError error) error {
 		if localDirError != nil {
 			// Handle GlobOptions.SkipOnDirError option:
 			// skip the offending directory and ignore the error.

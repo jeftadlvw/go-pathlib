@@ -479,7 +479,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 }
 
 func TestWalk_DirAccessErrorGrouping(t *testing.T) {
-	t.Run("ErrOpen and ErrReadDir are members of the ErrDirAccess group", func(t *testing.T) {
+	t.Run("ErrOpen and ErrReadDir are members of the ErrAccess group", func(t *testing.T) {
 		// Precise matching still works.
 		require.ErrorIs(t, ErrOpen, ErrOpen)
 		require.ErrorIs(t, ErrReadDir, ErrReadDir)
@@ -493,7 +493,7 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 		require.NotErrorIs(t, ErrReadDir, ErrOpen)
 	})
 
-	t.Run("localDirError from a real walk matches ErrDirAccess", func(t *testing.T) {
+	t.Run("localDirError from a real walk matches ErrAccess", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("chmod 0000 does not restrict access on Windows")
 		}
@@ -515,5 +515,43 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 
 		require.Error(t, captured)
 		require.ErrorIs(t, captured, ErrAccess)
+	})
+}
+
+func TestWalkR_CallbackErrors(t *testing.T) {
+	t.Run("callback error is wrapped as ErrWalk", func(t *testing.T) {
+		root := setupTempDir(t)
+		dir := createTempDir(t, root, "root")
+		createTempDir(t, dir, "sub")
+
+		errCallback := errors.New("callback failed")
+		err := dir.WalkR(func(p *Path, localDirError error) error {
+			return errCallback
+		})
+		require.ErrorIs(t, err, ErrWalk)
+		require.ErrorIs(t, err, errCallback)
+		require.ErrorAs(t, err, new(*PathlibError))
+	})
+
+	t.Run("unchanged localDirError is returned as is", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("chmod 0000 does not restrict access on Windows")
+		}
+
+		root := setupTempDir(t)
+		dir := createTempDir(t, root, "root")
+		unreadableDir := createTempDir(t, dir, "unreadable")
+		require.NoError(t, os.Chmod(unreadableDir.String(), 0000))
+		t.Cleanup(func() { os.Chmod(unreadableDir.String(), 0755) })
+
+		var captured error
+		err := dir.WalkR(func(p *Path, localDirError error) error {
+			if localDirError != nil {
+				captured = localDirError
+			}
+			return localDirError
+		})
+		require.Same(t, captured, err)
+		require.NotErrorIs(t, err, ErrWalk)
 	})
 }

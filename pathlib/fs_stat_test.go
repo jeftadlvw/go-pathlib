@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"io/fs"
 	"os"
 	"testing"
 
@@ -461,4 +462,26 @@ func TestDeviceMethods(t *testing.T) {
 		require.False(t, dirPath.IsSocket(), "directory is not a socket")
 		require.False(t, nonExistent.IsSocket(), "non-existent path is not a socket")
 	})
+}
+
+func TestFsErrorsAreWrapped(t *testing.T) {
+	root := setupTempDir(t)
+	missing := root.JoinStrings("missing")
+
+	_, err := missing.Stat()
+	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.ErrorAs(t, err, new(*PathlibError))
+
+	_, err = missing.Lstat()
+	require.ErrorIs(t, err, ErrStat)
+
+	err = SetPermission(missing, 0644)
+	require.ErrorIs(t, err, ErrSetPermission)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+
+	_, err = MkDirWithOptions(root.JoinStrings("a", "b"), DirOptions{})
+	require.ErrorIs(t, err, ErrCreate)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.ErrorAs(t, err, new(*PathlibError))
 }

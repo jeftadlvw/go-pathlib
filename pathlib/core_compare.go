@@ -21,7 +21,7 @@ Use forward slashes as path separators.
 
 By default, matching is case-sensitive. Pass CaseInsensitive to ignore casing.
 
-Empty patterns cause an error.
+Empty patterns cause ErrEmptyPattern, malformed patterns cause ErrBadPattern.
 */
 func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error) {
 	if pattern == "" {
@@ -40,7 +40,12 @@ func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, err
 		pathString = strings.ToLower(pathString)
 	}
 
-	return matchPattern(pattern, pathString)
+	match, err := matchPattern(pattern, pathString)
+	if err != nil {
+		return false, wrapErr(ErrBadPattern, err, *p)
+	}
+
+	return match, nil
 }
 
 /*

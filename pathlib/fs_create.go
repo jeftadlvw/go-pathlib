@@ -32,7 +32,7 @@ func (p *Path) ReadSymlinkTarget() (*Path, error) {
 
 	target, err := os.Readlink(p.String())
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrReadSymlink, err, *p)
 	}
 
 	return NewPath(target), nil
@@ -42,7 +42,12 @@ func (p *Path) ReadSymlinkTarget() (*Path, error) {
 SetPermission sets the permission mode for the specified path.
 */
 func SetPermission(path *Path, mode fs.FileMode) error {
-	return os.Chmod(path.String(), mode)
+	err := os.Chmod(path.String(), mode)
+	if err != nil {
+		return wrapErr(ErrSetPermission, err, *path)
+	}
+
+	return nil
 }
 
 /*
@@ -84,12 +89,15 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 
 	file, err := os.OpenFile(path.String(), os.O_RDWR|os.O_CREATE|os.O_TRUNC, options.Mode)
 	if err != nil {
-		return false, err
+		return false, wrapErr(ErrCreate, err, *path)
 	}
 
 	err = file.Close()
+	if err != nil {
+		return true, wrapErr(ErrCreate, err, *path)
+	}
 
-	return true, err
+	return true, nil
 }
 
 /*
@@ -133,7 +141,7 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	}
 
 	if err != nil {
-		return false, err
+		return false, wrapErr(ErrCreate, err, *path)
 	}
 
 	return true, nil
@@ -155,5 +163,10 @@ func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 		return pathErr(ErrParentNotExist, *symlinkPath)
 	}
 
-	return os.Symlink(symlinkTarget.String(), symlinkPath.String())
+	err := os.Symlink(symlinkTarget.String(), symlinkPath.String())
+	if err != nil {
+		return wrapErr(ErrCreate, err, *symlinkPath)
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,4 +60,11 @@ func TestMatchesPatternE(t *testing.T) {
 			require.Equal(t, tc.Expect.Match, match)
 		})
 	}
+}
+
+func TestMatchesPatternE_BadPattern(t *testing.T) {
+	_, err := NewPath("a/b").MatchesPatternE("a/[")
+	require.ErrorIs(t, err, ErrBadPattern)
+	require.ErrorIs(t, err, path.ErrBadPattern)
+	require.ErrorAs(t, err, new(*PathlibError))
 }

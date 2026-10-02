@@ -113,7 +113,7 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
 
 	file, err := os.CreateTemp(tempBaseDir, prefix)
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
 	}
 
 	_ = file.Close()
@@ -171,7 +171,7 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 
 	dirName, err := os.MkdirTemp(tempBaseDir, prefix)
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
 	}
 
 	tempDirPath := *NewPath(dirName)
@@ -186,4 +186,14 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
 
 func TempBaseDir() *Path {
 	return NewPath(os.TempDir())
+}
+
+// tempDirOrDefault returns the directory a temporary path is created in, which
+// is the OS temp directory when baseDir is empty.
+func tempDirOrDefault(baseDir string) *Path {
+	if baseDir == "" {
+		return TempBaseDir()
+	}
+
+	return NewPath(baseDir)
 }

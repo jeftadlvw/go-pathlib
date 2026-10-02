@@ -2,6 +2,7 @@ package pathlib
 
 import (
 	"fmt"
+	"io/fs"
 	"math/rand/v2"
 	"os"
 	"strings"
@@ -473,4 +474,20 @@ func TestReadWriteAppendOperations(t *testing.T) {
 
 func isMode(modeStr, requiredMode string) bool {
 	return strings.Contains(modeStr, requiredMode)
+}
+
+func TestIoErrorsAreWrapped(t *testing.T) {
+	root := setupTempDir(t)
+	missing := root.JoinStrings("missing.txt")
+
+	_, err := ReadFile(missing)
+	require.ErrorIs(t, err, ErrRead)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.ErrorAs(t, err, new(*PathlibError))
+
+	_, err = OpenFileWithOptions(missing, OpenOptions{Mode: "r"})
+	require.ErrorIs(t, err, ErrOpen)
+	require.ErrorIs(t, err, ErrAccess)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.ErrorAs(t, err, new(*PathlibError))
 }

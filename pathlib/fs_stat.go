@@ -53,7 +53,7 @@ func (p *Path) Resolve() (*Path, error) {
 
 	ep, err := filepath.EvalSymlinks(p.String())
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrResolve, err, *p)
 	}
 
 	return NewPath(ep).MakeAbsolute()
@@ -65,7 +65,12 @@ Stat returns file info for this Path.
 This function uses os.Stat.
 */
 func (p *Path) Stat() (os.FileInfo, error) {
-	return os.Stat(p.String())
+	info, err := os.Stat(p.String())
+	if err != nil {
+		return nil, wrapErr(ErrStat, err, *p)
+	}
+
+	return info, nil
 }
 
 /*
@@ -74,7 +79,12 @@ Lstat returns file info for this Path, not following symbolic links.
 This function uses os.Lstat.
 */
 func (p *Path) Lstat() (os.FileInfo, error) {
-	return os.Lstat(p.String())
+	info, err := os.Lstat(p.String())
+	if err != nil {
+		return nil, wrapErr(ErrStat, err, *p)
+	}
+
+	return info, nil
 }
 
 /*

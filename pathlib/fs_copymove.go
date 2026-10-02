@@ -62,20 +62,30 @@ func copyFile(source *Path, destination *Path) error {
 	// Open source file
 	sourceFile, err := os.Open(source.String())
 	if err != nil {
-		return err
+		return wrapErr(ErrOpen, err, *source)
 	}
 	defer sourceFile.Close()
 
 	// Create the destination file
 	destinationFile, err := os.OpenFile(destination.String(), os.O_RDWR|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
-		return err
+		return wrapErr(ErrCreate, err, *destination)
 	}
-	defer destinationFile.Close()
 
 	// Copy contents
 	_, err = io.Copy(destinationFile, sourceFile)
-	return err
+	if err != nil {
+		_ = destinationFile.Close()
+		return wrapErr(ErrCopy, err, *source, *destination)
+	}
+
+	// Closing flushes the content, so its error means the copy is incomplete.
+	err = destinationFile.Close()
+	if err != nil {
+		return wrapErr(ErrCopy, err, *source, *destination)
+	}
+
+	return nil
 }
 
 /*
@@ -128,14 +138,14 @@ func copyDir(src *Path, dst *Path) error {
 			// Ensure destination directory is empty
 			file, openErr := os.Open(dst.String())
 			if openErr != nil {
-				return openErr
+				return wrapErr(ErrOpen, openErr, *dst)
 			}
 
 			defer file.Close()
 
 			entries, readDirErr := file.ReadDir(1)
 			if readDirErr != nil && readDirErr != io.EOF {
-				return readDirErr
+				return wrapErr(ErrReadDir, readDirErr, *dst)
 			}
 
 			if len(entries) != 0 {
@@ -149,14 +159,14 @@ func copyDir(src *Path, dst *Path) error {
 		// Create the destination directory if it doesn't exist
 		err := os.Mkdir(dst.String(), srcInfo.Mode())
 		if err != nil {
-			return err
+			return wrapErr(ErrCreate, err, *dst)
 		}
 	}
 
 	// Read directory entries
 	entries, err := os.ReadDir(src.String())
 	if err != nil {
-		return err
+		return wrapErr(ErrReadDir, err, *src)
 	}
 
 	// Copy each entry
@@ -233,7 +243,12 @@ func Remove(path *Path) error {
 		return nil
 	}
 
-	return os.Remove(path.String())
+	err := os.Remove(path.String())
+	if err != nil {
+		return wrapErr(ErrRemove, err, *path)
+	}
+
+	return nil
 }
 
 /*
@@ -250,5 +265,10 @@ func RemoveAll(path *Path) error {
 		return pathErr(ErrNotDir, *path)
 	}
 
-	return os.RemoveAll(path.String())
+	err := os.RemoveAll(path.String())
+	if err != nil {
+		return wrapErr(ErrRemove, err, *path)
+	}
+
+	return nil
 }

@@ -1,13 +1,5 @@
 /*
 Package pathlib contains source code for go-pathlib.
-
-It's a one-file library that can be used in other projects by using Go's package system
-or by placing the source code file itself into the source tree.
-
-pathlib.go contains lexicographically based functions and does not interoperate with the
-file system. Case sensitivity is defined explicitly. Filesystem-specific functionality is outsourced to pathlib_fs.go.
-
-Use pathlib_fs.go, pathlib_io.go or pathlib_temp.go for more interoperability.
 */
 package pathlib
 
@@ -115,7 +107,7 @@ This function wraps os.Getwd.
 func NewCwd() (*Path, error) {
 	cwdPath, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrLookup, err)
 	}
 
 	return NewPath(cwdPath), nil
@@ -129,7 +121,7 @@ This function wraps os.UserHomeDir.
 func NewHome() (*Path, error) {
 	homePath, err := os.UserHomeDir()
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil
@@ -143,7 +135,7 @@ This function wraps os.UserConfigDir.
 func NewConfig() (*Path, error) {
 	homePath, err := os.UserConfigDir()
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil
@@ -157,7 +149,7 @@ This function wraps os.UserCacheDir.
 func NewCache() (*Path, error) {
 	homePath, err := os.UserCacheDir()
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil

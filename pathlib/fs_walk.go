@@ -49,14 +49,15 @@ WalkRFunc is called by WalkR for every entry.
 
 Return SkipDir to skip the rest of the current directory or a directory's content.
 Return SkipAll to stop the entire walk, or return any other non-nil error to abort
-and have WalkR return it.
+and have WalkR return it. The error will be wrapped as ErrWalk, except for an
+unchanged localDirError, which is returned as is.
 
 If the current directory could not be opened or read, localDirError is non-nil.
 Users may inspect it and act upon it by e.g. ignoring it (return nil), bubbling
 it (return error) or returning a different error instead (e.g. SkipDir).
 
 localDirError wraps ErrOpen (open failure) or ErrReadDir (read failure). These errors
-can be matched either precisely, or by their shared ErrDirAccess group.
+can be matched either precisely, or by their shared ErrAccess group.
 */
 type WalkRFunc func(p *Path, localDirError error) error
 
@@ -73,8 +74,9 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 }
 
 /*
-WalkContext is Walk with support for cancellation through ctx. The walk stops and
-returns ctx.Err() as soon as ctx is done, with cancellation checked before each entry.
+WalkContext is Walk with support for cancellation through ctx. The walk stops as
+soon as ctx is done and returns ctx.Err() wrapped as ErrWalk, with cancellation
+checked before each entry.
 */
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	if !p.IsDir() {
@@ -101,7 +103,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	for _, entry := range entries {
 		err := ctx.Err()
 		if err != nil {
-			return err
+			return wrapErr(ErrWalk, err, *p)
 		}
 
 		entryPath := p.JoinStrings(entry.Name())
@@ -137,8 +139,8 @@ func (p *Path) WalkR(walkFunc WalkRFunc) error {
 
 /*
 WalkRContext is WalkR with support for cancellation through ctx. The walk stops
-and returns ctx.Err() as soon as ctx is done, with cancellation checked before
-each directory and each entry.
+as soon as ctx is done and returns ctx.Err() wrapped as ErrWalk, with cancellation
+checked before each directory and each entry.
 */
 func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
 	err := walkR(ctx, p, nil, walkFunc)
@@ -160,7 +162,7 @@ func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
 // themselves, then sort with this helper, rather than calling os.ReadDir (which
 // would open, read and sort in one step). The reason is error reporting, as the
 // open step and the read step are wrapped with distinct sentinels (ErrOpen and
-// ErrReadDir, both members of the ErrDirAccess group) that are handed to the walk
+// ErrReadDir, both members of the ErrAccess group) that are handed to the walk
 // callback as localDirError. os.ReadDir collapses both into a single, unwrappable
 // error, so callers could no longer tell an open failure from a read failure.
 // Keeping the two steps separate is the only reason this helper exists instead of
@@ -186,7 +188,7 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 
 	err := ctx.Err()
 	if err != nil {
-		return err
+		return wrapErr(ErrWalk, err, *currentDir)
 	}
 
 	if !currentDir.IsDir() {
@@ -200,11 +202,7 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 	if err != nil {
 		// Give walkFunc a chance to inspect and ignore the directory error. A nil
 		// or SkipDir result skips this directory. Anything else aborts.
-		handled := walkFunc(currentDir, wrapErr(ErrOpen, err, *currentDir))
-		if handled == nil || errors.Is(handled, SkipDir) {
-			return nil
-		}
-		return handled
+		return handleDirErr(currentDir, wrapErr(ErrOpen, err, *currentDir), walkFunc)
 	}
 
 	// Read all entries up front so they can be sorted into a deterministic order.
@@ -212,11 +210,7 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 	entries, readErr := file.ReadDir(-1)
 	file.Close()
 	if readErr != nil {
-		handled := walkFunc(currentDir, wrapErr(ErrReadDir, readErr, *currentDir))
-		if handled == nil || errors.Is(handled, SkipDir) {
-			return nil
-		}
-		return handled
+		return handleDirErr(currentDir, wrapErr(ErrReadDir, readErr, *currentDir), walkFunc)
 	}
 
 	sortDirEntries(entries)
@@ -228,14 +222,14 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 			if errors.Is(walkErr, SkipDir) {
 				return nil
 			}
-			return walkErr
+			return callbackErr(walkErr, currentDir)
 		}
 	}
 
 	for _, entry := range entries {
 		err := ctx.Err()
 		if err != nil {
-			return err
+			return wrapErr(ErrWalk, err, *currentDir)
 		}
 
 		entryPath := currentDir.JoinStrings(entry.Name())
@@ -247,7 +241,7 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 				if errors.Is(walkErr, SkipDir) {
 					return nil
 				}
-				return walkErr
+				return callbackErr(walkErr, entryPath)
 			}
 			continue
 		}
@@ -260,4 +254,29 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 	}
 
 	return nil
+}
+
+/*
+handleDirErr hands a failure to open or read dir to walkFunc. A nil or SkipDir
+result skips the directory. The unchanged dirErr is returned as is, and any
+other error is wrapped as ErrWalk.
+*/
+func handleDirErr(dir *Path, dirErr error, walkFunc WalkRFunc) error {
+	handled := walkFunc(dir, dirErr)
+	if handled == nil || errors.Is(handled, SkipDir) {
+		return nil
+	}
+	if handled == dirErr {
+		return dirErr
+	}
+	return callbackErr(handled, dir)
+}
+
+// callbackErr wraps an error returned by a WalkRFunc for p as ErrWalk. SkipAll
+// passes through unchanged, so WalkRContext can end the walk successfully.
+func callbackErr(err error, p *Path) error {
+	if errors.Is(err, SkipAll) {
+		return err
+	}
+	return wrapErr(ErrWalk, err, *p)
 }

@@ -637,3 +637,14 @@ func TestPath_ListDirs(t *testing.T) {
 		require.Equal(t, []string{"subdir1", "subdir1/nested", "subdir2"}, relPathsSorted(t, dirs, dir))
 	})
 }
+
+func TestGlob_InvalidInputFailsBeforeWalking(t *testing.T) {
+	// The directory is empty, so the walk callback never runs.
+	dir := setupTempDir(t)
+
+	_, err := dir.Glob("[")
+	require.ErrorIs(t, err, ErrBadPattern)
+
+	_, err = dir.GlobWithOptions("*", GlobOptions{Filter: 99})
+	require.ErrorIs(t, err, ErrInvalidFilter)
+}

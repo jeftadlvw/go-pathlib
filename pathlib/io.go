@@ -97,7 +97,7 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 				f, createErr := os.OpenFile(path.String(), os.O_CREATE|os.O_WRONLY, opts.Permission)
 
 				if createErr != nil {
-					return nil, createErr
+					return nil, wrapErr(ErrCreate, createErr, *path)
 				}
 
 				_ = f.Close()
@@ -109,7 +109,7 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 
 	file, err := os.OpenFile(path.String(), fileOpenMode, opts.Permission)
 	if err != nil {
-		return nil, err
+		return nil, wrapErr(ErrOpen, err, *path)
 	}
 
 	// Fun fact: Unix-based operating systems support opening a file descriptor
@@ -134,14 +134,19 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 ReadFile reads the passed file and returns read bytes.
 */
 func ReadFile(path *Path) ([]byte, error) {
-	return os.ReadFile(path.String())
+	bytes, err := os.ReadFile(path.String())
+	if err != nil {
+		return nil, wrapErr(ErrRead, err, *path)
+	}
+
+	return bytes, nil
 }
 
 /*
 ReadFileToString reads the passed file and returns its content as a string.
 */
 func ReadFileToString(path *Path) (string, error) {
-	bytes, err := os.ReadFile(path.String())
+	bytes, err := ReadFile(path)
 	return string(bytes), err
 }
 
@@ -194,7 +199,17 @@ func writeBytes(path *Path, data []byte, mode string) (int, error) {
 		return 0, err
 	}
 
-	defer file.Close()
+	n, err := file.Write(data)
+	if err != nil {
+		_ = file.Close()
+		return n, wrapErr(ErrWrite, err, *path)
+	}
 
-	return file.Write(data)
+	// Closing flushes the content, so its error means the write is incomplete.
+	err = file.Close()
+	if err != nil {
+		return n, wrapErr(ErrWrite, err, *path)
+	}
+
+	return n, nil
 }

@@ -2,6 +2,7 @@ package pathlib
 
 import (
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -11,81 +12,91 @@ Every error the library produces is a *PathlibError, so a single
 errors.As(err, new(*pathlib.PathlibError)) catches any of them, and
 errors.Is(err, ErrX) matches the exported sentinels by identity.
 
-The base type lives here in pathlib.go because every other file already depends
-on it. This keeps the library's one-file rule intact (no central error file).
-Domain sentinels (ErrNotExist, ErrNotDir, ...) are declared next to the code
-that raises them.
+A PathlibError is immutable. Its fields are read through Kind, Paths, and Unwrap.
+
+The base type lives in the core group because every other group depends on it,
+so each bundle stays self-contained. Domain sentinels are declared in the
+*_errors.go file of the group that raises them (core_errors.go, fs_errors.go,
+io_errors.go, temp_errors.go).
 */
 type PathlibError struct {
-	// Kind categorizes the error. It is always set and is exposed to errors.Is
-	// via Unwrap, so callers match on it by identity.
-	Kind error
+	// kind categorizes the error. It is always set and is matched by the Is
+	// method, so errors.Is reaches it by identity.
+	kind error
 
-	// Paths are the paths this error concerns, in an order documented per
+	// paths are the paths this error concerns, in an order documented per
 	// operation (e.g. Copy reports [source, destination]). May be empty.
-	Paths []Path
+	paths []Path
 
-	// Err is the underlying cause (e.g. a wrapped os error), or nil.
-	Err error
+	// err is the underlying cause (e.g. a wrapped os error), or nil.
+	err error
+}
+
+// Kind returns the sentinel that categorizes the error. Match it with errors.Is.
+func (e *PathlibError) Kind() error {
+	return e.kind
+}
+
+// Paths returns a copy of the paths this error concerns, in an order documented
+// per operation (e.g. Copy reports [source, destination]). It may be empty.
+func (e *PathlibError) Paths() []Path {
+	return slices.Clone(e.paths)
 }
 
 // Error renders the kind, any paths, and the wrapped cause as a single message.
 func (e *PathlibError) Error() string {
 	var b strings.Builder
 
-	if e.Kind != nil {
-		b.WriteString(e.Kind.Error())
+	if e.kind != nil {
+		b.WriteString(e.kind.Error())
 	} else {
 		b.WriteString("pathlib error")
 	}
 
-	switch len(e.Paths) {
+	switch len(e.paths) {
 	case 0:
 	case 1:
 		b.WriteString(": ")
-		b.WriteString(e.Paths[0].String())
+		b.WriteString(e.paths[0].String())
 	default:
 		b.WriteString(": [")
-		for i := range e.Paths {
+		for i := range e.paths {
 			if i > 0 {
 				b.WriteString(", ")
 			}
-			b.WriteString(e.Paths[i].String())
+			b.WriteString(e.paths[i].String())
 		}
 		b.WriteString("]")
 	}
 
-	if e.Err != nil {
+	if e.err != nil {
 		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		b.WriteString(e.err.Error())
 	}
 
 	return b.String()
 }
 
-// Unwrap exposes the kind and the cause as separate branches so the standard
-// errors.Is / errors.As reach both by identity.
-func (e *PathlibError) Unwrap() []error {
-	switch {
-	case e.Kind != nil && e.Err != nil:
-		return []error{e.Kind, e.Err}
-	case e.Err != nil:
-		return []error{e.Err}
-	case e.Kind != nil:
-		return []error{e.Kind}
-	default:
-		return nil
-	}
+// Unwrap returns the cause, or nil. The kind is no cause, so errors.Unwrap
+// follows a linear chain.
+func (e *PathlibError) Unwrap() error {
+	return e.err
+}
+
+// Is reports whether target matches the kind, so errors.Is finds kinds and
+// their groups as well as causes.
+func (e *PathlibError) Is(target error) bool {
+	return e.kind != nil && errors.Is(e.kind, target)
 }
 
 // pathErr builds a categorized error over zero or more paths.
 func pathErr(kind error, paths ...Path) *PathlibError {
-	return &PathlibError{Kind: kind, Paths: paths}
+	return &PathlibError{kind: kind, paths: paths}
 }
 
 // wrapErr is pathErr with an underlying cause attached.
 func wrapErr(kind, cause error, paths ...Path) *PathlibError {
-	return &PathlibError{Kind: kind, Err: cause, Paths: paths}
+	return &PathlibError{kind: kind, err: cause, paths: paths}
 }
 
 /*
@@ -110,10 +121,14 @@ func subKind(parent error, msg string) error {
 	return &kindError{msg: msg, parent: parent}
 }
 
-// Error sentinels raised by pathlib.go (lexical path operations).
+// Error sentinels raised by the core group (lexical path operations).
 var (
 	// ErrEmptyPattern is returned when a match pattern is empty.
 	ErrEmptyPattern = errors.New("pattern may not be empty")
+
+	// ErrBadPattern is returned when a match pattern is malformed. The cause is
+	// path.ErrBadPattern.
+	ErrBadPattern = errors.New("malformed pattern")
 
 	// ErrAnchorMismatch is returned when one path is Windows-anchored and the
 	// other is not, or their anchors differ.
@@ -124,4 +139,8 @@ var (
 
 	// ErrRelImpossible is returned when one path cannot be made relative to another.
 	ErrRelImpossible = errors.New("cannot make path relative to the other")
+
+	// ErrLookup is returned when a well-known directory, such as the working or
+	// home directory, cannot be determined. The os cause is wrapped.
+	ErrLookup = errors.New("could not look up directory")
 )
