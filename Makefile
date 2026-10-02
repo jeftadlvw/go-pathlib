@@ -1,4 +1,7 @@
-.PHONY: test doc-gen bundle
+.PHONY: install-tools test doc-gen bundle
+
+install-dev-tools:
+	@go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
 
 test:
 	@go test ./...
@@ -6,6 +9,5 @@ test:
 bundle:
 	@go run ./tools/bundle
 
-doc-gen:
-	@go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+generate-docs:
 	@gomarkdoc -o docs/pathlib.md -e ./pathlib
