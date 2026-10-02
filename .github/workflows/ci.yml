@@ -16,6 +16,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ["1.22", "stable"]
+    env:
+      # Before Go 1.24, the linker writes the LC_UUID load command only when -B
+      # is passed, and newer macOS versions refuse to run binaries without it.
+      GOFLAGS: ${{ matrix.os == 'macos-latest' && matrix.go == '1.22' && '-ldflags=-B=gobuildid' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
