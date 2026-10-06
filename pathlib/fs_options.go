@@ -40,13 +40,36 @@ func effectiveDirMode(mode fs.FileMode) fs.FileMode {
 }
 
 /*
+PermissionBits are the mode bits accepted wherever a permission is passed. The Unix
+permission bits (fs.ModePerm) plus fs.ModeSetuid, fs.ModeSetgid and fs.ModeSticky.
+Any other bit returns ErrPermissionRange. This includes file type bits such as
+fs.ModeDir and the Unix octal notation of the special bits (e.g. 0o4755), which the
+os package would silently drop.
+
+Whether the setuid and setgid bits survive the creation of a file or directory
+depends on the operating system, e.g. macOS drops them. SetPermission sets them
+reliably. On Windows, the special bits have no effect.
+*/
+const PermissionBits = fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky
+
+// checkPermission returns ErrPermissionRange if mode has bits outside PermissionBits.
+func checkPermission(mode fs.FileMode, path *Path) error {
+	if mode&^PermissionBits != 0 {
+		return permRangeErr(mode, *path)
+	}
+
+	return nil
+}
+
+/*
 FileOptions contains options for file and directory creation and deletion operations
 */
 type FileOptions struct {
 	// ExistOk specifies whether it's acceptable if the file/directory already exists
 	ExistOk bool
 
-	// Mode specifies the file/directory permission mode
+	// Mode specifies the file/directory permission mode. It may only contain
+	// PermissionBits.
 	Mode fs.FileMode
 }
 
@@ -67,7 +90,8 @@ type DirOptions struct {
 	// ExistOk specifies whether it's acceptable if the file/directory already exists
 	ExistOk bool
 
-	// Mode specifies the file/directory permission mode
+	// Mode specifies the file/directory permission mode. It may only contain
+	// PermissionBits.
 	Mode fs.FileMode
 
 	// CreateAll creates all missing directories.

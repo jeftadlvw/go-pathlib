@@ -41,9 +41,17 @@ func (p *Path) ReadSymlinkTarget() (*Path, error) {
 
 /*
 SetPermission sets the permission mode for the specified path.
+
+The mode may only contain PermissionBits, any other bit returns ErrPermissionRange.
+Unlike on creation, the setuid and setgid bits are set reliably.
 */
 func SetPermission(path *Path, mode fs.FileMode) error {
-	err := os.Chmod(path.String(), mode)
+	err := checkPermission(mode, path)
+	if err != nil {
+		return err
+	}
+
+	err = os.Chmod(path.String(), mode)
 	if err != nil {
 		return wrapErr(ErrSetPermission, err, *path)
 	}
@@ -75,11 +83,16 @@ An existing path that is not a file returns ErrNotFile. This includes a broken s
 whose target is never created.
 
 FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
-and defaults to DefaultFileMode.
+and defaults to DefaultFileMode. Any bit outside PermissionBits returns ErrPermissionRange.
 
 Returns true if a new file was created, false otherwise.
 */
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
+	err := checkPermission(options.Mode, path)
+	if err != nil {
+		return false, err
+	}
+
 	exists, err := lexists(path)
 	if err != nil {
 		return false, err
@@ -133,11 +146,16 @@ If ExistOk is true and the directory already exists, no action is taken.
 An existing path that is not a directory returns ErrNotDir. This includes a broken symlink.
 
 DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
-and defaults to DefaultDirMode.
+and defaults to DefaultDirMode. Any bit outside PermissionBits returns ErrPermissionRange.
 
 Returns true if a new directory was created, false otherwise.
 */
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
+	err := checkPermission(options.Mode, path)
+	if err != nil {
+		return false, err
+	}
+
 	exists, err := lexists(path)
 	if err != nil {
 		return false, err

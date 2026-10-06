@@ -14,7 +14,7 @@ type OpenOptions struct {
 	// Create the file if it does not exist.
 	CreateIfNotExists bool
 
-	// Permissions for file creation.
+	// Permissions for file creation. It may only contain PermissionBits.
 	Permission os.FileMode
 
 	// Open mode. Loosely defined as a string that may only contain "r" (read), "w" (write) and "a" (append).
@@ -44,7 +44,8 @@ func OpenFile(path *Path) (*os.File, error) {
 /*
 OpenFileWithOptions opens a file with passed extended configuration.
 
-If OpenOptions.Permission is 0, the value defaults to 0644.
+If OpenOptions.Permission is 0, the value defaults to 0644. Any bit outside
+PermissionBits returns ErrPermissionRange.
 If OpenOptions.Mode is an empty string, it defaults to "rw"
 
 The order for OpenOptions.Mode is enforced as follows: "r" (read), "w" (write), "a" (append) must be used
@@ -54,8 +55,9 @@ It's the caller's responsibility to close the returned os.File.
 */
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 
-	if opts.Permission > 0777 { // opts.Permission is uint32, so it can never be < 0
-		return nil, permRangeErr(opts.Permission, *path)
+	err := checkPermission(opts.Permission, path)
+	if err != nil {
+		return nil, err
 	}
 
 	// set the default permission value
@@ -178,8 +180,9 @@ func WriteString(path *Path, data string) (int, error) {
 WriteBytesWithOptions writes raw byte data to the defined file with given options.
 
 A missing file is created with FileOptions.Mode, which defaults to DefaultFileMode
-if it is 0. The mode only applies to a created file, an existing file keeps its
-permissions. Parent directories must exist.
+if it is 0. Any bit outside PermissionBits returns ErrPermissionRange. The mode only
+applies to a created file, an existing file keeps its permissions. Parent directories
+must exist.
 
 If FileOptions.ExistOk is true, preexisting content is truncated. Otherwise an
 existing file returns ErrFileExist and is left untouched, as in CreateFileWithOptions.
@@ -229,6 +232,11 @@ with the additional flag (os.O_TRUNC or os.O_APPEND). The file is created if it
 does not exist, and options apply as described in WriteBytesWithOptions.
 */
 func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, error) {
+	err := checkPermission(options.Mode, path)
+	if err != nil {
+		return 0, err
+	}
+
 	// Check the path itself, so a broken symlink is not written through.
 	exists, err := lexists(path)
 	if err != nil {

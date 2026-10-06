@@ -12,9 +12,10 @@ var (
 	// configuration. Match it with errors.Is to catch both members below.
 	ErrPermission = errors.New("invalid file permission or mode")
 
-	// ErrPermissionRange is raised when a permission value is out of bounds.
-	// It is a member of the ErrPermission group and is carried by a *PermissionError.
-	ErrPermissionRange = subKind(ErrPermission, "permission out of bounds (0..0o777)")
+	// ErrPermissionRange is raised when a permission value has bits outside
+	// PermissionBits. It is a member of the ErrPermission group and is carried by
+	// a *PermissionError.
+	ErrPermissionRange = subKind(ErrPermission, "permission has bits outside PermissionBits")
 
 	// ErrUnsupportedMode is raised when an open-mode string is not supported.
 	// It is a member of the ErrPermission group and is carried by a *PermissionError.

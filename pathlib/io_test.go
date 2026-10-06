@@ -198,9 +198,9 @@ func TestOpenFileWithOptions(t *testing.T) {
 						localPermissionCase = defaultOpenPermission
 					}
 
-					// os.FileMode is uint32, so the < 0 check is always false.
-					// It is kept for clarity to document the intended bounds check.
-					localPermissionCaseOutOfBounds := localPermissionCase < 0 || localPermissionCase > 0777
+					// Decimal cases like 744 (0o1350) set the Unix octal sticky bit,
+					// which is not fs.ModeSticky and lies outside PermissionBits.
+					localPermissionCaseOutOfBounds := localPermissionCase&^PermissionBits != 0
 
 					filePermissionTest := func(t *testing.T, file *os.File) {
 						t.Run("file permissions", func(t *testing.T) {
