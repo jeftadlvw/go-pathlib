@@ -104,6 +104,16 @@ func TestErrNotExist_MatchesBothSentinels(t *testing.T) {
 			_, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
 			return err
 		}},
+
+		// Missing parent directories of written files.
+		{"WriteBytes with missing parent", func(t *testing.T, root *Path) error {
+			_, err := WriteBytes(root.JoinStrings("missing", "file.txt"), nil)
+			return err
+		}},
+		{"AppendBytes with missing parent", func(t *testing.T, root *Path) error {
+			_, err := AppendBytes(root.JoinStrings("missing", "file.txt"), nil)
+			return err
+		}},
 	}
 
 	runErrCases(t, cases, func(t *testing.T, err error) {
@@ -138,6 +148,10 @@ func TestErrExist_MatchesBothSentinels(t *testing.T) {
 		{"CreateSymlink over broken symlink", func(t *testing.T, root *Path) error {
 			link := createTempSymlinkAbs(t, root, "missing", "link")
 			return CreateSymlink(root, link)
+		}},
+		{"WriteBytesWithOptions without ExistOk", func(t *testing.T, root *Path) error {
+			_, err := WriteBytesWithOptions(writeTempFile(t, root, "file.txt", ""), nil, FileOptions{})
+			return err
 		}},
 		{"Copy onto broken symlink", func(t *testing.T, root *Path) error {
 			src := writeTempFile(t, root, "src.txt", "")

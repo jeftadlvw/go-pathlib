@@ -491,3 +491,144 @@ func TestIoErrorsAreWrapped(t *testing.T) {
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 }
+
+// writeFuncs are all write functions with the behavior they share: writing to a
+// missing file creates it, and a symlink to a file is written through.
+var writeFuncs = map[string]func(*Path, string) (int, error){
+	"WriteBytes":  func(p *Path, s string) (int, error) { return WriteBytes(p, []byte(s)) },
+	"WriteString": WriteString,
+	"WriteBytesWithOptions": func(p *Path, s string) (int, error) {
+		return WriteBytesWithOptions(p, []byte(s), FileOptions{ExistOk: true})
+	},
+	"WriteStringWithOptions": func(p *Path, s string) (int, error) {
+		return WriteStringWithOptions(p, s, FileOptions{ExistOk: true})
+	},
+	"AppendBytes":  func(p *Path, s string) (int, error) { return AppendBytes(p, []byte(s)) },
+	"AppendString": AppendString,
+}
+
+func TestWrite_CreatesMissingFile(t *testing.T) {
+	for name, write := range writeFuncs {
+		t.Run(name, func(t *testing.T) {
+			file := setupTempDir(t).JoinStrings("new.txt")
+
+			n, err := write(file, "content")
+			require.NoError(t, err)
+			require.Equal(t, len("content"), n)
+
+			content, err := os.ReadFile(file.String())
+			require.NoError(t, err)
+			require.Equal(t, "content", string(content))
+
+			info, err := file.Stat()
+			require.NoError(t, err)
+			require.Equal(t, DefaultFileMode.Perm(), info.Mode().Perm())
+		})
+	}
+}
+
+func TestWrite_SymlinkToFileIsWrittenThrough(t *testing.T) {
+	for name, write := range writeFuncs {
+		t.Run(name, func(t *testing.T) {
+			root := setupTempDir(t)
+			target := writeTempFile(t, root, "target.txt", "")
+			link := createTempSymlinkAbs(t, root, "target.txt", "link")
+
+			_, err := write(link, "content")
+			require.NoError(t, err)
+			require.True(t, link.IsSymlink(), "the link is kept")
+
+			content, err := os.ReadFile(target.String())
+			require.NoError(t, err)
+			require.Equal(t, "content", string(content))
+		})
+	}
+}
+
+func TestWrite_NonFilePathIsRefused(t *testing.T) {
+	for name, write := range writeFuncs {
+		t.Run(name+"/directory", func(t *testing.T) {
+			dir := createTempDir(t, setupTempDir(t), "dir")
+			_, err := write(dir, "content")
+			require.ErrorIs(t, err, ErrNotFile)
+		})
+
+		t.Run(name+"/broken symlink", func(t *testing.T) {
+			root := setupTempDir(t)
+			link := createTempSymlinkAbs(t, root, "target.txt", "link")
+
+			_, err := write(link, "content")
+			require.ErrorIs(t, err, ErrNotFile)
+			requireLExists(t, false, root.JoinStrings("target.txt"), "the link target is not created")
+		})
+	}
+}
+
+func TestWriteBytesWithOptions(t *testing.T) {
+	t.Run("Mode applies to a created file", func(t *testing.T) {
+		file := setupTempDir(t).JoinStrings("new.txt")
+
+		_, err := WriteBytesWithOptions(file, []byte("content"), FileOptions{Mode: 0600})
+		require.NoError(t, err)
+
+		info, err := file.Stat()
+		require.NoError(t, err)
+		require.Equal(t, effectiveFileMode(0600).Perm(), info.Mode().Perm())
+	})
+
+	t.Run("Mode does not change an existing file", func(t *testing.T) {
+		file := writeTempFile(t, setupTempDir(t), "file.txt", "old")
+
+		_, err := WriteBytesWithOptions(file, []byte("new"), FileOptions{ExistOk: true, Mode: 0600})
+		require.NoError(t, err)
+
+		info, err := file.Stat()
+		require.NoError(t, err)
+		require.Equal(t, effectiveFileMode(0644).Perm(), info.Mode().Perm())
+	})
+
+	t.Run("ExistOk=true truncates an existing file", func(t *testing.T) {
+		file := writeTempFile(t, setupTempDir(t), "file.txt", "old content")
+
+		_, err := WriteStringWithOptions(file, "new", FileOptions{ExistOk: true})
+		require.NoError(t, err)
+
+		content, err := ReadFileToString(file)
+		require.NoError(t, err)
+		require.Equal(t, "new", content)
+	})
+
+	t.Run("ExistOk=false refuses an existing file", func(t *testing.T) {
+		file := writeTempFile(t, setupTempDir(t), "file.txt", "old content")
+
+		n, err := WriteStringWithOptions(file, "new", FileOptions{ExistOk: false})
+		require.ErrorIs(t, err, ErrFileExist)
+		require.Zero(t, n)
+
+		content, err := ReadFileToString(file)
+		require.NoError(t, err)
+		require.Equal(t, "old content", content, "the file is left untouched")
+	})
+
+	t.Run("ExistOk=false creates a missing file", func(t *testing.T) {
+		file := setupTempDir(t).JoinStrings("new.txt")
+
+		_, err := WriteStringWithOptions(file, "content", FileOptions{ExistOk: false})
+		require.NoError(t, err)
+
+		content, err := ReadFileToString(file)
+		require.NoError(t, err)
+		require.Equal(t, "content", content)
+	})
+}
+
+func TestAppendBytes_AppendsToExistingFile(t *testing.T) {
+	file := writeTempFile(t, setupTempDir(t), "file.txt", "old")
+
+	_, err := AppendString(file, "+new")
+	require.NoError(t, err)
+
+	content, err := ReadFileToString(file)
+	require.NoError(t, err)
+	require.Equal(t, "old+new", content)
+}

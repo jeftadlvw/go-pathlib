@@ -151,52 +151,112 @@ func ReadFileToString(path *Path) (string, error) {
 }
 
 /*
-WriteBytes writes raw byte data to the defined file.
+WriteBytes writes raw byte data to the defined file, like os.WriteFile.
 
-The file is not created. Preexisting content is truncated.
+A missing file is created with DefaultFileMode. Preexisting content is truncated.
+Parent directories must exist.
+
+This function uses WriteBytesWithOptions. The same behaviors apply.
 */
 func WriteBytes(path *Path, data []byte) (int, error) {
-	return writeBytes(path, data, "w")
+	return WriteBytesWithOptions(path, data, FileOptions{ExistOk: true})
 }
 
 /*
-WriteString writes a string to the defined file.
+WriteString writes a string to the defined file, like os.WriteFile.
 
-The file is not created. Preexisting content is truncated.
+A missing file is created with DefaultFileMode. Preexisting content is truncated.
+Parent directories must exist.
+
+This function uses WriteBytesWithOptions. The same behaviors apply.
 */
 func WriteString(path *Path, data string) (int, error) {
 	return WriteBytes(path, []byte(data))
 }
 
 /*
+WriteBytesWithOptions writes raw byte data to the defined file with given options.
+
+A missing file is created with FileOptions.Mode, which defaults to DefaultFileMode
+if it is 0. The mode only applies to a created file, an existing file keeps its
+permissions. Parent directories must exist.
+
+If FileOptions.ExistOk is true, preexisting content is truncated. Otherwise an
+existing file returns ErrFileExist and is left untouched, as in CreateFileWithOptions.
+
+A symlink to a file is written through. An existing path that is not a file returns
+ErrNotFile. This includes a broken symlink, whose target is never created.
+
+Returns the number of bytes written.
+*/
+func WriteBytesWithOptions(path *Path, data []byte, options FileOptions) (int, error) {
+	return writeBytes(path, data, os.O_TRUNC, options)
+}
+
+/*
+WriteStringWithOptions writes a string to the defined file with given options.
+
+This function uses WriteBytesWithOptions. The same behaviors apply.
+*/
+func WriteStringWithOptions(path *Path, data string, options FileOptions) (int, error) {
+	return WriteBytesWithOptions(path, []byte(data), options)
+}
+
+/*
 AppendBytes appends byte data to the defined file.
 
-The file is not created.
+A missing file is created with DefaultFileMode. Parent directories must exist.
+
+A symlink to a file is written through. An existing path that is not a file returns
+ErrNotFile. This includes a broken symlink, whose target is never created.
 */
 func AppendBytes(path *Path, data []byte) (int, error) {
-	return writeBytes(path, data, "wa")
+	return writeBytes(path, data, os.O_APPEND, FileOptions{ExistOk: true})
 }
 
 /*
 AppendString appends a string to the defined file.
 
-The file is not created.
+This function uses AppendBytes. The same behaviors apply.
 */
 func AppendString(path *Path, data string) (int, error) {
 	return AppendBytes(path, []byte(data))
 }
 
 /*
-writeBytes is an internal function that writes data to a file, opened in a specific mode.
+writeBytes is an internal function that writes data to a file, opened for writing
+with the additional flag (os.O_TRUNC or os.O_APPEND). The file is created if it
+does not exist, and options apply as described in WriteBytesWithOptions.
 */
-func writeBytes(path *Path, data []byte, mode string) (int, error) {
-	file, err := OpenFileWithOptions(path, OpenOptions{
-		CreateIfNotExists: false,
-		Mode:              mode,
-	})
-
+func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, error) {
+	// Check the path itself, so a broken symlink is not written through.
+	exists, err := lexists(path)
 	if err != nil {
 		return 0, err
+	}
+
+	if exists {
+		if !path.IsFile() {
+			return 0, pathErr(ErrNotFile, *path)
+		}
+		if !options.ExistOk {
+			return 0, pathErr(ErrFileExist, *path)
+		}
+	}
+
+	if options.Mode == 0 {
+		options.Mode = DefaultFileMode
+	}
+
+	flag |= os.O_WRONLY | os.O_CREATE
+	if !options.ExistOk {
+		// O_EXCL refuses a path created since the check, symlinks included.
+		flag |= os.O_EXCL
+	}
+
+	file, err := os.OpenFile(path.String(), flag, options.Mode)
+	if err != nil {
+		return 0, wrapErr(ErrOpen, err, *path)
 	}
 
 	n, err := file.Write(data)
