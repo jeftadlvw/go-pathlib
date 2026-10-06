@@ -246,11 +246,7 @@ func Move(src *Path, dst *Path) error {
 		return err
 	}
 
-	if src.IsDir() {
-		return RemoveAll(src)
-	} else {
-		return Remove(src)
-	}
+	return RemoveAll(src)
 }
 
 /*
@@ -288,14 +284,12 @@ func Remove(path *Path) error {
 }
 
 /*
-RemoveAll recursively removes the directory and all its entries at the specified path.
+RemoveAll removes the path at the specified path and, if it is a directory, all its
+entries, like os.RemoveAll.
 
-Nothing happens if the given path does not exist.
-
-Unlike os.RemoveAll, the path must be a directory. Any other existing path returns
-ErrNotDir and is left in place, and this includes a broken symlink. Use Remove for
-files and symlinks. If the path is a symlink to a directory, only the symlink is removed.
-If the path cannot be checked, e.g. for missing permissions, ErrStat is returned.
+Nothing happens if the given path does not exist. A symlink is removed itself, never
+its target, and this includes a symlink to a directory and a broken symlink. If the
+path cannot be checked, e.g. for missing permissions, ErrStat is returned.
 */
 func RemoveAll(path *Path) error {
 	exists, err := lexists(path)
@@ -304,10 +298,6 @@ func RemoveAll(path *Path) error {
 	}
 	if !exists {
 		return nil
-	}
-
-	if !path.IsDir() {
-		return pathErr(ErrNotDir, *path)
 	}
 
 	err = os.RemoveAll(path.String())

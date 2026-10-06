@@ -1,7 +1,6 @@
 package pathlib
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"slices"
@@ -482,14 +481,24 @@ func TestRemoveAll(t *testing.T) {
 			Error: false,
 		},
 		{
-			Name: "Remove a file (should error)",
+			Name: "Remove a file",
 			Input: Input{
 				RelPath: "a_file.txt",
 				Setup: func(t *testing.T, root *Path) {
 					writeTempFile(t, root, "a_file.txt", "")
 				},
 			},
-			Error: true,
+			Error: false,
+		},
+		{
+			Name: "Remove a broken symlink",
+			Input: Input{
+				RelPath: "broken_link",
+				Setup: func(t *testing.T, root *Path) {
+					createTempSymlinkAbs(t, root, "missing", "broken_link")
+				},
+			},
+			Error: false,
 		},
 	}
 
@@ -502,13 +511,9 @@ func TestRemoveAll(t *testing.T) {
 
 		if expectError {
 			require.Error(t, err)
-			// For RemoveAll, if it errors because it's not a directory, the path *should* still exist.
-			if errors.Is(err, ErrNotDir) {
-				require.True(t, targetPath.Exists())
-			}
 		} else {
 			require.NoError(t, err)
-			require.False(t, targetPath.Exists(), "Path should not exist after RemoveAll")
+			requireLExists(t, false, targetPath, "Path should not exist after RemoveAll")
 		}
 	})
 }
@@ -691,12 +696,14 @@ func TestRemove_UncheckablePathIsAnError(t *testing.T) {
 	require.ErrorIs(t, err, fs.ErrPermission)
 }
 
-func TestRemoveAll_BrokenSymlinkIsNotADirectory(t *testing.T) {
+func TestRemoveAll_SymlinkToFileRemovesOnlyLink(t *testing.T) {
 	root := setupTempDir(t)
-	link := createTempSymlinkAbs(t, root, "missing", "link")
+	target := writeTempFile(t, root, "target.txt", "content")
+	link := createTempSymlinkAbs(t, root, "target.txt", "link")
 
-	require.ErrorIs(t, RemoveAll(link), ErrNotDir)
-	requireLExists(t, true, link, "the link is left in place")
+	require.NoError(t, RemoveAll(link))
+	requireLExists(t, false, link, "the symlink is removed")
+	require.True(t, target.IsFile(), "the target is kept")
 }
 
 func TestCopy_BrokenSymlinks(t *testing.T) {
