@@ -230,12 +230,12 @@ func validateGlob(p *Path, pattern string, options GlobOptions) error {
 	}
 
 	if pattern == "" {
-		return pathErr(ErrEmptyPattern, *p)
+		return patternErr(ErrEmptyPattern, pattern, nil, *p)
 	}
 
 	err = validatePattern(pattern)
 	if err != nil {
-		return wrapErr(ErrBadPattern, err, *p)
+		return patternErr(ErrBadPattern, pattern, err, *p)
 	}
 
 	if options.FilterFunc == nil && !options.Filter.Valid() {

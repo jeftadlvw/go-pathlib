@@ -1,5 +1,5 @@
 // io_error_permission.go holds PermissionError, the cause of every failure
-// below ErrPermission.
+// below ErrInvalidPermission.
 
 package pathlib
 
@@ -12,7 +12,7 @@ import (
 )
 
 /*
-PermissionError is the cause of every failure below [ErrPermission]. It holds the
+PermissionError is the cause of every failure below [ErrInvalidPermission]. It holds the
 rejected permission or open-mode value and the paths the failure concerns.
 
 Read it with [errors.As]:

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func allKinds() []*PathlibError {
 		ErrNotFile, ErrNotDir, ErrNotSymlink, ErrNotEmptyDir, ErrCopyType, ErrTypeMismatch,
 		ErrAccess, ErrOpen, ErrReadDir, ErrStat, ErrReadSymlink, ErrResolve, ErrCreate, ErrRemove,
 		ErrCopy, ErrSetPermission, ErrWalk, ErrInvalidFilter,
-		ErrPermission, ErrPermissionRange, ErrUnsupportedMode, ErrRead, ErrWrite, ErrIsDir,
+		ErrInvalidPermission, ErrPermissionRange, ErrUnsupportedMode, ErrRead, ErrWrite, ErrIsDir,
 	}
 }
 
@@ -49,17 +50,17 @@ func TestPathlibError(t *testing.T) {
 		t.Parallel()
 
 		require.Equal(t, "PATHLIB", ErrPathlib.Code())
-		require.Equal(t, "PATHLIB_NOT_EXIST", ErrNotExist.Code())
-		require.Equal(t, "PATHLIB_EXIST_FILE", ErrFileExist.Code())
-		require.Equal(t, "PATHLIB_ACCESS_READ_DIR", ErrReadDir.Code())
-		require.Equal(t, "PATHLIB_PERMISSION_UNSUPPORTED_MODE", ErrUnsupportedMode.Code())
+		require.Equal(t, "PATHLIB.NOT_EXIST", ErrNotExist.Code())
+		require.Equal(t, "PATHLIB.EXIST.FILE", ErrFileExist.Code())
+		require.Equal(t, "PATHLIB.ACCESS.READ_DIR", ErrReadDir.Code())
+		require.Equal(t, "PATHLIB.INVALID_PERMISSION.UNSUPPORTED_MODE", ErrUnsupportedMode.Code())
 	})
 
 	t.Run("Error shows the message and the code", func(t *testing.T) {
 		t.Parallel()
 
 		require.Equal(t, "file already exists", ErrFileExist.Message())
-		require.Equal(t, "file already exists [PATHLIB_EXIST_FILE]", ErrFileExist.Error())
+		require.Equal(t, "file already exists [PATHLIB.EXIST.FILE]", ErrFileExist.Error())
 	})
 
 	t.Run("Malformed code panics", func(t *testing.T) {
@@ -121,33 +122,26 @@ func TestRaisedError(t *testing.T) {
 		require.Equal(t, []Path{p}, cause.Paths())
 	})
 
-	t.Run("Alias kind matches its standard sentinel in both directions", func(t *testing.T) {
+	t.Run("A condition of the cause does not match a kind", func(t *testing.T) {
 		t.Parallel()
 
-		alias := aliasError(ErrPathlib, fs.ErrNotExist, "ALIAS", "alias")
-		member := defineError(alias, "MEMBER", "member")
-
-		// An error of the alias kind, or of a member, matches the standard sentinel.
-		require.ErrorIs(t, pathErr(alias, p), fs.ErrNotExist)
-		require.ErrorIs(t, pathErr(member, p), fs.ErrNotExist)
-		require.ErrorIs(t, pathErr(member, p), alias)
-
-		// An error whose cause matches the standard sentinel matches the alias kind.
+		// The operating system reported the missing path, so the kind stays the
+		// one of the operation. The condition matches through the cause.
 		err := wrapErr(ErrOpen, fs.ErrNotExist, p)
-		require.ErrorIs(t, err, alias)
-		require.ErrorIs(t, wrapErr(ErrWalk, err, p), alias)
+		require.ErrorIs(t, err, fs.ErrNotExist)
+		require.NotErrorIs(t, err, ErrNotExist)
+		require.ErrorIs(t, wrapErr(ErrWalk, err, p), fs.ErrNotExist)
 
-		// A matching cause does not make an error a specific member of the group.
-		require.NotErrorIs(t, err, member)
-		require.NotErrorIs(t, wrapErr(ErrOpen, fs.ErrPermission, p), alias)
-		require.NotErrorIs(t, pathErr(ErrOpen, p), alias)
+		// A kind without a matching cause does not match a standard sentinel.
+		require.NotErrorIs(t, pathErr(ErrNotExist, p), fs.ErrNotExist)
+		require.ErrorIs(t, wrapErr(ErrNotExist, fs.ErrNotExist, p), fs.ErrNotExist)
 	})
 
-	t.Run("Plain kind does not match a sibling through the cause", func(t *testing.T) {
+	t.Run("A kind does not match a sibling through the cause", func(t *testing.T) {
 		t.Parallel()
 
-		// Only alias kinds are matched against the cause. A cause of kind ErrOpen
-		// is in the ErrAccess group, but that does not make the error an ErrReadDir.
+		// A cause of kind ErrOpen is in the ErrAccess group, but that does not
+		// make the error an ErrReadDir.
 		err := wrapErr(ErrWalk, pathErr(ErrOpen, p), p)
 		require.ErrorIs(t, err, ErrOpen)
 		require.ErrorIs(t, err, ErrAccess)
@@ -174,13 +168,15 @@ func TestRaisedError_Error(t *testing.T) {
 		Err    error
 		Expect string
 	}{
-		{"Kind without cause", raiseError(ErrNotDir, nil), "path is not a directory [PATHLIB_NOT_DIR]"},
-		{"One path", pathErr(ErrNotDir, p), "path is not a directory [PATHLIB_NOT_DIR]: " + p.String()},
-		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other [PATHLIB_REL_IMPOSSIBLE]: [" + p.String() + ", " + o.String() + "]"},
-		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path [PATHLIB_ACCESS_OPEN]: " + p.String() + ": permission denied"},
-		{"Cause without path", raiseError(ErrLookup, fs.ErrPermission), "could not look up directory [PATHLIB_LOOKUP]: permission denied"},
-		{"Permission value", permRangeErr(0o1000, p), "permission has bits outside PermissionBits [PATHLIB_PERMISSION_RANGE]: " + p.String() + " (perm 01000)"},
-		{"Empty mode", permModeErr("", p), "unsupported open mode [PATHLIB_PERMISSION_UNSUPPORTED_MODE]: " + p.String() + ` (mode "")`},
+		{"Kind without cause", raiseError(ErrNotDir, nil), "path is not a directory [PATHLIB.NOT_DIR]"},
+		{"One path", pathErr(ErrNotDir, p), "path is not a directory [PATHLIB.NOT_DIR]: " + p.String()},
+		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other [PATHLIB.REL_IMPOSSIBLE]: [" + p.String() + ", " + o.String() + "]"},
+		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path [PATHLIB.ACCESS.OPEN]: " + p.String() + ": permission denied"},
+		{"Cause without path", raiseError(ErrLookup, fs.ErrPermission), "could not look up directory [PATHLIB.LOOKUP]: permission denied"},
+		{"Permission value", permRangeErr(0o1000, p), "permission has bits outside PermissionBits [PATHLIB.INVALID_PERMISSION.RANGE]: " + p.String() + " (perm 01000)"},
+		{"Empty pattern", patternErr(ErrEmptyPattern, "", nil, p), "pattern may not be empty [PATHLIB.EMPTY_PATTERN]: " + p.String() + ` (pattern "")`},
+		{"Bad pattern", patternErr(ErrBadPattern, "a/[", path.ErrBadPattern, p), "malformed pattern [PATHLIB.BAD_PATTERN]: " + p.String() + ` (pattern "a/["): syntax error in pattern`},
+		{"Empty mode", permModeErr("", p), "unsupported open mode [PATHLIB.INVALID_PERMISSION.UNSUPPORTED_MODE]: " + p.String() + ` (mode "")`},
 	}
 
 	for _, c := range cases {
@@ -206,11 +202,11 @@ func TestRaisedError_MarshalJSON(t *testing.T) {
 		encoded, jsonErr := json.Marshal(err)
 		require.NoError(t, jsonErr)
 
-		expect := `{"kind":"error walking path","code":"PATHLIB_WALK","cause":{` +
+		expect := `{"kind":"error walking path","code":"PATHLIB.WALK","cause":{` +
 			`"message":` + jsonString(t, errors.Unwrap(err).Error()) + `,` +
 			`"details":{"paths":["a/b"],"cause":{` +
 			`"message":` + jsonString(t, inner.Error()) + `,` +
-			`"details":{"kind":"could not open path","code":"PATHLIB_ACCESS_OPEN","cause":{` +
+			`"details":{"kind":"could not open path","code":"PATHLIB.ACCESS.OPEN","cause":{` +
 			`"message":` + jsonString(t, errors.Unwrap(inner).Error()) + `,` +
 			`"details":{"paths":["a/b"],"cause":{"message":"permission denied"}}}}}}}}`
 		require.JSONEq(t, expect, string(encoded))
@@ -247,9 +243,9 @@ func TestRaisedError_LogValue(t *testing.T) {
 	logger.Info("", "err", err)
 
 	out := buf.String()
-	require.Contains(t, out, "err.kind=\"error walking path\" err.code=PATHLIB_WALK")
+	require.Contains(t, out, "err.kind=\"error walking path\" err.code=PATHLIB.WALK")
 	require.Contains(t, out, "err.cause.details.paths=[a/b]")
-	require.Contains(t, out, "err.cause.details.cause.details.code=PATHLIB_ACCESS_OPEN")
+	require.Contains(t, out, "err.cause.details.cause.details.code=PATHLIB.ACCESS.OPEN")
 	require.Contains(t, out, "err.cause.details.cause.details.cause.details.cause.message=\"permission denied\"")
 }
 
@@ -263,7 +259,7 @@ func TestPermissionError(t *testing.T) {
 
 		err := permModeErr("x", p)
 		require.ErrorIs(t, err, ErrUnsupportedMode)
-		require.ErrorIs(t, err, ErrPermission)
+		require.ErrorIs(t, err, ErrInvalidPermission)
 		require.ErrorIs(t, err, ErrPathlib)
 		require.ErrorAs(t, err, new(*PathlibError))
 		require.NotErrorAs(t, err, new(*PathError))

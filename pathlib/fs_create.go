@@ -15,7 +15,7 @@ This function uses CreateSymlink, and the errors of [CreateSymlink] apply.
 */
 func (p *Path) SymlinkTo(linkPath *Path) error {
 	if !p.Exists() {
-		return pathErr(ErrNotExist, *p)
+		return wrapErr(ErrNotExist, fs.ErrNotExist, *p)
 	}
 
 	return CreateSymlink(p, linkPath)
@@ -93,7 +93,7 @@ FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the
 and defaults to DefaultFileMode. Any bit outside PermissionBits returns ErrPermissionRange.
 
 A path that cannot be checked returns [ErrStat], and a failed creation returns
-[ErrCreate]. ErrCreate also matches [ErrNotExist] for a missing parent
+[ErrCreate]. ErrCreate also matches [fs.ErrNotExist] for a missing parent
 directory.
 
 Returns true if a new file was created, false otherwise.
@@ -153,8 +153,8 @@ DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the 
 and defaults to DefaultDirMode. Any bit outside PermissionBits returns ErrPermissionRange.
 
 A path that cannot be checked returns [ErrStat], and a failed creation returns
-[ErrCreate]. ErrCreate also matches [ErrNotExist] for a missing parent directory
-without DirOptions.CreateAll.
+[ErrCreate]. ErrCreate also matches [fs.ErrNotExist] for a missing parent
+directory without DirOptions.CreateAll.
 
 Returns true if a new directory was created, false otherwise.
 */
@@ -207,11 +207,11 @@ func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 		return err
 	}
 	if exists {
-		return pathErr(ErrExist, *symlinkPath)
+		return wrapErr(ErrExist, fs.ErrExist, *symlinkPath)
 	}
 
 	if !symlinkPath.Parent().Exists() {
-		return pathErr(ErrParentNotExist, *symlinkPath)
+		return wrapErr(ErrParentNotExist, fs.ErrNotExist, *symlinkPath)
 	}
 
 	err = os.Symlink(symlinkTarget.String(), symlinkPath.String())
@@ -246,7 +246,7 @@ func checkCreateTarget(path *Path, isKind func() bool, existOk bool, notKind, ex
 	}
 
 	if !existOk {
-		return true, pathErr(exist, *path)
+		return true, wrapErr(exist, fs.ErrExist, *path)
 	}
 
 	return true, nil

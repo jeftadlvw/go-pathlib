@@ -11,8 +11,9 @@ import (
 )
 
 /*
-PathError is the cause of every failure below [ErrPathlib], except for those
-below [ErrPermission] and [ErrLookup]. It holds the paths the failure concerns and
+PathError is the cause of every failure below [ErrPathlib], except for those of
+[ErrEmptyPattern], [ErrBadPattern], [ErrLookup], and the kinds below
+[ErrInvalidPermission]. It holds the paths the failure concerns and
 the error that caused it, such as an error of the os package.
 
 Read it with [errors.As]:
@@ -61,7 +62,7 @@ func (e *PathError) Unwrap() error {
 func (e *PathError) LogValue() slog.Value {
 	attrs := []slog.Attr{slog.Any("paths", posixPaths(e.paths))}
 	if e.err != nil {
-		attrs = append(attrs, slog.Attr{Key: "cause", Value: causeLogValue(e.err)})
+		attrs = append(attrs, slog.Attr{Key: causeKey, Value: causeLogValue(e.err)})
 	}
 
 	return slog.GroupValue(attrs...)

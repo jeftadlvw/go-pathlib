@@ -67,7 +67,7 @@ A missing path returns [ErrNotExist], and a failed resolution returns
 */
 func (p *Path) Resolve() (*Path, error) {
 	if !p.Exists() {
-		return nil, pathErr(ErrNotExist, *p)
+		return nil, wrapErr(ErrNotExist, fs.ErrNotExist, *p)
 	}
 
 	ep, err := filepath.EvalSymlinks(p.String())
@@ -83,7 +83,7 @@ Stat returns file info for this Path.
 
 This function uses os.Stat.
 
-A failure returns [ErrStat], which also matches [ErrNotExist] for a missing
+A failure returns [ErrStat], which also matches [fs.ErrNotExist] for a missing
 path.
 */
 func (p *Path) Stat() (os.FileInfo, error) {
@@ -100,7 +100,7 @@ Lstat returns file info for this Path, not following symbolic links.
 
 This function uses os.Lstat.
 
-A failure returns [ErrStat], which also matches [ErrNotExist] for a missing
+A failure returns [ErrStat], which also matches [fs.ErrNotExist] for a missing
 path.
 */
 func (p *Path) Lstat() (os.FileInfo, error) {

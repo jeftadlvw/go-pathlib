@@ -6,18 +6,18 @@ package pathlib
 // Kinds raised by the io group. Their cause is a *[PathError], unless a kind
 // names another.
 var (
-	// ErrPermission is the broad group for an invalid permission or open-mode
+	// ErrInvalidPermission is the broad group for an invalid permission or open-mode
 	// value passed to the library. Match it with [errors.Is] to catch both
 	// members below. Its cause is a *[PermissionError].
-	ErrPermission = defineError(ErrPathlib, "PERMISSION", "invalid file permission or mode")
+	ErrInvalidPermission = defineError(ErrPathlib, "INVALID_PERMISSION", "invalid file permission or mode")
 
 	// ErrPermissionRange is raised when a permission value has bits outside
-	// [PermissionBits]. It is a member of the ErrPermission group.
-	ErrPermissionRange = defineError(ErrPermission, "RANGE", "permission has bits outside PermissionBits")
+	// [PermissionBits]. It is a member of the ErrInvalidPermission group.
+	ErrPermissionRange = defineError(ErrInvalidPermission, "RANGE", "permission has bits outside PermissionBits")
 
 	// ErrUnsupportedMode is raised when an open-mode string is not supported.
-	// It is a member of the ErrPermission group.
-	ErrUnsupportedMode = defineError(ErrPermission, "UNSUPPORTED_MODE", "unsupported open mode")
+	// It is a member of the ErrInvalidPermission group.
+	ErrUnsupportedMode = defineError(ErrInvalidPermission, "UNSUPPORTED_MODE", "unsupported open mode")
 
 	// ErrRead is returned when a file could not be read.
 	ErrRead = defineError(ErrPathlib, "READ", "could not read file")

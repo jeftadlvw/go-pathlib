@@ -64,7 +64,7 @@ func TestPermissionBits_RefusesOtherBits(t *testing.T) {
 				p, existed, err := apply(t, root, mode)
 
 				require.ErrorIs(t, err, ErrPermissionRange)
-				require.ErrorIs(t, err, ErrPermission)
+				require.ErrorIs(t, err, ErrInvalidPermission)
 				var permErr *PermissionError
 				require.ErrorAs(t, err, &permErr)
 				require.Equal(t, mode, permErr.Perm())

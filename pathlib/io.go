@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"io/fs"
 	"os"
 )
 
@@ -56,7 +57,7 @@ in exactly this order. "a" can only be used if "w" is used.
 It's the caller's responsibility to close the returned os.File.
 
 An unsupported mode returns [ErrUnsupportedMode]. A file that cannot be opened
-returns [ErrOpen], which also matches [ErrNotExist] for a missing file. A
+returns [ErrOpen], which also matches [fs.ErrNotExist] for a missing file. A
 directory returns [ErrIsDir]. A failed creation returns [ErrCreate], and a
 failed check of the opened path returns [ErrStat].
 */
@@ -101,8 +102,8 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 /*
 ReadFile reads the passed file and returns read bytes.
 
-A file that cannot be read returns [ErrRead], which also matches [ErrNotExist]
-for a missing file.
+A file that cannot be read returns [ErrRead], which also matches
+[fs.ErrNotExist] for a missing file.
 */
 func ReadFile(path *Path) ([]byte, error) {
 	bytes, err := os.ReadFile(path.String())
@@ -162,7 +163,7 @@ A symlink to a file is written through. An existing path that is not a file retu
 ErrNotFile. This includes a broken symlink, whose target is never created.
 
 A path that cannot be checked returns [ErrStat]. A file that cannot be opened
-returns [ErrOpen], which also matches [ErrNotExist] for a missing parent
+returns [ErrOpen], which also matches [fs.ErrNotExist] for a missing parent
 directory. A failed write returns [ErrWrite].
 
 Returns the number of bytes written.
@@ -189,7 +190,7 @@ A symlink to a file is written through. An existing path that is not a file retu
 ErrNotFile. This includes a broken symlink, whose target is never created.
 
 A path that cannot be checked returns [ErrStat]. A file that cannot be opened
-returns [ErrOpen], which also matches [ErrNotExist] for a missing parent
+returns [ErrOpen], which also matches [fs.ErrNotExist] for a missing parent
 directory. A failed write returns [ErrWrite].
 */
 func AppendBytes(path *Path, data []byte) (int, error) {
@@ -342,7 +343,7 @@ func checkWritable(path *Path, existOk bool) error {
 	}
 
 	if !existOk {
-		return pathErr(ErrFileExist, *path)
+		return wrapErr(ErrFileExist, fs.ErrExist, *path)
 	}
 
 	return nil

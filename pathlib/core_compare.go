@@ -35,19 +35,20 @@ An empty pattern returns [ErrEmptyPattern], and a malformed pattern returns
 */
 func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error) {
 	if pattern == "" {
-		return false, pathErr(ErrEmptyPattern, *p)
+		return false, patternErr(ErrEmptyPattern, pattern, nil, *p)
 	}
 
+	matchedPattern := pattern
 	pathString := p.ToPosix()
 
 	if len(opts) > 0 && opts[0] == CaseInsensitive {
-		pattern = strings.ToLower(pattern)
+		matchedPattern = strings.ToLower(pattern)
 		pathString = strings.ToLower(pathString)
 	}
 
-	match, err := matchPattern(pattern, pathString)
+	match, err := matchPattern(matchedPattern, pathString)
 	if err != nil {
-		return false, wrapErr(ErrBadPattern, err, *p)
+		return false, patternErr(ErrBadPattern, pattern, err, *p)
 	}
 
 	return match, nil

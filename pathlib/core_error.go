@@ -12,6 +12,10 @@ import (
 	"strconv"
 )
 
+// causeKey is the key of the cause in the log description of a failure and of
+// a cause.
+const causeKey = "cause"
+
 // codePattern is the format of one name in a code, such as NOT_EXIST.
 var codePattern = regexp.MustCompile(`^[A-Z]+(_[A-Z]+)*$`)
 
@@ -22,16 +26,15 @@ and kinds form a tree rooted at [ErrPathlib].
 Every error the library returns has a kind. [errors.Is] matches a kind and every
 one of its ancestors, so errors.Is(err, ErrPathlib) catches every error of the
 library. [errors.As] with a *PathlibError target returns the kind of a failure.
-The data of a failure, such as its paths, lives in its cause. See [PathError]
-and [PermissionError].
+The data of a failure, such as its paths, lives in its cause. See [PathError],
+[PatternError], and [PermissionError].
 
-Each kind has a code, such as "PATHLIB_EXIST_FILE", that stays stable when its
+A kind says what the library did or checked. What the operating system reported
+stays in the cause, so errors.Is(err, fs.ErrNotExist) matches every missing
+path, whether the operating system or the library found it.
+
+Each kind has a code, such as "PATHLIB.EXIST.FILE", that stays stable when its
 message changes. Logs, metrics, and alerts key on it.
-
-A kind may alias a standard library sentinel, such as [fs.ErrNotExist].
-errors.Is then matches in both directions. A failure of the kind, or of a kind
-below it, matches the sentinel. A failure whose cause matches the sentinel
-matches the kind.
 
 Kinds are package-level values and are immutable.
 */
@@ -40,10 +43,7 @@ type PathlibError struct {
 	// parent is the group the kind belongs to, or nil for the root.
 	parent *PathlibError
 
-	// std is the standard library sentinel the kind aliases, or nil.
-	std error
-
-	// code joins the names of the kind and its ancestors with underscores.
+	// code joins the names of the kind and its ancestors with dots.
 	code string
 
 	// message describes the failure.
@@ -67,7 +67,7 @@ type causeJSON struct {
 }
 
 // defineError declares a kind below parent. The code of the kind is the code of
-// parent and code, joined by an underscore.
+// parent and code, joined by a dot.
 func defineError(parent *PathlibError, code, message string) *PathlibError {
 	// Kinds are defined during package initialization, so a malformed code
 	// panics before any caller runs.
@@ -77,18 +77,10 @@ func defineError(parent *PathlibError, code, message string) *PathlibError {
 
 	definedCode := code
 	if parent != nil {
-		definedCode = parent.code + "_" + definedCode
+		definedCode = parent.code + "." + definedCode
 	}
 
 	return &PathlibError{parent: parent, code: definedCode, message: message}
-}
-
-// aliasError is defineError for a kind that aliases the standard library
-// sentinel std.
-func aliasError(parent *PathlibError, std error, code, message string) *PathlibError {
-	kind := defineError(parent, code, message)
-	kind.std = std
-	return kind
 }
 
 // raiseError returns a failure of kind caused by cause. It is the only way the
@@ -97,7 +89,7 @@ func raiseError(kind *PathlibError, cause error) error {
 	return &raisedError{kind: kind, cause: cause}
 }
 
-// Code returns the stable identifier of the kind, such as "PATHLIB_EXIST_FILE".
+// Code returns the stable identifier of the kind, such as "PATHLIB.EXIST.FILE".
 func (k *PathlibError) Code() string {
 	return k.code
 }
@@ -122,12 +114,6 @@ func (k *PathlibError) Unwrap() error {
 	return k.parent
 }
 
-// Is reports whether target matches the standard library sentinel the kind
-// aliases.
-func (k *PathlibError) Is(target error) bool {
-	return k.std != nil && errors.Is(k.std, target)
-}
-
 // Error returns the text of the kind followed by the text of the cause.
 func (e *raisedError) Error() string {
 	if e.cause == nil {
@@ -142,16 +128,9 @@ func (e *raisedError) Unwrap() error {
 	return e.cause
 }
 
-// Is matches the kind and its ancestors. A kind that aliases a standard library
-// sentinel also matches when the cause matches that sentinel, so an error the
-// operating system reports as fs.ErrNotExist matches ErrNotExist.
+// Is matches the kind and its ancestors.
 func (e *raisedError) Is(target error) bool {
-	if errors.Is(e.kind, target) {
-		return true
-	}
-
-	kind, ok := target.(*PathlibError)
-	return ok && kind.std != nil && e.cause != nil && errors.Is(e.cause, kind.std)
+	return errors.Is(e.kind, target)
 }
 
 // As reaches the kind and its ancestors.
@@ -166,7 +145,7 @@ func (e *raisedError) LogValue() slog.Value {
 		slog.String("code", e.kind.code),
 	}
 	if e.cause != nil {
-		attrs = append(attrs, slog.Attr{Key: "cause", Value: causeLogValue(e.cause)})
+		attrs = append(attrs, slog.Attr{Key: causeKey, Value: causeLogValue(e.cause)})
 	}
 
 	return slog.GroupValue(attrs...)

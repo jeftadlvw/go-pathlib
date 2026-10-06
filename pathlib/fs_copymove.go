@@ -37,12 +37,12 @@ func Copy(src *Path, destination *Path) error {
 		return err
 	}
 	if !srcExists {
-		return pathErr(ErrNotExist, *src)
+		return wrapErr(ErrNotExist, fs.ErrNotExist, *src)
 	}
 
 	// Ensure parent directories exist
 	if !destination.Parent().Exists() {
-		return pathErr(ErrParentNotExist, *destination)
+		return wrapErr(ErrParentNotExist, fs.ErrNotExist, *destination)
 	}
 
 	switch {
@@ -77,7 +77,7 @@ func Move(src *Path, dst *Path) error {
 		return err
 	}
 	if !srcExists {
-		return pathErr(ErrNotExist, *src)
+		return wrapErr(ErrNotExist, fs.ErrNotExist, *src)
 	}
 
 	// Destination path may not exist, except if source is a directory
@@ -88,7 +88,7 @@ func Move(src *Path, dst *Path) error {
 			return err
 		}
 		if dstExists {
-			return pathErr(ErrExist, *dst)
+			return wrapErr(ErrExist, fs.ErrExist, *dst)
 		}
 	}
 
@@ -329,7 +329,7 @@ func prepareCopyDirDestination(src *Path, dst *Path) error {
 	case dst.IsDir():
 		return requireEmptyDir(dst)
 	default:
-		return pathErr(ErrExist, *dst)
+		return wrapErr(ErrExist, fs.ErrExist, *dst)
 	}
 }
 
@@ -376,10 +376,10 @@ func requireCopyFileDestinationFree(source *Path, destination *Path) error {
 
 	switch {
 	case destination.IsFile():
-		return pathErr(ErrFileExist, *destination)
+		return wrapErr(ErrFileExist, fs.ErrExist, *destination)
 	case destination.IsDir():
 		return pathErr(ErrTypeMismatch, *source, *destination)
 	default:
-		return pathErr(ErrExist, *destination)
+		return wrapErr(ErrExist, fs.ErrExist, *destination)
 	}
 }

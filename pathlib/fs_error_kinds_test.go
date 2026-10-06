@@ -28,31 +28,10 @@ func runErrCases(t *testing.T, cases []errCase, check func(t *testing.T, err err
 	}
 }
 
-func TestErrNotExist_MatchesBothSentinels(t *testing.T) {
+func TestErrNotExist_LibraryChecks(t *testing.T) {
 	t.Parallel()
 
 	cases := []errCase{
-		// Raised by the operating system and wrapped with an operation kind.
-		{"ReadFile", func(_ *testing.T, root *Path) error {
-			_, err := ReadFile(root.JoinStrings("missing"))
-			return err
-		}},
-		{"OpenFileWithOptions", func(_ *testing.T, root *Path) error {
-			_, err := OpenFileWithOptions(root.JoinStrings("missing"), OpenOptions{Mode: "r"})
-			return err
-		}},
-		{"Stat", func(_ *testing.T, root *Path) error {
-			_, err := root.JoinStrings("missing").Stat()
-			return err
-		}},
-		{"SetPermission", func(_ *testing.T, root *Path) error {
-			return SetPermission(root.JoinStrings("missing"), 0644)
-		}},
-		{"MkDirWithOptions with missing parent", func(_ *testing.T, root *Path) error {
-			_, err := MkDirWithOptions(root.JoinStrings("a", "b"), DirOptions{})
-			return err
-		}},
-
 		// Raised by the library's own checks.
 		{"Copy with missing source", func(_ *testing.T, root *Path) error {
 			return Copy(root.JoinStrings("missing"), root.JoinStrings("dst"))
@@ -114,6 +93,43 @@ func TestErrNotExist_MatchesBothSentinels(t *testing.T) {
 			_, _, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
 			return err
 		}},
+	}
+
+	runErrCases(t, cases, func(t *testing.T, err error) {
+		t.Helper()
+
+		require.ErrorIs(t, err, ErrNotExist)
+		require.ErrorIs(t, err, fs.ErrNotExist)
+		require.NotErrorIs(t, err, ErrExist)
+		require.NotErrorIs(t, err, fs.ErrExist)
+		require.NotErrorIs(t, err, ErrNotDir)
+	})
+}
+
+func TestErrNotExist_OperatingSystem(t *testing.T) {
+	t.Parallel()
+
+	// Raised by the operating system and wrapped with the kind of the operation.
+	cases := []errCase{
+		{"ReadFile", func(_ *testing.T, root *Path) error {
+			_, err := ReadFile(root.JoinStrings("missing"))
+			return err
+		}},
+		{"OpenFileWithOptions", func(_ *testing.T, root *Path) error {
+			_, err := OpenFileWithOptions(root.JoinStrings("missing"), OpenOptions{Mode: "r"})
+			return err
+		}},
+		{"Stat", func(_ *testing.T, root *Path) error {
+			_, err := root.JoinStrings("missing").Stat()
+			return err
+		}},
+		{"SetPermission", func(_ *testing.T, root *Path) error {
+			return SetPermission(root.JoinStrings("missing"), 0644)
+		}},
+		{"MkDirWithOptions with missing parent", func(_ *testing.T, root *Path) error {
+			_, err := MkDirWithOptions(root.JoinStrings("a", "b"), DirOptions{})
+			return err
+		}},
 
 		// Missing parent directories of written files.
 		{"WriteBytes with missing parent", func(_ *testing.T, root *Path) error {
@@ -129,15 +145,13 @@ func TestErrNotExist_MatchesBothSentinels(t *testing.T) {
 	runErrCases(t, cases, func(t *testing.T, err error) {
 		t.Helper()
 
-		require.ErrorIs(t, err, ErrNotExist)
 		require.ErrorIs(t, err, fs.ErrNotExist)
-		require.NotErrorIs(t, err, ErrExist)
+		require.NotErrorIs(t, err, ErrNotExist, "the kind is the one of the operation")
 		require.NotErrorIs(t, err, fs.ErrExist)
-		require.NotErrorIs(t, err, ErrNotDir)
 	})
 }
 
-func TestErrExist_MatchesBothSentinels(t *testing.T) {
+func TestErrExist_LibraryChecks(t *testing.T) {
 	t.Parallel()
 
 	cases := []errCase{
@@ -195,8 +209,7 @@ func TestErrExist_MatchesBothSentinels(t *testing.T) {
 		}},
 
 		// An exist error raised by the operating system needs a race against the
-		// library's own checks, so it is not reproducible here. The alias mechanism
-		// that matches it is covered by TestRaisedError.
+		// library's own checks, so it is not reproducible here.
 	}
 
 	runErrCases(t, cases, func(t *testing.T, err error) {
