@@ -64,6 +64,7 @@ type WalkRFunc func(p *Path, localDirError error) error
 /*
 Walk walks this directory and calls walkFunc for every entry (files, directories, etc.).
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
+A missing path returns ErrNotExist, an existing non-directory returns ErrNotDir.
 
 Entries are visited in lexical order by name, making the traversal deterministic.
 
@@ -79,8 +80,9 @@ soon as ctx is done and returns ctx.Err() wrapped as ErrWalk, with cancellation
 checked before each entry.
 */
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
-	if !p.IsDir() {
-		return pathErr(ErrNotDir, *p)
+	err := requireDir(p)
+	if err != nil {
+		return err
 	}
 
 	// Open and read are kept as separate steps so failures can be reported with
@@ -124,6 +126,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 /*
 WalkR walks this directory recursively and calls walkFunc for every entry.
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
+A missing path returns ErrNotExist, an existing non-directory returns ErrNotDir.
 
 Symlinks inside the tree are not followed. A symlink to a directory is passed to
 walkFunc as a single entry, and its contents are not visited. This matches
@@ -147,7 +150,12 @@ as soon as ctx is done and returns ctx.Err() wrapped as ErrWalk, with cancellati
 checked before each directory and each entry.
 */
 func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
-	err := walkR(ctx, p, nil, walkFunc)
+	err := requireDir(p)
+	if err != nil {
+		return err
+	}
+
+	err = walkR(ctx, p, nil, walkFunc)
 
 	// SkipAll is a successful early termination, not a failure.
 	if errors.Is(err, SkipAll) {
@@ -195,9 +203,9 @@ func walkR(ctx context.Context, initialDir *Path, currentDir *Path, walkFunc Wal
 		return wrapErr(ErrWalk, err, *currentDir)
 	}
 
-	if !currentDir.IsDir() {
-		return pathErr(ErrNotDir, *currentDir)
-	}
+	// The root is checked by WalkRContext, and subdirectories come from directory
+	// entries. A subdirectory that vanished or changed since it was read fails to
+	// open or read below and is handed to walkFunc like any other directory error.
 
 	// Open and read are kept as separate steps so an open failure and a read
 	// failure can be reported with distinct sentinels (ErrOpen vs ErrReadDir);

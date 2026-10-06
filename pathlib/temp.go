@@ -39,7 +39,8 @@ of a temporary path.
 */
 type TempPathOptions struct {
 	/*
-		BaseDir is the base directory for the temporary path.
+		BaseDir is the base directory for the temporary path. It must be an existing directory.
+		A missing path returns ErrNotExist, an existing non-directory returns ErrNotDir.
 
 		If set to NewPath(""), the current working directory is used, because NewPath("") translates to NewPath(".").
 		Keep nil for default os temp directory.
@@ -60,8 +61,9 @@ func (t *TempPathOptions) toUsableValues() (string, string, error) {
 	tempBaseDir := ""
 
 	if t.BaseDir != nil {
-		if !t.BaseDir.IsDir() {
-			return "", "", pathErr(ErrNotDir, *t.BaseDir)
+		err := requireDir(t.BaseDir)
+		if err != nil {
+			return "", "", err
 		}
 
 		tempBaseDir = t.BaseDir.String()

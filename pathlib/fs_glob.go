@@ -31,7 +31,8 @@ func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error)
 GlobWithOptions returns all entries matching the given pattern within this Path's Posix representation.
 If an error is returned, all entries until that error are returned.
 
-This Path must be a directory.
+This Path must be a directory. A missing path returns ErrNotExist, an existing
+non-directory returns ErrNotDir.
 
 The tree is walked with WalkR, so symlinks to directories inside the tree are matched
 as entries, but their contents are not visited. GlobOptions.Filter judges a symlink by
@@ -48,15 +49,16 @@ ctx. The entries collected before cancellation are returned alongside ctx.Err(),
 wrapped as ErrWalk.
 */
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
-	if !p.IsDir() {
-		return nil, pathErr(ErrNotDir, *p)
+	err := requireDir(p)
+	if err != nil {
+		return nil, err
 	}
 
 	if pattern == "" {
 		return nil, pathErr(ErrEmptyPattern, *p)
 	}
 
-	err := validatePattern(pattern)
+	err = validatePattern(pattern)
 	if err != nil {
 		return nil, wrapErr(ErrBadPattern, err, *p)
 	}

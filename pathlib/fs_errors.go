@@ -2,6 +2,7 @@ package pathlib
 
 import (
 	"errors"
+	"io/fs"
 )
 
 // Error sentinels raised by the fs group (filesystem operations). They are
@@ -9,7 +10,12 @@ import (
 var (
 	// ErrNotExist is the broad group for "a required path does not exist".
 	// Match it with errors.Is to catch every not-exist case below.
-	ErrNotExist = errors.New("path does not exist")
+	//
+	// It aliases fs.ErrNotExist (and thus os.ErrNotExist), so both sentinels catch
+	// every not-exist error, whether raised by this library's own checks or by the
+	// operating system (e.g. ErrRead for a missing file). os.IsNotExist does not
+	// unwrap errors and never matches.
+	ErrNotExist = aliasKind(fs.ErrNotExist, "path does not exist")
 
 	// ErrParentNotExist is raised when a required parent directory is missing.
 	// It is a member of the ErrNotExist group.
@@ -17,7 +23,11 @@ var (
 
 	// ErrExist is the broad group for "a path already exists and would be
 	// overwritten". Match it with errors.Is to catch every exist case below.
-	ErrExist = errors.New("path already exists")
+	//
+	// It aliases fs.ErrExist (and thus os.ErrExist), so both sentinels catch every
+	// exist error, whether raised by this library's own checks or by the operating
+	// system. os.IsExist does not unwrap errors and never matches.
+	ErrExist = aliasKind(fs.ErrExist, "path already exists")
 
 	// ErrFileExist is raised when the conflicting path is a file.
 	// It is a member of the ErrExist group.

@@ -1,6 +1,8 @@
 package pathlib
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -138,6 +140,28 @@ func pathCheck(p *Path) int {
 	}
 
 	return pathCheckFile
+}
+
+/*
+requireDir returns nil if this Path is an existing directory. Symlinks are followed.
+
+A missing path returns ErrNotExist and an existing non-directory returns ErrNotDir.
+Any other stat failure returns ErrStat. The os cause is wrapped where there is one.
+*/
+func requireDir(p *Path) error {
+	info, err := os.Stat(p.String())
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return wrapErr(ErrNotExist, err, *p)
+		}
+		return wrapErr(ErrStat, err, *p)
+	}
+
+	if !info.IsDir() {
+		return pathErr(ErrNotDir, *p)
+	}
+
+	return nil
 }
 
 /*

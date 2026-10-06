@@ -16,8 +16,7 @@ A PathlibError is immutable. Its fields are read through Kind, Paths, and Unwrap
 
 The base type lives in the core group because every other group depends on it,
 so each bundle stays self-contained. Domain sentinels are declared in the
-*_errors.go file of the group that raises them (core_errors.go, fs_errors.go,
-io_errors.go, temp_errors.go).
+*_errors.go file of the group that raises them.
 */
 type PathlibError struct {
 	// kind categorizes the error. It is always set and is matched by the Is
@@ -25,7 +24,7 @@ type PathlibError struct {
 	kind error
 
 	// paths are the paths this error concerns, in an order documented per
-	// operation (e.g. Copy reports [source, destination]). May be empty.
+	// operation (e.g. RelativeTo reports [this, other]). May be empty.
 	paths []Path
 
 	// err is the underlying cause (e.g. a wrapped os error), or nil.
@@ -38,7 +37,7 @@ func (e *PathlibError) Kind() error {
 }
 
 // Paths returns a copy of the paths this error concerns, in an order documented
-// per operation (e.g. Copy reports [source, destination]). It may be empty.
+// per operation (e.g. RelativeTo reports [this, other]). It may be empty.
 func (e *PathlibError) Paths() []Path {
 	return slices.Clone(e.paths)
 }
@@ -84,9 +83,15 @@ func (e *PathlibError) Unwrap() error {
 }
 
 // Is reports whether target matches the kind, so errors.Is finds kinds and
-// their groups as well as causes.
+// their groups as well as causes. An alias kind also matches when the cause
+// matches the standard library sentinel it aliases.
 func (e *PathlibError) Is(target error) bool {
-	return e.kind != nil && errors.Is(e.kind, target)
+	if e.kind != nil && errors.Is(e.kind, target) {
+		return true
+	}
+
+	k, ok := target.(*kindError)
+	return ok && k.alias && e.err != nil && errors.Is(e.err, k.parent)
 }
 
 // pathErr builds a categorized error over zero or more paths.
@@ -101,8 +106,8 @@ func wrapErr(kind, cause error, paths ...Path) *PathlibError {
 
 /*
 kindError is a sentinel that belongs to a broader parent sentinel. It lets a
-specific error kind (e.g. ErrFileExist) be matched either precisely or by its
-group (e.g. ErrExist), because errors.Is walks the parent through Unwrap.
+specific error kind be matched either precisely or by its group, because
+errors.Is walks the parent through Unwrap.
 
 Sentinels remain lightweight category markers. The per-call paths and wrapped
 cause live on the *PathlibError instance, not on the shared sentinel value.
@@ -110,6 +115,10 @@ cause live on the *PathlibError instance, not on the shared sentinel value.
 type kindError struct {
 	msg    string
 	parent error
+
+	// alias marks the kind as an alias of its parent, a standard library sentinel.
+	// PathlibError.Is then also matches the kind against a cause matching the parent.
+	alias bool
 }
 
 func (e *kindError) Error() string { return e.msg }
@@ -119,6 +128,13 @@ func (e *kindError) Unwrap() error { return e.parent }
 // that errors.Is(subKind(parent, ...), parent) reports true.
 func subKind(parent error, msg string) error {
 	return &kindError{msg: msg, parent: parent}
+}
+
+// aliasKind declares a sentinel that aliases a standard library sentinel, so
+// that errors.Is matches in both directions: an error of this kind matches std,
+// and an error whose cause matches std (e.g. a wrapped os error) matches this kind.
+func aliasKind(std error, msg string) error {
+	return &kindError{msg: msg, parent: std, alias: true}
 }
 
 // Error sentinels raised by the core group (lexical path operations).

@@ -28,6 +28,35 @@ func TestPathlibError_Chain(t *testing.T) {
 		require.NotErrorIs(t, err, ErrReadDir)
 	})
 
+	t.Run("Alias kind matches its standard sentinel in both directions", func(t *testing.T) {
+		alias := aliasKind(fs.ErrNotExist, "alias")
+		member := subKind(alias, "member")
+
+		// An error of the alias kind, or of a member, matches the standard sentinel.
+		require.ErrorIs(t, pathErr(alias, p), fs.ErrNotExist)
+		require.ErrorIs(t, pathErr(member, p), fs.ErrNotExist)
+		require.ErrorIs(t, pathErr(member, p), alias)
+
+		// An error whose cause matches the standard sentinel matches the alias kind.
+		err := wrapErr(ErrOpen, fs.ErrNotExist, p)
+		require.ErrorIs(t, err, alias)
+		require.ErrorIs(t, wrapErr(ErrWalk, err, p), alias)
+
+		// A matching cause does not make an error a specific member of the group.
+		require.NotErrorIs(t, err, member)
+		require.NotErrorIs(t, wrapErr(ErrOpen, fs.ErrPermission, p), alias)
+		require.NotErrorIs(t, pathErr(ErrOpen, p), alias)
+	})
+
+	t.Run("Plain subkind does not match a sibling through the cause", func(t *testing.T) {
+		// Only alias kinds are matched against the cause. A cause of kind ErrOpen
+		// is in the ErrAccess group, but that does not make the error an ErrReadDir.
+		err := wrapErr(ErrWalk, pathErr(ErrOpen, p), p)
+		require.ErrorIs(t, err, ErrOpen)
+		require.ErrorIs(t, err, ErrAccess)
+		require.NotErrorIs(t, err, ErrReadDir)
+	})
+
 	t.Run("Kind and Paths return the fields", func(t *testing.T) {
 		o := *NewPath("c")
 		err := pathErr(ErrRelImpossible, p, o)
