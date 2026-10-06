@@ -7,6 +7,9 @@ order:
 [Google Go Style Guide](https://google.github.io/styleguide/go/),
 [Effective Go](https://go.dev/doc/effective_go).
 
+`CONTRIBUTING.md` describes the model of the project, including its error
+model. Where it is more specific than these conventions, it applies.
+
 These conventions take precedence over patterns found in existing code.
 
 ## 1. Prose

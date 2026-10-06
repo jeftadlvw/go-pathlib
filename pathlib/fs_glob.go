@@ -33,8 +33,12 @@ func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error)
 GlobWithOptions returns all entries matching the given pattern within this Path's Posix representation.
 If an error is returned, all entries until that error are returned.
 
-This Path must be a directory. A missing path returns ErrNotExist, an existing
-non-directory returns ErrNotDir.
+This Path must be a directory. A missing path returns [ErrNotExist], and an
+existing non-directory returns [ErrNotDir]. A path that cannot be checked
+returns [ErrStat]. An empty pattern returns [ErrEmptyPattern], a malformed
+pattern returns [ErrBadPattern], and an unknown GlobOptions.Filter returns
+[ErrInvalidFilter]. A directory that cannot be opened or read returns a kind
+below [ErrAccess], unless GlobOptions.SkipOnDirError skips it.
 
 The tree is walked with WalkR, so symlinks to directories inside the tree are matched
 as entries, but their contents are not visited. GlobOptions.Filter judges a symlink by
@@ -176,7 +180,8 @@ func patternMaxDepth(pattern string) int {
 HasGlobMatchE returns whether the passed pattern exists within this Path's directory.
 
 This function uses GlobWithOptions with GlobOptions{Limit: 1}, so the pattern
-syntax (including "**") is the same and matching is case-sensitive.
+syntax (including "**") is the same and matching is case-sensitive. The errors
+of [Path.GlobWithOptions] apply.
 */
 func (p *Path) HasGlobMatchE(pattern string) (bool, error) {
 	matches, err := p.GlobWithOptions(pattern, GlobOptions{Limit: 1})
@@ -208,7 +213,8 @@ If an error occurs, no entries are returned.
 
 Use Walk or WalkR for more fine-grained control.
 
-This function uses GlobWithOptions.
+This function uses GlobWithOptions, and the errors of [Path.GlobWithOptions]
+apply.
 */
 func (p *Path) List(options ListOptions) ([]*Path, error) {
 	// Use the extensive and configurable globbing algorithm of GlobWithOptions.

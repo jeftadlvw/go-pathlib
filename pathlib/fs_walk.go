@@ -71,9 +71,9 @@ Walk walks this directory and calls walkFunc for every entry (files, directories
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
 
 A missing path returns [ErrNotExist], and an existing non-directory returns
-[ErrNotDir]. A path that cannot be checked returns [ErrStat], and a directory that
-cannot be opened or read returns a kind below [ErrAccess]. An error of walkFunc is
-returned as the cause of [ErrWalk].
+[ErrNotDir]. A path that cannot be checked returns [ErrStat], and a directory
+that cannot be opened or read returns a kind below [ErrAccess]. An error of
+walkFunc is returned as the cause of [ErrWalk].
 
 Entries are visited in lexical order by name, making the traversal deterministic.
 
@@ -137,9 +137,9 @@ WalkR walks this directory recursively and calls walkFunc for every entry.
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
 
 A missing path returns [ErrNotExist], and an existing non-directory returns
-[ErrNotDir]. A path that cannot be checked returns [ErrStat]. An error of walkFunc
-is returned as the cause of [ErrWalk], and an unchanged localDirError, a kind below
-[ErrAccess], is returned as is.
+[ErrNotDir]. A path that cannot be checked returns [ErrStat]. An error of
+walkFunc is returned as the cause of [ErrWalk], and an unchanged localDirError,
+a kind below [ErrAccess], is returned as is.
 
 Symlinks inside the tree are not followed. A symlink to a directory is passed to
 walkFunc as a single entry, and its contents are not visited. This matches

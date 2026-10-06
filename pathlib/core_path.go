@@ -105,6 +105,9 @@ func NewPathFromWindows(path string) *Path {
 NewCwd returns a new Path instance pointing to the application's current working directory.
 
 This function wraps os.Getwd.
+
+If the directory cannot be determined, [ErrLookup] is returned with the error
+of the os package as its cause.
 */
 func NewCwd() (*Path, error) {
 	cwdPath, err := os.Getwd()
@@ -119,6 +122,9 @@ func NewCwd() (*Path, error) {
 NewHome returns a new Path instance pointing to the user's home directory.
 
 This function wraps os.UserHomeDir.
+
+If the directory cannot be determined, [ErrLookup] is returned with the error
+of the os package as its cause.
 */
 func NewHome() (*Path, error) {
 	homePath, err := os.UserHomeDir()
@@ -133,6 +139,9 @@ func NewHome() (*Path, error) {
 NewConfig returns a new Path instance pointing to the user's configuration directory.
 
 This function wraps os.UserConfigDir.
+
+If the directory cannot be determined, [ErrLookup] is returned with the error
+of the os package as its cause.
 */
 func NewConfig() (*Path, error) {
 	homePath, err := os.UserConfigDir()
@@ -147,6 +156,9 @@ func NewConfig() (*Path, error) {
 NewCache returns a new Path instance pointing to the user's cache directory.
 
 This function wraps os.UserCacheDir.
+
+If the directory cannot be determined, [ErrLookup] is returned with the error
+of the os package as its cause.
 */
 func NewCache() (*Path, error) {
 	homePath, err := os.UserCacheDir()

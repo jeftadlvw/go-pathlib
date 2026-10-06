@@ -13,12 +13,13 @@ var (
 	// *[PathError], unless a kind below it names another.
 	ErrPathlib = defineError(nil, "PATHLIB", "pathlib error")
 
-	// ErrEmptyPattern is returned when a match pattern is empty. The pattern is
-	// the only path.
+	// ErrEmptyPattern is returned when a match pattern is empty. The path is the
+	// matched path, or the directory a glob starts in.
 	ErrEmptyPattern = defineError(ErrPathlib, "EMPTY_PATTERN", "pattern may not be empty")
 
-	// ErrBadPattern is returned when a match pattern is malformed. The pattern is
-	// the only path, and the underlying error is [path.ErrBadPattern].
+	// ErrBadPattern is returned when a match pattern is malformed. The path is the
+	// matched path, or the directory a glob starts in. The underlying error is
+	// [path.ErrBadPattern].
 	ErrBadPattern = defineError(ErrPathlib, "BAD_PATTERN", "malformed pattern")
 
 	// ErrAnchorMismatch is returned when one path is Windows-anchored and the

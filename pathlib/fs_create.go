@@ -9,9 +9,9 @@ import (
 /*
 SymlinkTo creates a symbolic link at the source path pointing to the target path.
 
-This path must exist.
+This path must exist, else [ErrNotExist] is returned.
 
-This function uses CreateSymlink.
+This function uses CreateSymlink, and the errors of [CreateSymlink] apply.
 */
 func (p *Path) SymlinkTo(linkPath *Path) error {
 	if !p.Exists() {
@@ -24,7 +24,8 @@ func (p *Path) SymlinkTo(linkPath *Path) error {
 /*
 ReadSymlinkTarget reads the target path for this Path.
 
-This Path must be a symlink.
+This Path must be a symlink, else [ErrNotSymlink] is returned. A target that
+cannot be read returns [ErrReadSymlink].
 */
 func (p *Path) ReadSymlinkTarget() (*Path, error) {
 	if !p.IsSymlink() {
@@ -42,7 +43,10 @@ func (p *Path) ReadSymlinkTarget() (*Path, error) {
 /*
 SetPermission sets the permission mode for the specified path.
 
-The mode may only contain PermissionBits, any other bit returns ErrPermissionRange.
+The mode may only contain [PermissionBits]. Any other bit returns
+[ErrPermissionRange]. A failure of the operating system returns
+[ErrSetPermission].
+
 Unlike on creation, the setuid and setgid bits are set reliably.
 */
 func SetPermission(path *Path, mode fs.FileMode) error {
@@ -67,6 +71,8 @@ Parent directories must exist.
 
 Unlike os.Create, CreateFile never truncates. Use CreateFileWithOptions with
 FileOptions.ExistOk to accept an existing file, or OpenFile to create or truncate it.
+
+The errors of [CreateFileWithOptions] apply.
 */
 func CreateFile(path *Path) error {
 	_, err := CreateFileWithOptions(path, DefaultFileOptions())
@@ -77,13 +83,18 @@ func CreateFile(path *Path) error {
 CreateFileWithOptions creates the file at the defined path with given options.
 
 If FileOptions.ExistOk is true and the file already exists, no action is taken and false is returned.
-Parent directories must exist.
+Otherwise an existing file returns [ErrFileExist]. Parent directories must
+exist.
 
 An existing path that is not a file returns ErrNotFile. This includes a broken symlink,
 whose target is never created.
 
 FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
 and defaults to DefaultFileMode. Any bit outside PermissionBits returns ErrPermissionRange.
+
+A path that cannot be checked returns [ErrStat], and a failed creation returns
+[ErrCreate]. ErrCreate also matches [ErrNotExist] for a missing parent
+directory.
 
 Returns true if a new file was created, false otherwise.
 */
@@ -133,6 +144,8 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 /*
 MkDir creates the directory at the defined path with mode 0755.
 Parent directories must exist.
+
+The errors of [MkDirWithOptions] apply.
 */
 func MkDir(path *Path) error {
 	_, err := MkDirWithOptions(path, DefaultDirOptions())
@@ -142,11 +155,16 @@ func MkDir(path *Path) error {
 /*
 MkDirWithOptions creates the directory at the defined path with given options.
 If ExistOk is true and the directory already exists, no action is taken.
+Otherwise an existing directory returns [ErrDirExist].
 
 An existing path that is not a directory returns ErrNotDir. This includes a broken symlink.
 
 DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
 and defaults to DefaultDirMode. Any bit outside PermissionBits returns ErrPermissionRange.
+
+A path that cannot be checked returns [ErrStat], and a failed creation returns
+[ErrCreate]. ErrCreate also matches [ErrNotExist] for a missing parent directory
+without DirOptions.CreateAll.
 
 Returns true if a new directory was created, false otherwise.
 */
@@ -198,7 +216,10 @@ CreateSymlink creates a symlink at the symlinkPath that points to symlinkTarget.
 symlinkTarget may be relative or absolute.
 
 symlinkPath may not exist, but parent directory should. A broken symlink at
-symlinkPath exists too and returns ErrExist.
+symlinkPath exists too and returns [ErrExist].
+
+A missing parent directory returns [ErrParentNotExist]. A path that cannot be
+checked returns [ErrStat], and a failed creation returns [ErrCreate].
 */
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 	exists, err := lexists(symlinkPath)

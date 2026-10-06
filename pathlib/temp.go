@@ -72,6 +72,8 @@ Example:
 		// handle error
 	}
 	defer func() { _ = dispose() }()
+
+The errors of [CreateTempFileWithOptions] apply.
 */
 func CreateTempFile() (*Path, DisposeFunc, error) {
 	return CreateTempFileWithOptions(nil)
@@ -95,6 +97,10 @@ Example:
 		// handle error
 	}
 	defer func() { _ = dispose() }()
+
+A TempPathOptions.BaseDir that is missing returns [ErrNotExist], and one that is
+not a directory returns [ErrNotDir]. A failed creation returns [ErrCreate] with
+the base directory as its path.
 */
 func CreateTempFileWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
@@ -131,6 +137,8 @@ Example:
 		// handle error
 	}
 	defer func() { _ = dispose() }()
+
+The errors of [CreateTempDirWithOptions] apply.
 */
 func CreateTempDir() (*Path, DisposeFunc, error) {
 	return CreateTempDirWithOptions(nil)
@@ -154,6 +162,10 @@ Example:
 		// handle error
 	}
 	defer func() { _ = dispose() }()
+
+A TempPathOptions.BaseDir that is missing returns [ErrNotExist], and one that is
+not a directory returns [ErrNotDir]. A failed creation returns [ErrCreate] with
+the base directory as its path.
 */
 func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()

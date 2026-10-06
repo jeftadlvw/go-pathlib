@@ -105,9 +105,10 @@ would be necessary to compute it.
   - a/b/c RelativeTo a/x/y → ../../b/c
   - /a/b/c RelativeTo / → a/b/c
 
-If one path has a Windows anchor, the other also needs one, and both anchors must
-match. Otherwise [ErrAnchorMismatch] is returned. A path that cannot be made
-relative returns [ErrRelImpossible]. Both errors report the paths [this, other].
+If one path has a Windows anchor, the other also needs one, and both anchors
+must match. Otherwise [ErrAnchorMismatch] is returned. A path that cannot be
+made relative returns [ErrRelImpossible]. Both errors report the paths [this,
+other].
 */
 func (p *Path) RelativeTo(o *Path) (*Path, error) {
 	if p.isWindowsAnchoredPath() || o.isWindowsAnchoredPath() {
@@ -145,9 +146,10 @@ would be necessary to compute it.
   - a/x/y RelativeFrom a/b/c → ../../x/y
   - /a/b/c RelativeFrom / → ../../..
 
-If one path has a Windows anchor, the other also needs one, and both anchors must
-match. Otherwise [ErrAnchorMismatch] is returned. A path that cannot be made
-relative returns [ErrRelImpossible]. Both errors report the paths [this, other].
+If one path has a Windows anchor, the other also needs one, and both anchors
+must match. Otherwise [ErrAnchorMismatch] is returned. A path that cannot be
+made relative returns [ErrRelImpossible]. Both errors report the paths [this,
+other].
 */
 func (p *Path) RelativeFrom(o *Path) (*Path, error) {
 	if p.isWindowsAnchoredPath() || o.isWindowsAnchoredPath() {

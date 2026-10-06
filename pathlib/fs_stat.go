@@ -61,6 +61,9 @@ func (p *Path) LExists() bool {
 Resolve resolves all symbolic links and ensures an absolute path representation.
 
 This function uses filepath.EvalSymlinks and MakeAbsolute.
+
+A missing path returns [ErrNotExist], and a failed resolution returns
+[ErrResolve]. The errors of [Path.MakeAbsolute] apply.
 */
 func (p *Path) Resolve() (*Path, error) {
 	if !p.Exists() {
@@ -79,6 +82,9 @@ func (p *Path) Resolve() (*Path, error) {
 Stat returns file info for this Path.
 
 This function uses os.Stat.
+
+A failure returns [ErrStat], which also matches [ErrNotExist] for a missing
+path.
 */
 func (p *Path) Stat() (os.FileInfo, error) {
 	info, err := os.Stat(p.String())
@@ -93,6 +99,9 @@ func (p *Path) Stat() (os.FileInfo, error) {
 Lstat returns file info for this Path, not following symbolic links.
 
 This function uses os.Lstat.
+
+A failure returns [ErrStat], which also matches [ErrNotExist] for a missing
+path.
 */
 func (p *Path) Lstat() (os.FileInfo, error) {
 	info, err := os.Lstat(p.String())

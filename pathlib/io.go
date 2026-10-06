@@ -57,8 +57,8 @@ It's the caller's responsibility to close the returned os.File.
 
 An unsupported mode returns [ErrUnsupportedMode]. A file that cannot be opened
 returns [ErrOpen], which also matches [ErrNotExist] for a missing file. A
-directory returns [ErrIsDir]. A failed creation returns [ErrCreate], and a failed
-check of the opened path returns [ErrStat].
+directory returns [ErrIsDir]. A failed creation returns [ErrCreate], and a
+failed check of the opened path returns [ErrStat].
 */
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 	err := checkPermission(opts.Permission, path)

@@ -189,7 +189,7 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 - `nil` is a natural "no path". The `Equals*` functions accept it, every other method panics on a nil `*Path`. Check for `nil` if uncertain.
 
 **Checking errors**
-- Every error wraps the `os` cause (see [Handling errors](#handling-errors)). `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
+- Errors of the operating system stay in the error chain (see [Handling errors](#handling-errors)). `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
 - Use `errors.Is(err, pathlib.ErrNotExist)` (`errors.Is(err, fs.ErrNotExist)`) instead. Both match every not-exist error, whether raised by the operating system or by the library's own checks. The same holds for `pathlib.ErrExist` (and `fs.ErrExist`).
 - `pathlib.ErrPermission` is about invalid permission or open-mode values passed to the library. An access denied by the operating system matches `fs.ErrPermission`.
 
