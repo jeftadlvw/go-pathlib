@@ -61,29 +61,37 @@ differ from the model.
 | --- | --- |
 | Kind type | `PathlibError`, with the root `ErrPathlib` |
 | Kinds | the `Err*` values in `core_error_kinds.go`, `fs_error_kinds.go`, and `io_error_kinds.go` |
-| Causes | `PathError` for most kinds, `PermissionError` below `ErrPermission`, and the `os` error for `ErrLookup` |
+| Causes | `PathError` for most kinds, `PatternError` for `ErrEmptyPattern` and `ErrBadPattern`, `PermissionError` below `ErrInvalidPermission`, and the `os` error for `ErrLookup` |
 | Failure | the unexported `raisedError`, created by `raiseError` |
 
 Code raises failures through the helpers built on `raiseError`:
 
 - `pathErr(kind, paths...)` for a failure that concerns paths.
-- `wrapErr(kind, cause, paths...)` for a failure caused by another error,
-  such as an error of the `os` package.
-- `permRangeErr` and `permModeErr` for the `ErrPermission` group.
+- `osErr(operation, err, paths...)` for a failed call to the operating
+  system. It picks the most specific kind, see below.
+- `wrapErr(kind, cause, paths...)` for a failure caused by another error that
+  is not an error of the operating system, such as an error of a walk
+  callback.
+- `patternErr(kind, pattern, cause, paths...)` for a rejected pattern.
+- `permRangeErr` and `permModeErr` for the `ErrInvalidPermission` group.
 - `raiseError(ErrLookup, err)` for a failed lookup of a well-known directory.
 
 ### Differences from the Model
 
-- **Alias kinds.** `ErrNotExist` and `ErrExist` alias `fs.ErrNotExist` and
-  `fs.ErrExist`. `errors.Is` matches them in both directions. `aliasError`
-  declares such a kind.
+- **The most specific kind.** Every failure gets the most specific kind the
+  library knows. `osErr` turns an error of the operating system that matches
+  `fs.ErrNotExist`, `fs.ErrExist`, or `fs.ErrPermission` into `ErrNotExist`,
+  `ErrExist`, or `ErrPermissionDenied`. Any other error keeps the kind of the
+  operation, such as `ErrRead`. A check of the library that finds a missing or
+  an existing path raises the same kinds with `fs.ErrNotExist` or
+  `fs.ErrExist` as the underlying error, such as
+  `wrapErr(ErrNotExist, fs.ErrNotExist, p)`. Callers then check pathlib kinds
+  alone, and the `fs` sentinels still match through the chain.
 - **Kinds per group.** Each group declares the kinds it raises in its own
   `<group>_error_kinds.go`, so the `core` bundle stays self-contained. The
   README shows the whole tree.
-- **Code format.** Names are UPPER_SNAKE_CASE and a code joins them with
-  underscores, such as `PATHLIB_EXIST_FILE`, instead of lower_snake_case
-  names joined with dots. The test `Codes are unique` guards against two
-  kinds joining to the same code.
+- **Code format.** Names are UPPER_SNAKE_CASE, and a code joins them with
+  dots, such as `PATHLIB.EXIST.FILE`.
 - **One shared cause.** Most failures carry the same data, the paths and an
   underlying error. `PathError` is their cause, independent of the group.
 - **errors.As.** Callers read kinds and causes with `errors.As`.

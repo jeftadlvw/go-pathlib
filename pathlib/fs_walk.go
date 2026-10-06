@@ -57,8 +57,9 @@ root itself is only passed to walkFunc in this case. Users may inspect the error
 and act upon it by e.g. ignoring it (return nil), bubbling it (return error) or
 returning a different error instead (e.g. SkipDir).
 
-localDirError wraps ErrOpen (open failure) or ErrReadDir (read failure). These errors
-can be matched either precisely, or by their shared ErrAccess group.
+localDirError is [ErrPermissionDenied] for a directory whose access is denied,
+and [ErrNotExist] for a directory removed during the walk. Any other failure is
+[ErrOpen] or [ErrReadDir], which share the [ErrAccess] group.
 */
 type WalkRFunc func(p *Path, localDirError error) error
 
@@ -67,9 +68,10 @@ Walk walks this directory and calls walkFunc for every entry (files, directories
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
 
 A missing path returns [ErrNotExist], and an existing non-directory returns
-[ErrNotDir]. A path that cannot be checked returns [ErrStat], and a directory
-that cannot be opened or read returns a kind below [ErrAccess]. An error of
-walkFunc is returned as the cause of [ErrWalk].
+[ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
+failure to check the path returns [ErrStat], and any other failure to open or
+read the directory returns a kind below [ErrAccess]. An error of walkFunc is
+returned as the cause of [ErrWalk].
 
 Entries are visited in lexical order by name, making the traversal deterministic.
 
@@ -121,9 +123,9 @@ WalkR walks this directory recursively and calls walkFunc for every entry.
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
 
 A missing path returns [ErrNotExist], and an existing non-directory returns
-[ErrNotDir]. A path that cannot be checked returns [ErrStat]. An error of
-walkFunc is returned as the cause of [ErrWalk], and an unchanged localDirError,
-a kind below [ErrAccess], is returned as is.
+[ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
+failure to check the path returns [ErrStat]. An error of walkFunc is returned
+as the cause of [ErrWalk], and an unchanged localDirError is returned as is.
 
 Symlinks inside the tree are not followed. A symlink to a directory is passed to
 walkFunc as a single entry, and its contents are not visited. This matches
@@ -208,7 +210,7 @@ func readDirSorted(dir *Path) ([]os.DirEntry, error) {
 	// os.ReadDir.
 	file, err := os.Open(dir.String())
 	if err != nil {
-		return nil, wrapErr(ErrOpen, err, *dir)
+		return nil, osErr(ErrOpen, err, *dir)
 	}
 
 	// Read all entries up front so they can be sorted into a deterministic order.
@@ -216,7 +218,7 @@ func readDirSorted(dir *Path) ([]os.DirEntry, error) {
 	// The directory is only read, so closing it cannot lose data.
 	_ = file.Close()
 	if err != nil {
-		return nil, wrapErr(ErrReadDir, err, *dir)
+		return nil, osErr(ErrReadDir, err, *dir)
 	}
 
 	sortDirEntries(entries)

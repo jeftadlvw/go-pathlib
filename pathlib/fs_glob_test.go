@@ -910,7 +910,7 @@ func TestList_NonRecursiveIgnoresUnreadableSubdirectories(t *testing.T) {
 	options := DefaultListOptions()
 	options.Recursive = true
 	_, err = root.List(options)
-	require.ErrorIs(t, err, ErrAccess)
+	require.ErrorIs(t, err, ErrPermissionDenied)
 }
 
 // topLevelPaths returns the paths without a separator, in their order.

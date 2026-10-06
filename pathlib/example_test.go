@@ -36,8 +36,8 @@ func Example_errorHandling() {
 
 	// Output:
 	// true
-	// false
 	// true
-	// PATHLIB.READ
+	// true
+	// PATHLIB.NOT_EXIST
 	// missing.txt
 }

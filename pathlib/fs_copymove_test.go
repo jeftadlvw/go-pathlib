@@ -866,11 +866,11 @@ func TestRemove_UncheckablePathIsAnError(t *testing.T) {
 
 	// Before, both silently returned nil and left the paths in place.
 	err := Remove(file)
-	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, ErrPermissionDenied)
 	require.ErrorIs(t, err, fs.ErrPermission)
 
 	err = RemoveAll(subdir)
-	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, ErrPermissionDenied)
 	require.ErrorIs(t, err, fs.ErrPermission)
 }
 

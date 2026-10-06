@@ -56,10 +56,10 @@ in exactly this order. "a" can only be used if "w" is used.
 
 It's the caller's responsibility to close the returned os.File.
 
-An unsupported mode returns [ErrUnsupportedMode]. A file that cannot be opened
-returns [ErrOpen], which also matches [fs.ErrNotExist] for a missing file. A
-directory returns [ErrIsDir]. A failed creation returns [ErrCreate], and a
-failed check of the opened path returns [ErrStat].
+An unsupported mode returns [ErrUnsupportedMode], and a directory returns
+[ErrIsDir]. A missing file returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failure to open the file returns [ErrOpen], to
+create it [ErrCreate], and to check it [ErrStat].
 */
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 	err := checkPermission(opts.Permission, path)
@@ -102,13 +102,13 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 /*
 ReadFile reads the passed file and returns read bytes.
 
-A file that cannot be read returns [ErrRead], which also matches
-[fs.ErrNotExist] for a missing file.
+A missing file returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failure returns [ErrRead].
 */
 func ReadFile(path *Path) ([]byte, error) {
 	bytes, err := os.ReadFile(path.String())
 	if err != nil {
-		return nil, wrapErr(ErrRead, err, *path)
+		return nil, osErr(ErrRead, err, *path)
 	}
 
 	return bytes, nil
@@ -162,9 +162,9 @@ existing file returns ErrFileExist and is left untouched, as in CreateFileWithOp
 A symlink to a file is written through. An existing path that is not a file returns
 ErrNotFile. This includes a broken symlink, whose target is never created.
 
-A path that cannot be checked returns [ErrStat]. A file that cannot be opened
-returns [ErrOpen], which also matches [fs.ErrNotExist] for a missing parent
-directory. A failed write returns [ErrWrite].
+A missing parent directory returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failure to check the path returns [ErrStat], to
+open the file [ErrOpen], and to write [ErrWrite].
 
 Returns the number of bytes written.
 */
@@ -189,9 +189,9 @@ A missing file is created with DefaultFileMode. Parent directories must exist.
 A symlink to a file is written through. An existing path that is not a file returns
 ErrNotFile. This includes a broken symlink, whose target is never created.
 
-A path that cannot be checked returns [ErrStat]. A file that cannot be opened
-returns [ErrOpen], which also matches [fs.ErrNotExist] for a missing parent
-directory. A failed write returns [ErrWrite].
+A missing parent directory returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failure to check the path returns [ErrStat], to
+open the file [ErrOpen], and to write [ErrWrite].
 */
 func AppendBytes(path *Path, data []byte) (int, error) {
 	return writeBytes(path, data, os.O_APPEND, FileOptions{ExistOk: true})
@@ -234,19 +234,19 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 
 	file, err := os.OpenFile(path.String(), flag, options.Mode)
 	if err != nil {
-		return 0, wrapErr(ErrOpen, err, *path)
+		return 0, osErr(ErrOpen, err, *path)
 	}
 
 	n, err := file.Write(data)
 	if err != nil {
 		_ = file.Close()
-		return n, wrapErr(ErrWrite, err, *path)
+		return n, osErr(ErrWrite, err, *path)
 	}
 
 	// Closing flushes the content, so its error means the write is incomplete.
 	err = file.Close()
 	if err != nil {
-		return n, wrapErr(ErrWrite, err, *path)
+		return n, osErr(ErrWrite, err, *path)
 	}
 
 	return n, nil
@@ -275,7 +275,7 @@ func openModeFlags(mode string, path *Path) (int, error) {
 
 /*
 createIfMissing creates an empty file with permission perm at path if nothing
-exists there. A failed creation returns [ErrCreate].
+exists there. A failed creation returns the error of osErr for ErrCreate.
 */
 func createIfMissing(path *Path, perm os.FileMode) error {
 	_, err := os.Stat(path.String())
@@ -285,7 +285,7 @@ func createIfMissing(path *Path, perm os.FileMode) error {
 
 	f, err := os.OpenFile(path.String(), os.O_CREATE|os.O_WRONLY, perm)
 	if err != nil {
-		return wrapErr(ErrCreate, err, *path)
+		return osErr(ErrCreate, err, *path)
 	}
 
 	_ = f.Close()
@@ -300,7 +300,7 @@ returns [ErrStat], and a directory returns [ErrIsDir].
 func openNonDir(path *Path, flag int, perm os.FileMode) (*os.File, error) {
 	file, err := os.OpenFile(path.String(), flag, perm)
 	if err != nil {
-		return nil, wrapErr(ErrOpen, err, *path)
+		return nil, osErr(ErrOpen, err, *path)
 	}
 
 	// Fun fact: Unix-based operating systems support opening a file descriptor
@@ -310,7 +310,7 @@ func openNonDir(path *Path, flag int, perm os.FileMode) (*os.File, error) {
 
 	if err != nil {
 		_ = file.Close()
-		return nil, wrapErr(ErrStat, err, *path)
+		return nil, osErr(ErrStat, err, *path)
 	}
 
 	if stat.IsDir() {

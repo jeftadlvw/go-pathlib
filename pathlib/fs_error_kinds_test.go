@@ -109,7 +109,7 @@ func TestErrNotExist_LibraryChecks(t *testing.T) {
 func TestErrNotExist_OperatingSystem(t *testing.T) {
 	t.Parallel()
 
-	// Raised by the operating system and wrapped with the kind of the operation.
+	// Raised by the operating system and classified as ErrNotExist.
 	cases := []errCase{
 		{"ReadFile", func(_ *testing.T, root *Path) error {
 			_, err := ReadFile(root.JoinStrings("missing"))
@@ -145,8 +145,9 @@ func TestErrNotExist_OperatingSystem(t *testing.T) {
 	runErrCases(t, cases, func(t *testing.T, err error) {
 		t.Helper()
 
+		require.ErrorIs(t, err, ErrNotExist)
 		require.ErrorIs(t, err, fs.ErrNotExist)
-		require.NotErrorIs(t, err, ErrNotExist, "the kind is the one of the operation")
+		require.NotErrorIs(t, err, ErrExist)
 		require.NotErrorIs(t, err, fs.ErrExist)
 	})
 }

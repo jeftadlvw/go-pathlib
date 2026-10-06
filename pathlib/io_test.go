@@ -495,13 +495,14 @@ func TestIoErrorsAreWrapped(t *testing.T) {
 	missing := root.JoinStrings("missing.txt")
 
 	_, err := ReadFile(missing)
-	require.ErrorIs(t, err, ErrRead)
+	require.ErrorIs(t, err, ErrNotExist)
+	require.NotErrorIs(t, err, ErrRead, "the most specific kind replaces the operation")
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 
 	_, err = OpenFileWithOptions(missing, OpenOptions{Mode: "r"})
-	require.ErrorIs(t, err, ErrOpen)
-	require.ErrorIs(t, err, ErrAccess)
+	require.ErrorIs(t, err, ErrNotExist)
+	require.NotErrorIs(t, err, ErrOpen, "the most specific kind replaces the operation")
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 }

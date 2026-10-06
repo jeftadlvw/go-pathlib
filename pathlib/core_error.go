@@ -29,9 +29,11 @@ library. [errors.As] with a *PathlibError target returns the kind of a failure.
 The data of a failure, such as its paths, lives in its cause. See [PathError],
 [PatternError], and [PermissionError].
 
-A kind says what the library did or checked. What the operating system reported
-stays in the cause, so errors.Is(err, fs.ErrNotExist) matches every missing
-path, whether the operating system or the library found it.
+A failure has the most specific kind the library knows. A missing path is
+[ErrNotExist], whether a check of the library or the operating system found it.
+The kind of an operation, such as [ErrRead], describes the failures no other
+kind describes. The error of the operating system stays in the cause, so
+errors.Is also matches standard library sentinels such as [fs.ErrNotExist].
 
 Each kind has a code, such as "PATHLIB.EXIST.FILE", that stays stable when its
 message changes. Logs, metrics, and alerts key on it.
@@ -99,9 +101,9 @@ func (k *PathlibError) Message() string {
 	return k.message
 }
 
-// Error returns the message followed by the code in brackets.
+// Error returns the message followed by the code in round brackets.
 func (k *PathlibError) Error() string {
-	return k.message + " [" + k.code + "]"
+	return k.message + " (" + k.code + ")"
 }
 
 // Unwrap returns the parent kind, or nil for the root, so [errors.Is] matches

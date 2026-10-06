@@ -3,29 +3,30 @@
 
 package pathlib
 
-// Kinds raised by the fs group. Their cause is a *[PathError], and an
-// underlying error of the os package is kept as the cause of the PathError.
+/*
+Kinds raised by the fs group. Their cause is a *[PathError], and the error of the
+operating system is kept as the underlying error of the PathError.
+
+A failed call to the operating system returns the most specific kind the library
+knows. An error matching [fs.ErrNotExist], [fs.ErrExist], or [fs.ErrPermission]
+returns ErrNotExist, ErrExist, or ErrPermissionDenied. Any other error returns
+the kind of the operation, such as [ErrRead].
+*/
 var (
-	// ErrNotExist is returned when a check of the library finds that a required
-	// path does not exist. Match it with [errors.Is] to catch every kind below.
-	// The underlying error is [fs.ErrNotExist].
-	//
-	// A missing path the operating system reports keeps the kind of the failed
-	// operation, such as [ErrRead]. Match [fs.ErrNotExist] to catch every missing
-	// path. [os.IsNotExist] does not unwrap errors and never matches.
+	// ErrNotExist is returned when a required path does not exist, whether a
+	// check of the library or the operating system found it. Match it with
+	// [errors.Is] to catch every kind below. The underlying error matches
+	// fs.ErrNotExist. [os.IsNotExist] does not unwrap errors and never matches.
 	ErrNotExist = defineError(ErrPathlib, "NOT_EXIST", "path does not exist")
 
 	// ErrParentNotExist is raised when a required parent directory is missing.
 	// It is a member of the ErrNotExist group.
 	ErrParentNotExist = defineError(ErrNotExist, "PARENT", "parent directory does not exist")
 
-	// ErrExist is returned when a check of the library finds that a path already
-	// exists and would be overwritten. Match it with errors.Is to catch every
-	// kind below. The underlying error is [fs.ErrExist].
-	//
-	// An existing path the operating system reports keeps the kind of the failed
-	// operation, such as [ErrCreate]. Match fs.ErrExist to catch every existing
-	// path. [os.IsExist] does not unwrap errors and never matches.
+	// ErrExist is returned when a path already exists and would be overwritten,
+	// whether a check of the library or the operating system found it. Match it
+	// with errors.Is to catch every kind below. The underlying error matches
+	// fs.ErrExist. [os.IsExist] does not unwrap errors and never matches.
 	ErrExist = defineError(ErrPathlib, "EXIST", "path already exists")
 
 	// ErrFileExist is raised when the conflicting path is a file.
@@ -35,6 +36,10 @@ var (
 	// ErrDirExist is raised when the conflicting path is a directory.
 	// It is a member of the ErrExist group.
 	ErrDirExist = defineError(ErrExist, "DIR", "directory already exists")
+
+	// ErrPermissionDenied is returned when the operating system denies access
+	// to a path. The underlying error matches fs.ErrPermission.
+	ErrPermissionDenied = defineError(ErrPathlib, "PERMISSION_DENIED", "permission denied")
 
 	// ErrNotFile is returned when a path is expected to be a regular file but
 	// is not.
@@ -59,10 +64,8 @@ var (
 	ErrTypeMismatch = defineError(ErrPathlib, "TYPE_MISMATCH", "source and destination types are incompatible")
 
 	// ErrAccess is the broad group for "a path could not be accessed", covering
-	// both the open and the read-dir failures below. [Path.Walk] and
-	// [Path.WalkR] surface these failures (as localDirError, in WalkR's case).
-	// Match it with errors.Is to catch every access failure without
-	// distinguishing the exact cause.
+	// both the open and the read-dir failures below. Match it with errors.Is to
+	// catch every access failure without distinguishing the exact cause.
 	ErrAccess = defineError(ErrPathlib, "ACCESS", "could not access path")
 
 	// ErrOpen is returned when a path could not be opened. It is a member of the

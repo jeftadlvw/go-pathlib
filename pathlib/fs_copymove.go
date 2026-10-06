@@ -22,8 +22,9 @@ A missing source returns [ErrNotExist], and a missing destination parent returns
 [ErrParentNotExist]. An existing destination returns a kind below [ErrExist], or
 [ErrNotEmptyDir] for a directory that is not empty. A destination of an
 incompatible file type returns [ErrTypeMismatch], and a source of a file type
-that cannot be copied returns [ErrCopyType]. A failure of the operating system
-returns [ErrStat], a kind below [ErrAccess], [ErrCreate], [ErrCopy], or
+that cannot be copied returns [ErrCopyType]. Denied access returns
+[ErrPermissionDenied]. Any other failure of the operating system returns
+[ErrStat], a kind below [ErrAccess], [ErrCreate], [ErrCopy], or
 [ErrReadSymlink].
 
 A symlink with a relative target is copied with a target rebased to the
@@ -120,9 +121,9 @@ Remove removes the file at the specified path
 or removes an empty directory.
 
 Nothing happens if the given path does not exist. A symlink is removed itself,
-never its target, and this includes a broken symlink. If the path cannot be
-checked, e.g. for missing permissions, [ErrStat] is returned. A failed removal
-returns [ErrRemove].
+never its target, and this includes a broken symlink. Denied access returns
+[ErrPermissionDenied]. Any other failure to check the path returns [ErrStat],
+and any other failed removal returns [ErrRemove].
 */
 func Remove(path *Path) error {
 	exists, err := lexists(path)
@@ -136,7 +137,7 @@ func Remove(path *Path) error {
 	// The path may have vanished since the check, which is the wanted outcome.
 	err = os.Remove(path.String())
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return wrapErr(ErrRemove, err, *path)
+		return osErr(ErrRemove, err, *path)
 	}
 
 	return nil
@@ -147,9 +148,9 @@ RemoveAll removes the path at the specified path and, if it is a directory, all 
 entries, like os.RemoveAll.
 
 Nothing happens if the given path does not exist. A symlink is removed itself, never
-its target, and this includes a symlink to a directory and a broken symlink. If the
-path cannot be checked, e.g. for missing permissions, [ErrStat] is returned. A
-failed removal returns [ErrRemove].
+its target, and this includes a symlink to a directory and a broken symlink.
+Denied access returns [ErrPermissionDenied]. Any other failure to check the path
+returns [ErrStat], and any other failed removal returns [ErrRemove].
 */
 func RemoveAll(path *Path) error {
 	exists, err := lexists(path)
@@ -162,7 +163,7 @@ func RemoveAll(path *Path) error {
 
 	err = os.RemoveAll(path.String())
 	if err != nil {
-		return wrapErr(ErrRemove, err, *path)
+		return osErr(ErrRemove, err, *path)
 	}
 
 	return nil
@@ -188,7 +189,7 @@ func copyFile(source *Path, destination *Path) error {
 	// Open source file
 	sourceFile, err := os.Open(source.String())
 	if err != nil {
-		return wrapErr(ErrOpen, err, *source)
+		return osErr(ErrOpen, err, *source)
 	}
 	// The source is only read, so closing it cannot lose data.
 	defer func() { _ = sourceFile.Close() }()
@@ -197,20 +198,20 @@ func copyFile(source *Path, destination *Path) error {
 	// symlinks included, so nothing is overwritten or written through.
 	destinationFile, err := os.OpenFile(destination.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, srcInfo.Mode())
 	if err != nil {
-		return wrapErr(ErrCreate, err, *destination)
+		return osErr(ErrCreate, err, *destination)
 	}
 
 	// Copy contents
 	_, err = io.Copy(destinationFile, sourceFile)
 	if err != nil {
 		_ = destinationFile.Close()
-		return wrapErr(ErrCopy, err, *source, *destination)
+		return osErr(ErrCopy, err, *source, *destination)
 	}
 
 	// Closing flushes the content, so its error means the copy is incomplete.
 	err = destinationFile.Close()
 	if err != nil {
-		return wrapErr(ErrCopy, err, *source, *destination)
+		return osErr(ErrCopy, err, *source, *destination)
 	}
 
 	return nil
@@ -281,7 +282,7 @@ func copyDir(src *Path, dst *Path) error {
 	// Read directory entries
 	entries, err := os.ReadDir(src.String())
 	if err != nil {
-		return wrapErr(ErrReadDir, err, *src)
+		return osErr(ErrReadDir, err, *src)
 	}
 
 	// Copy each entry
@@ -318,7 +319,7 @@ func prepareCopyDirDestination(src *Path, dst *Path) error {
 	if !dstExists {
 		err = os.Mkdir(dst.String(), srcInfo.Mode())
 		if err != nil {
-			return wrapErr(ErrCreate, err, *dst)
+			return osErr(ErrCreate, err, *dst)
 		}
 		return nil
 	}
@@ -339,7 +340,7 @@ requireEmptyDir returns [ErrNotEmptyDir] if the directory dir has entries.
 func requireEmptyDir(dir *Path) error {
 	file, err := os.Open(dir.String())
 	if err != nil {
-		return wrapErr(ErrOpen, err, *dir)
+		return osErr(ErrOpen, err, *dir)
 	}
 
 	// The directory is only read, so closing it cannot lose data.
@@ -347,7 +348,7 @@ func requireEmptyDir(dir *Path) error {
 
 	entries, err := file.ReadDir(1)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return wrapErr(ErrReadDir, err, *dir)
+		return osErr(ErrReadDir, err, *dir)
 	}
 
 	if len(entries) != 0 {

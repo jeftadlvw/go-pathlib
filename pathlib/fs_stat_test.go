@@ -573,19 +573,19 @@ func TestFsErrorsAreWrapped(t *testing.T) {
 	missing := root.JoinStrings("missing")
 
 	_, err := missing.Stat()
-	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, ErrNotExist)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 
 	_, err = missing.Lstat()
-	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, ErrNotExist)
 
 	err = SetPermission(missing, 0644)
-	require.ErrorIs(t, err, ErrSetPermission)
+	require.ErrorIs(t, err, ErrNotExist)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 
 	_, err = MkDirWithOptions(root.JoinStrings("a", "b"), DirOptions{})
-	require.ErrorIs(t, err, ErrCreate)
+	require.ErrorIs(t, err, ErrNotExist)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 }
@@ -668,7 +668,7 @@ func TestLexists_UncheckablePathIsAnError(t *testing.T) {
 
 	exists, err := lexists(file)
 	require.False(t, exists)
-	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, ErrPermissionDenied)
 	require.ErrorIs(t, err, fs.ErrPermission)
 	require.NotErrorIs(t, err, ErrNotExist)
 

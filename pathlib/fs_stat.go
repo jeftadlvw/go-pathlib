@@ -62,8 +62,9 @@ Resolve resolves all symbolic links and ensures an absolute path representation.
 
 This function uses filepath.EvalSymlinks and MakeAbsolute.
 
-A missing path returns [ErrNotExist], and a failed resolution returns
-[ErrResolve]. The errors of [Path.MakeAbsolute] apply.
+A missing path returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failed resolution returns [ErrResolve]. The
+errors of [Path.MakeAbsolute] apply.
 */
 func (p *Path) Resolve() (*Path, error) {
 	if !p.Exists() {
@@ -72,7 +73,7 @@ func (p *Path) Resolve() (*Path, error) {
 
 	ep, err := filepath.EvalSymlinks(p.String())
 	if err != nil {
-		return nil, wrapErr(ErrResolve, err, *p)
+		return nil, osErr(ErrResolve, err, *p)
 	}
 
 	return NewPath(ep).MakeAbsolute()
@@ -83,13 +84,13 @@ Stat returns file info for this Path.
 
 This function uses os.Stat.
 
-A failure returns [ErrStat], which also matches [fs.ErrNotExist] for a missing
-path.
+A missing path returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failure returns [ErrStat].
 */
 func (p *Path) Stat() (os.FileInfo, error) {
 	info, err := os.Stat(p.String())
 	if err != nil {
-		return nil, wrapErr(ErrStat, err, *p)
+		return nil, osErr(ErrStat, err, *p)
 	}
 
 	return info, nil
@@ -100,13 +101,13 @@ Lstat returns file info for this Path, not following symbolic links.
 
 This function uses os.Lstat.
 
-A failure returns [ErrStat], which also matches [fs.ErrNotExist] for a missing
-path.
+A missing path returns [ErrNotExist], and denied access returns
+[ErrPermissionDenied]. Any other failure returns [ErrStat].
 */
 func (p *Path) Lstat() (os.FileInfo, error) {
 	info, err := os.Lstat(p.String())
 	if err != nil {
-		return nil, wrapErr(ErrStat, err, *p)
+		return nil, osErr(ErrStat, err, *p)
 	}
 
 	return info, nil
@@ -168,16 +169,13 @@ func pathCheck(p *Path) int {
 /*
 requireDir returns nil if this Path is an existing directory. Symlinks are followed.
 
-A missing path returns ErrNotExist and an existing non-directory returns ErrNotDir.
-Any other stat failure returns ErrStat. The os cause is wrapped where there is one.
+An existing non-directory returns ErrNotDir. A failed stat returns the error of
+osErr for ErrStat, such as ErrNotExist for a missing path.
 */
 func requireDir(p *Path) error {
 	info, err := os.Stat(p.String())
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return wrapErr(ErrNotExist, err, *p)
-		}
-		return wrapErr(ErrStat, err, *p)
+		return osErr(ErrStat, err, *p)
 	}
 
 	if !info.IsDir() {
@@ -192,7 +190,8 @@ lexists reports whether this Path exists, without following symlinks.
 
 Unlike LExists, it tells a missing path apart from one that cannot be checked:
 a missing path, including one below a non-directory, returns false and no error.
-Any other failure, e.g. missing permissions, returns ErrStat with the os cause.
+Any other failure returns the error of osErr for ErrStat, such as
+ErrPermissionDenied for missing permissions.
 */
 func lexists(p *Path) (bool, error) {
 	_, err := os.Lstat(p.String())
@@ -205,7 +204,7 @@ func lexists(p *Path) (bool, error) {
 		return false, nil
 	}
 
-	return false, wrapErr(ErrStat, err, *p)
+	return false, osErr(ErrStat, err, *p)
 }
 
 /*

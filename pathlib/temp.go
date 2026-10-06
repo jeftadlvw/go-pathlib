@@ -99,8 +99,9 @@ Example:
 	defer func() { _ = dispose() }()
 
 A TempPathOptions.BaseDir that is missing returns [ErrNotExist], and one that is
-not a directory returns [ErrNotDir]. A failed creation returns [ErrCreate] with
-the base directory as its path.
+not a directory returns [ErrNotDir]. Denied access returns
+[ErrPermissionDenied], and any other failed creation returns [ErrCreate], both
+with the base directory as their path.
 */
 func CreateTempFileWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
@@ -110,7 +111,7 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*Path, DisposeFunc, er
 
 	file, err := os.CreateTemp(tempBaseDir, prefix)
 	if err != nil {
-		return nil, voidDispose, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
+		return nil, voidDispose, osErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
 	}
 
 	_ = file.Close()
@@ -164,8 +165,9 @@ Example:
 	defer func() { _ = dispose() }()
 
 A TempPathOptions.BaseDir that is missing returns [ErrNotExist], and one that is
-not a directory returns [ErrNotDir]. A failed creation returns [ErrCreate] with
-the base directory as its path.
+not a directory returns [ErrNotDir]. Denied access returns
+[ErrPermissionDenied], and any other failed creation returns [ErrCreate], both
+with the base directory as their path.
 */
 func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
@@ -175,7 +177,7 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, err
 
 	dirName, err := os.MkdirTemp(tempBaseDir, prefix)
 	if err != nil {
-		return nil, voidDispose, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
+		return nil, voidDispose, osErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
 	}
 
 	// The DisposeFunc uses its own Path, independent of the returned one.

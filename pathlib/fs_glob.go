@@ -34,11 +34,13 @@ GlobWithOptions returns all entries matching the given pattern within this Path'
 If an error is returned, all entries until that error are returned.
 
 This Path must be a directory. A missing path returns [ErrNotExist], and an
-existing non-directory returns [ErrNotDir]. A path that cannot be checked
-returns [ErrStat]. An empty pattern returns [ErrEmptyPattern], a malformed
-pattern returns [ErrBadPattern], and an unknown GlobOptions.Filter returns
-[ErrInvalidFilter]. A directory that cannot be opened or read returns a kind
-below [ErrAccess], unless GlobOptions.SkipOnDirError skips it.
+existing non-directory returns [ErrNotDir]. An empty pattern returns
+[ErrEmptyPattern], a malformed pattern returns [ErrBadPattern], and an unknown
+GlobOptions.Filter returns [ErrInvalidFilter]. Denied access returns
+[ErrPermissionDenied], also for a directory inside the tree. Any other failure
+to check the path returns [ErrStat], and any other failure to open or read a
+directory returns a kind below [ErrAccess]. GlobOptions.SkipOnDirError skips a
+directory that cannot be opened or read.
 
 The tree is walked with WalkR, so symlinks to directories inside the tree are matched
 as entries, but their contents are not visited. GlobOptions.Filter judges a symlink by

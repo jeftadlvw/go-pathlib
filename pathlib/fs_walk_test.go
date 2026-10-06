@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"testing"
 
@@ -606,7 +607,7 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 		require.NotErrorIs(t, ErrReadDir, ErrOpen)
 	})
 
-	t.Run("localDirError from a real walk matches ErrAccess", func(t *testing.T) {
+	t.Run("localDirError of a denied directory is ErrPermissionDenied", func(t *testing.T) {
 		t.Parallel()
 
 		root := setupTempDir(t)
@@ -624,7 +625,8 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Error(t, captured)
-		require.ErrorIs(t, captured, ErrAccess)
+		require.ErrorIs(t, captured, ErrPermissionDenied)
+		require.ErrorIs(t, captured, fs.ErrPermission)
 	})
 }
 
@@ -750,7 +752,7 @@ func TestWalkR_UnreadableDirectoryIsPassedTwice(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, errs, 2)
 	require.NoError(t, errs[0], "first call happens before reading")
-	require.ErrorIs(t, errs[1], ErrOpen, "second call carries the directory error")
+	require.ErrorIs(t, errs[1], ErrPermissionDenied, "second call carries the directory error")
 }
 
 func TestWalkR_UnreadableRootIsPassedOnce(t *testing.T) {
@@ -763,9 +765,9 @@ func TestWalkR_UnreadableRootIsPassedOnce(t *testing.T) {
 	err := root.WalkR(func(p *Path, localDirError error) error {
 		calls++
 		require.True(t, p.Equals(root))
-		require.ErrorIs(t, localDirError, ErrOpen)
+		require.ErrorIs(t, localDirError, ErrPermissionDenied)
 		return localDirError
 	})
-	require.ErrorIs(t, err, ErrOpen)
+	require.ErrorIs(t, err, ErrPermissionDenied)
 	require.Equal(t, 1, calls, "the root is only passed with its directory error")
 }

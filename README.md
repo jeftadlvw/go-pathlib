@@ -112,47 +112,45 @@ All three are nil-safe. Never compare paths with `==`, which compares pointers.
 Pattern matching (`MatchesPattern`) and globbing (`Glob`, `List`, `ListFiles`, `ListDirs`, `HasGlobMatch`) are case-sensitive by default as well. Pass `CaseInsensitive`, or set `GlobOptions.CaseSensitivity` to it, to ignore casing. The zero value of `CompareOption` is `CaseSensitive`, so a zero `GlobOptions{}` is strict too.
 
 ### Handling errors
-Every error the library returns pairs a **kind** with a **cause**:
-- The kind says what went wrong. Kinds are values of `*PathlibError`, such as `ErrNotExist`, and form a tree rooted at `ErrPathlib`. Match a kind, or a whole group of kinds, with `errors.Is`. Read the kind of a failure with `errors.As(err, &kind)`.
-- The cause holds the data of the failure. It is a `*PathError` with the paths the failure concerns and the underlying `os` error, or a `*PermissionError` for the `ErrPermission` group. Read it with `errors.As`. `ErrLookup` keeps the `os` error as its cause.
+Check errors with `errors.Is` against the `Err*` values of pathlib:
 
 ```go
 _, err := pathlib.ReadFile(p)
 
-var cause *pathlib.PathError
-if errors.As(err, &cause) {
-	report(cause.Paths())
-}
-
 switch {
 case errors.Is(err, pathlib.ErrNotExist):
-	return create(p)
-case errors.Is(err, pathlib.ErrPathlib):
-	return fmt.Errorf("read config: %w", err)
+	// the file does not exist
+case errors.Is(err, pathlib.ErrPermissionDenied):
+	// the file may not be read
+case err != nil:
+	return err
 }
 ```
 
-Every kind has a **code**, such as `PATHLIB_EXIST_FILE`, that stays stable when its message changes. Key logs, metrics, and alerts on `kind.Code()`. Errors print their code in brackets and describe themselves to `log/slog` and `encoding/json`:
+pathlib returns the most specific error it knows. An error also matches every value above it in the tree below, so `ErrFileExist` matches `ErrExist`, and every error matches `ErrPathlib`.
+
+Each error prints a stable code in brackets, so logs and metrics can rely on it:
 
 ```
-could not open path [PATHLIB_ACCESS_OPEN]: a/b: open a/b: permission denied
+path does not exist (PATHLIB.NOT_EXIST): a/b: open a/b: no such file or directory
 ```
 
-The kind tree lists the name of each kind. A code joins the names from the root with underscores, so the code of `ErrParentNotExist` is `PATHLIB_NOT_EXIST_PARENT`:
+All errors with their codes. Most carry their paths in a `*pathlib.PathError`, which `errors.As` reads. The marked ones carry other details:
 
 ```
 PATHLIB                      ErrPathlib
-├─ EMPTY_PATTERN             ErrEmptyPattern
-├─ BAD_PATTERN               ErrBadPattern
+├─ EMPTY_PATTERN             ErrEmptyPattern      (*PatternError)
+├─ BAD_PATTERN               ErrBadPattern        (*PatternError)
 ├─ ANCHOR_MISMATCH           ErrAnchorMismatch
 ├─ NOT_ABSOLUTE              ErrNotAbsolute
 ├─ REL_IMPOSSIBLE            ErrRelImpossible
-├─ LOOKUP                    ErrLookup            (cause: the os error)
-├─ NOT_EXIST                 ErrNotExist          (aliases fs.ErrNotExist)
+├─ LOOKUP                    ErrLookup            (os error only)
+├─ NOT_EXIST                 ErrNotExist
 │  └─ PARENT                 ErrParentNotExist
-├─ EXIST                     ErrExist             (aliases fs.ErrExist)
+├─ EXIST                     ErrExist
 │  ├─ FILE                   ErrFileExist
 │  └─ DIR                    ErrDirExist
+├─ PERMISSION_DENIED         ErrPermissionDenied
 ├─ NOT_FILE                  ErrNotFile
 ├─ NOT_DIR                   ErrNotDir
 ├─ NOT_SYMLINK               ErrNotSymlink
@@ -171,7 +169,7 @@ PATHLIB                      ErrPathlib
 ├─ SET_PERMISSION            ErrSetPermission
 ├─ WALK                      ErrWalk
 ├─ INVALID_FILTER            ErrInvalidFilter
-├─ PERMISSION                ErrPermission        (cause: *PermissionError)
+├─ INVALID_PERMISSION        ErrInvalidPermission (*PermissionError)
 │  ├─ RANGE                  ErrPermissionRange
 │  └─ UNSUPPORTED_MODE       ErrUnsupportedMode
 ├─ READ                      ErrRead
@@ -179,7 +177,7 @@ PATHLIB                      ErrPathlib
 └─ IS_DIR                    ErrIsDir
 ```
 
-The `core` bundle only contains the kinds of the core group, from `ErrPathlib` to `ErrLookup`.
+The `core` bundle contains the values from `ErrPathlib` to `ErrLookup`.
 
 ### Migrating from `os` and `filepath`
 Most code ported from `os` and `filepath` keeps compiling after switching to `*Path`. The points below are the ones that then quietly behave differently.
@@ -190,8 +188,8 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 
 **Checking errors**
 - Errors of the operating system stay in the error chain (see [Handling errors](#handling-errors)). `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
-- Use `errors.Is(err, pathlib.ErrNotExist)` (`errors.Is(err, fs.ErrNotExist)`) instead. Both match every not-exist error, whether raised by the operating system or by the library's own checks. The same holds for `pathlib.ErrExist` (and `fs.ErrExist`).
-- `pathlib.ErrPermission` is about invalid permission or open-mode values passed to the library. An access denied by the operating system matches `fs.ErrPermission`.
+- Use `errors.Is(err, pathlib.ErrNotExist)`, `pathlib.ErrExist` and `pathlib.ErrPermissionDenied` instead. The error of the operating system stays wrapped, so `fs.ErrNotExist` and the other `fs` sentinels match as well.
+- `pathlib.ErrInvalidPermission` is about invalid permission or open-mode values passed to the library. Access denied by the operating system is `pathlib.ErrPermissionDenied`.
 
 **Converting paths**
 - Pass `String()` to OS APIs and subprocess working directories. It is platform-native.

@@ -17,7 +17,7 @@ func allKinds() []*PathlibError {
 	return []*PathlibError{
 		ErrPathlib,
 		ErrEmptyPattern, ErrBadPattern, ErrAnchorMismatch, ErrNotAbsolute, ErrRelImpossible, ErrLookup,
-		ErrNotExist, ErrParentNotExist, ErrExist, ErrFileExist, ErrDirExist,
+		ErrNotExist, ErrParentNotExist, ErrExist, ErrFileExist, ErrDirExist, ErrPermissionDenied,
 		ErrNotFile, ErrNotDir, ErrNotSymlink, ErrNotEmptyDir, ErrCopyType, ErrTypeMismatch,
 		ErrAccess, ErrOpen, ErrReadDir, ErrStat, ErrReadSymlink, ErrResolve, ErrCreate, ErrRemove,
 		ErrCopy, ErrSetPermission, ErrWalk, ErrInvalidFilter,
@@ -60,7 +60,7 @@ func TestPathlibError(t *testing.T) {
 		t.Parallel()
 
 		require.Equal(t, "file already exists", ErrFileExist.Message())
-		require.Equal(t, "file already exists [PATHLIB.EXIST.FILE]", ErrFileExist.Error())
+		require.Equal(t, "file already exists (PATHLIB.EXIST.FILE)", ErrFileExist.Error())
 	})
 
 	t.Run("Malformed code panics", func(t *testing.T) {
@@ -122,21 +122,6 @@ func TestRaisedError(t *testing.T) {
 		require.Equal(t, []Path{p}, cause.Paths())
 	})
 
-	t.Run("A condition of the cause does not match a kind", func(t *testing.T) {
-		t.Parallel()
-
-		// The operating system reported the missing path, so the kind stays the
-		// one of the operation. The condition matches through the cause.
-		err := wrapErr(ErrOpen, fs.ErrNotExist, p)
-		require.ErrorIs(t, err, fs.ErrNotExist)
-		require.NotErrorIs(t, err, ErrNotExist)
-		require.ErrorIs(t, wrapErr(ErrWalk, err, p), fs.ErrNotExist)
-
-		// A kind without a matching cause does not match a standard sentinel.
-		require.NotErrorIs(t, pathErr(ErrNotExist, p), fs.ErrNotExist)
-		require.ErrorIs(t, wrapErr(ErrNotExist, fs.ErrNotExist, p), fs.ErrNotExist)
-	})
-
 	t.Run("A kind does not match a sibling through the cause", func(t *testing.T) {
 		t.Parallel()
 
@@ -168,15 +153,15 @@ func TestRaisedError_Error(t *testing.T) {
 		Err    error
 		Expect string
 	}{
-		{"Kind without cause", raiseError(ErrNotDir, nil), "path is not a directory [PATHLIB.NOT_DIR]"},
-		{"One path", pathErr(ErrNotDir, p), "path is not a directory [PATHLIB.NOT_DIR]: " + p.String()},
-		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other [PATHLIB.REL_IMPOSSIBLE]: [" + p.String() + ", " + o.String() + "]"},
-		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path [PATHLIB.ACCESS.OPEN]: " + p.String() + ": permission denied"},
-		{"Cause without path", raiseError(ErrLookup, fs.ErrPermission), "could not look up directory [PATHLIB.LOOKUP]: permission denied"},
-		{"Permission value", permRangeErr(0o1000, p), "permission has bits outside PermissionBits [PATHLIB.INVALID_PERMISSION.RANGE]: " + p.String() + " (perm 01000)"},
-		{"Empty pattern", patternErr(ErrEmptyPattern, "", nil, p), "pattern may not be empty [PATHLIB.EMPTY_PATTERN]: " + p.String() + ` (pattern "")`},
-		{"Bad pattern", patternErr(ErrBadPattern, "a/[", path.ErrBadPattern, p), "malformed pattern [PATHLIB.BAD_PATTERN]: " + p.String() + ` (pattern "a/["): syntax error in pattern`},
-		{"Empty mode", permModeErr("", p), "unsupported open mode [PATHLIB.INVALID_PERMISSION.UNSUPPORTED_MODE]: " + p.String() + ` (mode "")`},
+		{"Kind without cause", raiseError(ErrNotDir, nil), "path is not a directory (PATHLIB.NOT_DIR)"},
+		{"One path", pathErr(ErrNotDir, p), "path is not a directory (PATHLIB.NOT_DIR): " + p.String()},
+		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other (PATHLIB.REL_IMPOSSIBLE): [" + p.String() + ", " + o.String() + "]"},
+		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path (PATHLIB.ACCESS.OPEN): " + p.String() + ": permission denied"},
+		{"Cause without path", raiseError(ErrLookup, fs.ErrPermission), "could not look up directory (PATHLIB.LOOKUP): permission denied"},
+		{"Permission value", permRangeErr(0o1000, p), "permission has bits outside PermissionBits (PATHLIB.INVALID_PERMISSION.RANGE): " + p.String() + " (perm 01000)"},
+		{"Empty pattern", patternErr(ErrEmptyPattern, "", nil, p), "pattern may not be empty (PATHLIB.EMPTY_PATTERN): " + p.String() + ` (pattern "")`},
+		{"Bad pattern", patternErr(ErrBadPattern, "a/[", path.ErrBadPattern, p), "malformed pattern (PATHLIB.BAD_PATTERN): " + p.String() + ` (pattern "a/["): syntax error in pattern`},
+		{"Empty mode", permModeErr("", p), "unsupported open mode (PATHLIB.INVALID_PERMISSION.UNSUPPORTED_MODE): " + p.String() + ` (mode "")`},
 	}
 
 	for _, c := range cases {
