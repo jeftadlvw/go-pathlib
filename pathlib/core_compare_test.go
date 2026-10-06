@@ -350,3 +350,28 @@ func TestPath_EqualsIsNotPointerIdentity(t *testing.T) {
 	require.False(t, a == b)
 	require.True(t, a.Equals(b))
 }
+
+func TestCompareOption_ZeroValueIsCaseSensitive(t *testing.T) {
+	var zero CompareOption
+	require.Equal(t, CaseSensitive, zero)
+
+	upper := NewPathFromPosix("Dir/File.TXT")
+	lower := NewPathFromPosix("dir/file.txt")
+
+	cases := []TestCase[[]CompareOption, bool]{
+		{Name: "no option", Input: nil, Expect: false},
+		{Name: "zero value", Input: []CompareOption{zero}, Expect: false},
+		{Name: "CaseSensitive", Input: []CompareOption{CaseSensitive}, Expect: false},
+		{Name: "CaseInsensitive", Input: []CompareOption{CaseInsensitive}, Expect: true},
+	}
+
+	runForResults(t, cases, func(t *testing.T, opts []CompareOption, expect bool) {
+		require.Equal(t, expect, upper.Equals(lower, opts...), "Equals")
+		require.Equal(t, expect, upper.EqualsString(lower.ToPosix(), opts...), "EqualsString")
+		require.Equal(t, expect, upper.MatchesPattern("dir/*.txt", opts...), "MatchesPattern")
+
+		// Exact casing always matches.
+		require.True(t, upper.Equals(upper.Copy(), opts...))
+		require.True(t, upper.MatchesPattern("Dir/*.TXT", opts...))
+	})
+}

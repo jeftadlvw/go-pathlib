@@ -97,7 +97,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 				Pattern: "*.txt", Options: DefaultGlobOptions(),
 				Setup: setupComplexDir,
 			},
-			Expect: Expect{FoundPaths: []string{"Temp.txt", "Foo.TXT"}}, // Non-recursive only matches top-level
+			Expect: Expect{FoundPaths: []string{"Temp.txt"}}, // Non-recursive only matches top-level, case-sensitive by default
 			Error:  false,
 		},
 		{
@@ -106,7 +106,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 				Pattern: "d*", Options: DefaultGlobOptions(),
 				Setup: setupComplexDir,
 			},
-			Expect: Expect{FoundPaths: []string{"data", "dump.JSON"}}, // case-insensitive by default
+			Expect: Expect{FoundPaths: []string{"data", "dump.JSON"}},
 			Error:  false,
 		},
 		{
@@ -137,7 +137,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 				Pattern: "**/*.txt", Options: GlobOptions{},
 				Setup: setupComplexDir,
 			},
-			Expect: Expect{FoundPaths: []string{"data/report.txt", "data/docs/summary.txt", "Temp.txt", "Foo.TXT"}},
+			Expect: Expect{FoundPaths: []string{"data/report.txt", "data/docs/summary.txt", "Temp.txt"}},
 			Error:  false,
 		},
 		{
@@ -185,7 +185,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 		 * CaseSensitivity
 		 */
 		{
-			Name: "CaseSensitivity=true, *.txt - matches only lowercase .txt",
+			Name: "CaseSensitive, *.txt - matches only lowercase .txt",
 			Input: Input{
 				Pattern: "*.txt", Options: GlobOptions{CaseSensitivity: CaseSensitive},
 				Setup: setupComplexDir,
@@ -194,9 +194,36 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 		{
-			Name: "CaseSensitivity=true, *.TXT - no match (no files end in .TXT)",
+			Name: "CaseSensitive, *.TXT - matches only uppercase .TXT",
 			Input: Input{
 				Pattern: "*.TXT", Options: GlobOptions{CaseSensitivity: CaseSensitive},
+				Setup: setupComplexDir,
+			},
+			Expect: Expect{FoundPaths: []string{"Foo.TXT"}},
+			Error:  false,
+		},
+		{
+			Name: "CaseInsensitive, *.txt - matches every casing",
+			Input: Input{
+				Pattern: "*.txt", Options: GlobOptions{CaseSensitivity: CaseInsensitive},
+				Setup: setupComplexDir,
+			},
+			Expect: Expect{FoundPaths: []string{"Temp.txt", "Foo.TXT"}},
+			Error:  false,
+		},
+		{
+			Name: "CaseInsensitive, **/*.TXT - matches every casing recursively",
+			Input: Input{
+				Pattern: "**/*.TXT", Options: GlobOptions{CaseSensitivity: CaseInsensitive},
+				Setup: setupComplexDir,
+			},
+			Expect: Expect{FoundPaths: []string{"data/report.txt", "data/docs/summary.txt", "Temp.txt", "Foo.TXT"}},
+			Error:  false,
+		},
+		{
+			Name: "Zero value GlobOptions is case-sensitive",
+			Input: Input{
+				Pattern: "*.TXT", Options: GlobOptions{},
 				Setup: setupComplexDir,
 			},
 			Expect: Expect{FoundPaths: []string{"Foo.TXT"}},
@@ -450,7 +477,7 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Error:  false,
 		},
 		{
-			Name: "Matching is case-insensitive",
+			Name: "Matching is case-sensitive",
 			Input: Input{
 				Pattern: "*.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
@@ -459,7 +486,7 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 					return dir
 				},
 			},
-			Expect: Expect{HasMatch: true},
+			Expect: Expect{HasMatch: false},
 			Error:  false,
 		},
 	}

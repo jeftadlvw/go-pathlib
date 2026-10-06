@@ -5,11 +5,20 @@ import (
 	"strings"
 )
 
-type CompareOption bool
+/*
+CompareOption selects how casing is compared in path equality and pattern matching.
+
+The zero value is CaseSensitive, so comparisons are strict unless CaseInsensitive
+is passed explicitly.
+*/
+type CompareOption uint8
 
 const (
-	CaseSensitive   CompareOption = true
-	CaseInsensitive CompareOption = false
+	// CaseSensitive compares casing exactly. It is the zero value and the default.
+	CaseSensitive CompareOption = iota
+
+	// CaseInsensitive ignores casing.
+	CaseInsensitive
 )
 
 /*
@@ -28,14 +37,9 @@ func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, err
 		return false, pathErr(ErrEmptyPattern, *p)
 	}
 
-	caseSensitive := true
-	if len(opts) > 0 {
-		caseSensitive = bool(opts[0])
-	}
-
 	pathString := p.ToPosix()
 
-	if !caseSensitive {
+	if len(opts) > 0 && opts[0] == CaseInsensitive {
 		pattern = strings.ToLower(pattern)
 		pathString = strings.ToLower(pathString)
 	}
@@ -214,16 +218,11 @@ func (p *Path) Equals(other *Path, opts ...CompareOption) bool {
 		return p == other
 	}
 
-	caseSensitive := CaseSensitive
-	if len(opts) > 0 {
-		caseSensitive = opts[0]
+	if len(opts) > 0 && opts[0] == CaseInsensitive {
+		return strings.EqualFold(p.pathWithWindowsAnchor(), other.pathWithWindowsAnchor())
 	}
 
-	if caseSensitive {
-		return p.pathWithWindowsAnchor() == other.pathWithWindowsAnchor()
-	}
-
-	return strings.EqualFold(p.pathWithWindowsAnchor(), other.pathWithWindowsAnchor())
+	return p.pathWithWindowsAnchor() == other.pathWithWindowsAnchor()
 }
 
 /*

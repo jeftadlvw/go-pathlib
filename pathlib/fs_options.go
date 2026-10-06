@@ -100,7 +100,7 @@ GlobOptions contains options for file globbing.
 */
 type GlobOptions struct {
 	// CaseSensitivity defines whether pattern matching should be case-sensitive or not.
-	// Defaults to CaseInsensitive.
+	// Defaults to CaseSensitive.
 	CaseSensitivity CompareOption
 
 	// Filter defines which type of entry to glob:
@@ -130,7 +130,7 @@ DefaultGlobOptions returns the default options for directory operations.
 func DefaultGlobOptions() GlobOptions {
 	return GlobOptions{
 		Limit:           0,
-		CaseSensitivity: CaseInsensitive,
+		CaseSensitivity: CaseSensitive,
 		Filter:          GlobOptionFilterAll,
 		FilterFunc:      nil,
 		SkipOnDirError:  false,

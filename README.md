@@ -109,6 +109,8 @@ Although we recommend handling paths in a case-insensitive manner, we respect st
 
 All three are nil-safe. Never compare paths with `==`, which compares pointers.
 
+Pattern matching (`MatchesPattern`) and globbing (`Glob`, `List`, `ListFiles`, `ListDirs`, `HasGlobMatch`) are case-sensitive by default as well. Pass `CaseInsensitive`, or set `GlobOptions.CaseSensitivity` to it, to ignore casing. The zero value of `CompareOption` is `CaseSensitive`, so a zero `GlobOptions{}` is strict too.
+
 ### Migrating from `os` and `filepath`
 Most code ported from `os` and `filepath` keeps compiling after switching to `*Path`. The points below are the ones that then quietly behave differently.
 

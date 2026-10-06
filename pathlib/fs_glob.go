@@ -176,7 +176,7 @@ func patternMaxDepth(pattern string) int {
 HasGlobMatchE returns whether the passed pattern exists within this Path's directory.
 
 This function uses GlobWithOptions with GlobOptions{Limit: 1}, so the pattern
-syntax (including "**") and the case-insensitive matching are the same.
+syntax (including "**") is the same and matching is case-sensitive.
 */
 func (p *Path) HasGlobMatchE(pattern string) (bool, error) {
 	matches, err := p.GlobWithOptions(pattern, GlobOptions{Limit: 1})
