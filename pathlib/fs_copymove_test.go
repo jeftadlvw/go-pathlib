@@ -2,6 +2,8 @@ package pathlib
 
 import (
 	"errors"
+	"io/fs"
+	"os"
 	"slices"
 	"testing"
 
@@ -627,4 +629,18 @@ func TestRename(t *testing.T) {
 		slices.Sort(expect.FinalEntries)
 		require.Equal(t, expect.FinalEntries, finalState)
 	})
+}
+
+func TestRemoveAll_SymlinkToDirectoryRemovesOnlyLink(t *testing.T) {
+	root := setupTempDir(t)
+	target := createTempDir(t, root, "target_dir")
+	file := writeTempFile(t, target, "file.txt", "")
+	link := createTempSymlinkAbs(t, root, "target_dir", "link_to_dir")
+
+	require.NoError(t, RemoveAll(link))
+
+	_, err := os.Lstat(link.String())
+	require.ErrorIs(t, err, fs.ErrNotExist, "the symlink is removed")
+	require.True(t, target.IsDir(), "the target directory is kept")
+	require.True(t, file.IsFile(), "the target's content is kept")
 }

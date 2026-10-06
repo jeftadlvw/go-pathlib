@@ -255,6 +255,10 @@ func Remove(path *Path) error {
 RemoveAll recursively removes the directory and all its entries at the specified path.
 
 Nothing happens if the given path does not exist.
+
+Unlike os.RemoveAll, the path must be a directory. Any other existing path returns
+ErrNotDir and is left in place. Use Remove for files. If the path is a symlink to a
+directory, only the symlink is removed.
 */
 func RemoveAll(path *Path) error {
 	if !path.Exists() {
