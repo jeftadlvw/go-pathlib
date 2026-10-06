@@ -90,7 +90,7 @@ Methods that return path components (`Anchor()`, `Base()`, `Parts()`, `Split()`,
 ### `\` on Posix vs `\` on Windows
 Backslashes (`\`) are allowed in regular Posix path part _names_, but are seen as _path separators_ in Windows paths. Thus, a path string containing a backslash is interpreted differently on different operating systems. This is a problem if a filepath with backslashes is persisted using Posix and read/used on Windows.
 
-There is really nothing to prevent this behavior, which is why this library prints a warning to stderr if a Posix path string contains a backslash. You can disable these warnings by setting `pathlib.PrintBackslashWarningOnPosix` to `false`.
+There is really nothing to prevent this behavior. Before persisting a path, check it with `HasBackslash()` and decide how your application handles it, e.g. by rejecting the path or by logging a warning. The library itself never prints anything. `NewPathFromWindows` converts backslashes to separators, so paths parsed from Windows strings never contain one.
 
 ### Persisting file paths
 When persisting file paths in e.g. configuration files or a database, use **lowercase paths** and use the **posix representation** for maximum portability. Also persist a path **relative to some base path**, and resolve the absolute path at runtime.

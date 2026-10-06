@@ -61,7 +61,7 @@ func NewPath(path string) *Path {
 /*
 NewPathFromPosix interprets the passed string as a Posix path, independent of the
 runtime OS. A backslash is treated as an ordinary filename character, not a
-separator. On Posix, a warning is printed to flag the cross-platform ambiguity.
+separator. Such a path changes its structure on Windows, use HasBackslash to check for it.
 
 The passed path string is automatically cleaned and ready for further use using the following rules:
   - Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
@@ -79,8 +79,6 @@ The path is not lowercased, because the path might be used on a case-sensitive f
 Functions that are case-insensitive must additionally lowercase this representation.
 */
 func NewPathFromPosix(path string) *Path {
-	warnForBackslashesOnPosix(path)
-
 	return &Path{path: normalizePath(path)}
 }
 
@@ -95,7 +93,6 @@ canonical separator and Windows volume names (e.g. "C:") and UNC anchors (e.g.
 NewPathFromPosix apply to the remainder.
 */
 func NewPathFromWindows(path string) *Path {
-	warnForBackslashesOnPosix(path)
 	return normalizeWindowsPath(path)
 }
 

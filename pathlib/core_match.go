@@ -1,12 +1,9 @@
 package pathlib
 
 import (
-	"fmt"
 	"math/rand/v2"
-	"os"
 	"path"
 	"strings"
-	"testing"
 )
 
 // matchPattern is the internal implementation that handles ** expansion.
@@ -294,25 +291,6 @@ dotCount is a simple helper function that returns the number of '.' occurrences 
 */
 func dotCount(s string) int {
 	return strings.Count(s, ".")
-}
-
-/*
-warnForBackslashesOnPosix prints a warning if we're running on in a non-Windows environment
-and the given string contains backslashes.
-
-This is because backslashes are allowed as a path part in Posix path strings.
-However, on Windows they are a path separator. When persisting a path containing backslashes
-from a Posix environment using Path.String or Path.ToPosix will cause path traversal errors
-when the persisted path is read and used on Windows environments.
-
-Printing the warning can be disabled by setting PrintBackslashWarningOnPosix to false.
-The warning is also suppressed automatically while running under "go test".
-*/
-func warnForBackslashesOnPosix(p string) {
-	if notRunningOnWindows && PrintBackslashWarningOnPosix && !testing.Testing() && strings.Contains(p, "\\") {
-		_, _ = os.Stderr.WriteString("Warning: Usage of backslashes in path string on Posix-like environments. " +
-			"This will break the path part structure if used on Windows: " + fmt.Sprintf(`"%s"`, p) + ".\n")
-	}
 }
 
 /*

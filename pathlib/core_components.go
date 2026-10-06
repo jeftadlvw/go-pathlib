@@ -76,6 +76,20 @@ func (p *Path) HasDotName() bool {
 }
 
 /*
+HasBackslash reports whether a part of this Path contains a backslash.
+
+Posix allows backslashes in names, but Windows treats them as separators. Such a
+path changes its structure when it is persisted on Posix and used on Windows.
+Paths from NewPathFromWindows never contain one, because their backslashes are
+converted to separators.
+
+This is a purely lexical check that does not touch the filesystem.
+*/
+func (p *Path) HasBackslash() bool {
+	return strings.Contains(p.path, windowsPathSeparator)
+}
+
+/*
 Stem returns the base of this Path without all extensions.
 */
 func (p *Path) Stem() string {

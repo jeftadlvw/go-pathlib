@@ -29,10 +29,6 @@ form). To join a Windows-formatted or OS-native string, parse it first and use J
 p.Join(NewPathFromWindows(s)) or p.Join(NewPath(s)).
 */
 func (p *Path) JoinStrings(paths ...string) *Path {
-	for _, localPath := range paths {
-		warnForBackslashesOnPosix(localPath)
-	}
-
 	return p.copyWithNewPath(path.Join(append([]string{p.path}, paths...)...))
 }
 
@@ -40,7 +36,7 @@ func (p *Path) JoinStrings(paths ...string) *Path {
 WithName returns this Path but with another base.
 
 name is interpreted as a Posix string, like JoinStrings: a backslash is an ordinary
-filename character, not a separator, and passing one on Posix logs a warning.
+filename character, not a separator.
 */
 func (p *Path) WithName(name string) *Path {
 	return p.Parent().JoinStrings(name)

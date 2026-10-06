@@ -19,10 +19,6 @@ var windowsNetworkPathRegex = regexp.MustCompile("^//[a-zA-Z0-9]+/[a-zA-Z0-9]+")
 
 var multipleWindowsPathSeparatorsRegex = regexp.MustCompile(`\\{2,}`)
 
-// PrintBackslashWarningOnPosix is a toggle for printing a warning on Posix
-// if a path string contains a backslash.
-var PrintBackslashWarningOnPosix = true
-
 // Windows path state bitmask values for windowsPathEncodings.
 const (
 	// windowsPathStateVolume indicates a Windows path anchored to a drive volume (e.g. "C:\foo").

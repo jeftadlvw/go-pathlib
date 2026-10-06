@@ -335,3 +335,24 @@ func TestPath_HasDotName(t *testing.T) {
 		require.Equal(t, expected, NewPath(input).HasDotName(), "HasDotName(%q)", input)
 	}
 }
+
+func TestPath_HasBackslash(t *testing.T) {
+	cases := []TestCase[*Path, bool]{
+		{Name: "Posix name with backslash", Input: NewPathFromPosix(`a\b`), Expect: true},
+		{Name: "Posix path without backslash", Input: NewPathFromPosix("a/b"), Expect: false},
+		{Name: "Windows path converts backslashes", Input: NewPathFromWindows(`C:\a\b`), Expect: false},
+		{Name: "Windows UNC path", Input: NewPathFromWindows(`\\host\share\a`), Expect: false},
+		{Name: "JoinStrings keeps backslash as name character", Input: NewPathFromPosix("a").JoinStrings(`b\c`), Expect: true},
+		{Name: "WithName keeps backslash as name character", Input: NewPathFromPosix("a/b").WithName(`c\d`), Expect: true},
+		{Name: "OS path", Input: NewPath(`a\b`), Expect: notRunningOnWindows},
+		{Name: "Unmarshalled path", Input: func() *Path {
+			p := &Path{}
+			require.NoError(t, p.UnmarshalText([]byte(`C:\Program Files\Epic Games`)))
+			return p
+		}(), Expect: false},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		require.Equal(t, expect, input.HasBackslash())
+	})
+}
