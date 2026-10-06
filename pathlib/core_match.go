@@ -277,13 +277,6 @@ func findMatchLengthAt(name string, startIdx int, pattern string) int {
 	return length
 }
 
-func mathAbsInt(i int) int {
-	if i < 0 {
-		return -i
-	}
-	return i
-}
-
 func stripLeadingDots(s string) string {
 	return strings.TrimLeft(s, ".")
 }

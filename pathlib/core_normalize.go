@@ -1,7 +1,6 @@
 package pathlib
 
 import (
-	"os"
 	"path"
 	"regexp"
 	"runtime"
@@ -11,9 +10,7 @@ import (
 const runningOnWindows = runtime.GOOS == "windows"
 const notRunningOnWindows = !runningOnWindows
 
-const osPathSeparator = string(os.PathSeparator)
 const canonicalPathSeparator = "/"
-const posixPathSeparator = "/"
 const windowsPathSeparator = "\\"
 
 // Regexes use forward slash instead of backwards slash, because we assume forward slash input
