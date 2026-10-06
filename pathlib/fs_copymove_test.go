@@ -644,3 +644,127 @@ func TestRemoveAll_SymlinkToDirectoryRemovesOnlyLink(t *testing.T) {
 	require.True(t, target.IsDir(), "the target directory is kept")
 	require.True(t, file.IsFile(), "the target's content is kept")
 }
+
+func TestRemove_Symlinks(t *testing.T) {
+	t.Run("broken symlink is removed", func(t *testing.T) {
+		root := setupTempDir(t)
+		link := createTempSymlinkAbs(t, root, "missing", "link")
+
+		require.NoError(t, Remove(link))
+		requireLExists(t, false, link)
+	})
+
+	t.Run("symlink to file removes only the link", func(t *testing.T) {
+		root := setupTempDir(t)
+		target := writeTempFile(t, root, "target.txt", "content")
+		link := createTempSymlinkAbs(t, root, "target.txt", "link")
+
+		require.NoError(t, Remove(link))
+		requireLExists(t, false, link)
+		require.True(t, target.IsFile())
+	})
+}
+
+func TestRemove_PathBelowFileIsNoop(t *testing.T) {
+	root := setupTempDir(t)
+	file := writeTempFile(t, root, "file.txt", "")
+
+	require.NoError(t, Remove(file.JoinStrings("child")))
+	require.NoError(t, RemoveAll(file.JoinStrings("child")))
+	require.True(t, file.IsFile())
+}
+
+func TestRemove_UncheckablePathIsAnError(t *testing.T) {
+	root := setupTempDir(t)
+	dir := createTempDir(t, root, "locked")
+	file := writeTempFile(t, dir, "file.txt", "")
+	subdir := createTempDir(t, dir, "subdir")
+	lockDir(t, dir)
+
+	// Before, both silently returned nil and left the paths in place.
+	err := Remove(file)
+	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, fs.ErrPermission)
+
+	err = RemoveAll(subdir)
+	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, fs.ErrPermission)
+}
+
+func TestRemoveAll_BrokenSymlinkIsNotADirectory(t *testing.T) {
+	root := setupTempDir(t)
+	link := createTempSymlinkAbs(t, root, "missing", "link")
+
+	require.ErrorIs(t, RemoveAll(link), ErrNotDir)
+	requireLExists(t, true, link, "the link is left in place")
+}
+
+func TestCopy_BrokenSymlinks(t *testing.T) {
+	t.Run("broken symlink is copied as symlink", func(t *testing.T) {
+		root := setupTempDir(t)
+		src := createTempSymlinkRel(t, root, "missing", "link")
+		dst := root.JoinStrings("copy")
+
+		require.NoError(t, Copy(src, dst))
+		require.True(t, dst.IsSymlink())
+		target, err := dst.ReadSymlinkTarget()
+		require.NoError(t, err)
+		require.True(t, target.EqualsString("missing"))
+	})
+
+	t.Run("directory containing a broken symlink is copied", func(t *testing.T) {
+		root := setupTempDir(t)
+		src := createTempDir(t, root, "src")
+		writeTempFile(t, src, "file.txt", "")
+		createTempSymlinkRel(t, root, "missing", "src/link")
+		dst := root.JoinStrings("dst")
+
+		require.NoError(t, Copy(src, dst))
+		require.True(t, dst.JoinStrings("file.txt").IsFile())
+		require.True(t, dst.JoinStrings("link").IsSymlink())
+	})
+
+	t.Run("file is not copied through a broken symlink", func(t *testing.T) {
+		root := setupTempDir(t)
+		src := writeTempFile(t, root, "src.txt", "content")
+		link := createTempSymlinkAbs(t, root, "target.txt", "link")
+
+		err := Copy(src, link)
+		require.ErrorIs(t, err, ErrExist)
+		require.True(t, link.IsSymlink(), "the link is left in place")
+		requireLExists(t, false, root.JoinStrings("target.txt"), "the link target is not created")
+	})
+
+	t.Run("directory is not copied onto a broken symlink", func(t *testing.T) {
+		root := setupTempDir(t)
+		src := createTempDir(t, root, "src")
+		link := createTempSymlinkAbs(t, root, "target_dir", "link")
+
+		err := Copy(src, link)
+		require.ErrorIs(t, err, ErrExist)
+		require.True(t, link.IsSymlink(), "the link is left in place")
+		requireLExists(t, false, root.JoinStrings("target_dir"), "the link target is not created")
+	})
+}
+
+func TestMove_BrokenSymlinks(t *testing.T) {
+	t.Run("broken symlink is moved", func(t *testing.T) {
+		root := setupTempDir(t)
+		src := createTempSymlinkRel(t, root, "missing", "link")
+		dst := root.JoinStrings("moved")
+
+		require.NoError(t, Move(src, dst))
+		requireLExists(t, false, src)
+		require.True(t, dst.IsSymlink())
+	})
+
+	t.Run("file is not moved onto a broken symlink", func(t *testing.T) {
+		root := setupTempDir(t)
+		src := writeTempFile(t, root, "src.txt", "content")
+		link := createTempSymlinkAbs(t, root, "missing", "link")
+
+		require.ErrorIs(t, Move(src, link), ErrExist)
+		require.True(t, src.IsFile(), "the source is left in place")
+		require.True(t, link.IsSymlink(), "the link is not replaced")
+	})
+}

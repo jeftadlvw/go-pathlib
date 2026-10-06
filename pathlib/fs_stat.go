@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 /*
@@ -37,10 +38,23 @@ func (p *Path) IsEmptyDir() bool {
 /*
 Exists returns whether this Path exists.
 
-If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
+If this Path is a symlink, the target is used, so a broken symlink does not exist.
+Use LExists to check the path itself. Exists also returns false if the path
+cannot be checked, e.g. for missing permissions.
 */
 func (p *Path) Exists() bool {
 	return pathCheck(p) != pathCheckNoExistOrUnreadable
+}
+
+/*
+LExists returns whether this Path exists, without following symlinks.
+A symlink exists even if its target does not.
+
+LExists also returns false if the path cannot be checked, e.g. for missing permissions.
+*/
+func (p *Path) LExists() bool {
+	exists, err := lexists(p)
+	return exists && err == nil
 }
 
 /*
@@ -162,6 +176,27 @@ func requireDir(p *Path) error {
 	}
 
 	return nil
+}
+
+/*
+lexists reports whether this Path exists, without following symlinks.
+
+Unlike LExists, it tells a missing path apart from one that cannot be checked:
+a missing path, including one below a non-directory, returns false and no error.
+Any other failure, e.g. missing permissions, returns ErrStat with the os cause.
+*/
+func lexists(p *Path) (bool, error) {
+	_, err := os.Lstat(p.String())
+	if err == nil {
+		return true, nil
+	}
+
+	// Posix reports a path below a file as ENOTDIR, Windows as not existing.
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
+		return false, nil
+	}
+
+	return false, wrapErr(ErrStat, err, *p)
 }
 
 /*

@@ -598,3 +598,57 @@ func TestSetPermission(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestCreate_BrokenSymlinks(t *testing.T) {
+	t.Run("CreateFileWithOptions does not create the link target", func(t *testing.T) {
+		for _, existOk := range []bool{false, true} {
+			root := setupTempDir(t)
+			link := createTempSymlinkAbs(t, root, "target.txt", "link")
+
+			created, err := CreateFileWithOptions(link, FileOptions{ExistOk: existOk})
+			require.ErrorIs(t, err, ErrNotFile, "ExistOk=%v", existOk)
+			require.False(t, created)
+			requireLExists(t, false, root.JoinStrings("target.txt"), "ExistOk=%v", existOk)
+		}
+	})
+
+	t.Run("MkDirWithOptions does not create the link target", func(t *testing.T) {
+		for _, createAll := range []bool{false, true} {
+			root := setupTempDir(t)
+			link := createTempSymlinkAbs(t, root, "target_dir", "link")
+
+			created, err := MkDirWithOptions(link, DirOptions{CreateAll: createAll})
+			require.ErrorIs(t, err, ErrNotDir, "CreateAll=%v", createAll)
+			require.False(t, created)
+			requireLExists(t, false, root.JoinStrings("target_dir"), "CreateAll=%v", createAll)
+		}
+	})
+
+	t.Run("CreateSymlink over a broken symlink", func(t *testing.T) {
+		root := setupTempDir(t)
+		link := createTempSymlinkAbs(t, root, "missing", "link")
+
+		err := CreateSymlink(root, link)
+		var pathlibErr *PathlibError
+		require.ErrorAs(t, err, &pathlibErr)
+		require.Equal(t, ErrExist, pathlibErr.Kind(), "raised by the existence check, not by os.Symlink")
+	})
+}
+
+func TestCreateFileWithOptions_SymlinkToFile(t *testing.T) {
+	root := setupTempDir(t)
+	target := writeTempFile(t, root, "target.txt", "content")
+	link := createTempSymlinkAbs(t, root, "target.txt", "link")
+
+	// A symlink to a file counts as that file.
+	created, err := CreateFileWithOptions(link, FileOptions{ExistOk: true})
+	require.NoError(t, err)
+	require.False(t, created)
+
+	_, err = CreateFileWithOptions(link, FileOptions{})
+	require.ErrorIs(t, err, ErrFileExist)
+
+	content, err := os.ReadFile(target.String())
+	require.NoError(t, err)
+	require.Equal(t, "content", string(content), "the target is not truncated")
+}

@@ -135,13 +135,22 @@ func TestErrExist_MatchesBothSentinels(t *testing.T) {
 			src := writeTempFile(t, root, "src.txt", "")
 			return Move(src, writeTempFile(t, root, "dst.txt", ""))
 		}},
-
-		// Raised by the operating system and wrapped with an operation kind. The
-		// broken symlink passes the existence check, but os.Symlink refuses it.
 		{"CreateSymlink over broken symlink", func(t *testing.T, root *Path) error {
 			link := createTempSymlinkAbs(t, root, "missing", "link")
 			return CreateSymlink(root, link)
 		}},
+		{"Copy onto broken symlink", func(t *testing.T, root *Path) error {
+			src := writeTempFile(t, root, "src.txt", "")
+			return Copy(src, createTempSymlinkAbs(t, root, "missing", "link"))
+		}},
+		{"Move onto broken symlink", func(t *testing.T, root *Path) error {
+			src := writeTempFile(t, root, "src.txt", "")
+			return Move(src, createTempSymlinkAbs(t, root, "missing", "link"))
+		}},
+
+		// An exist error raised by the operating system needs a race against the
+		// library's own checks, so it is not reproducible here. The alias mechanism
+		// that matches it is covered by TestPathlibError_Chain.
 	}
 
 	runErrCases(t, cases, func(t *testing.T, err error) {

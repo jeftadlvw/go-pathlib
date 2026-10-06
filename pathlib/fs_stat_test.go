@@ -485,3 +485,70 @@ func TestFsErrorsAreWrapped(t *testing.T) {
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 }
+
+func TestPath_LExists(t *testing.T) {
+	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
+		{
+			Name:   "File",
+			Input:  func(t *testing.T, root *Path) *Path { return writeTempFile(t, root, "file.txt", "") },
+			Expect: true,
+		},
+		{
+			Name:   "Directory",
+			Input:  func(t *testing.T, root *Path) *Path { return createTempDir(t, root, "dir") },
+			Expect: true,
+		},
+		{
+			Name: "Symlink to file",
+			Input: func(t *testing.T, root *Path) *Path {
+				writeTempFile(t, root, "target.txt", "")
+				return createTempSymlinkAbs(t, root, "target.txt", "link.txt")
+			},
+			Expect: true,
+		},
+		{
+			Name: "Broken symlink",
+			Input: func(t *testing.T, root *Path) *Path {
+				return createTempSymlinkAbs(t, root, "nonexistent_target", "broken_link")
+			},
+			Expect: true,
+		},
+		{
+			Name:   "Missing path",
+			Input:  func(t *testing.T, root *Path) *Path { return root.JoinStrings("missing") },
+			Expect: false,
+		},
+		{
+			Name: "Path below a file",
+			Input: func(t *testing.T, root *Path) *Path {
+				return writeTempFile(t, root, "file.txt", "").JoinStrings("child")
+			},
+			Expect: false,
+		},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		root := setupTempDir(t)
+		p := input(t, root)
+		require.Equal(t, expect, p.LExists())
+
+		exists, err := lexists(p)
+		require.NoError(t, err)
+		require.Equal(t, expect, exists)
+	})
+}
+
+func TestLexists_UncheckablePathIsAnError(t *testing.T) {
+	root := setupTempDir(t)
+	dir := createTempDir(t, root, "locked")
+	file := writeTempFile(t, dir, "file.txt", "")
+	lockDir(t, dir)
+
+	exists, err := lexists(file)
+	require.False(t, exists)
+	require.ErrorIs(t, err, ErrStat)
+	require.ErrorIs(t, err, fs.ErrPermission)
+	require.NotErrorIs(t, err, ErrNotExist)
+
+	require.False(t, file.LExists(), "LExists cannot report the error and returns false")
+}

@@ -159,3 +159,23 @@ func relPathsSorted(t *testing.T, entries []*Path, base *Path) []string {
 	slices.Sort(relPaths)
 	return relPaths
 }
+
+// lockDir removes all permissions from dir, so entries below it cannot be checked,
+// and restores them when the test ends. The test is skipped where directory
+// permissions are not enforced (Windows, or when running as root).
+func lockDir(t *testing.T, dir *Path) {
+	t.Helper()
+	if runningOnWindows || os.Geteuid() == 0 {
+		t.Skip("directory permissions are not enforced")
+	}
+
+	require.NoError(t, os.Chmod(dir.String(), 0000))
+	t.Cleanup(func() { _ = os.Chmod(dir.String(), 0755) })
+}
+
+// requireLExists asserts whether p exists, without following symlinks.
+func requireLExists(t *testing.T, expect bool, p *Path, msgAndArgs ...any) {
+	t.Helper()
+	_, err := os.Lstat(p.String())
+	require.Equal(t, expect, err == nil, msgAndArgs...)
+}

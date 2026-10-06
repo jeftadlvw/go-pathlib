@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 )
@@ -70,13 +71,21 @@ CreateFileWithOptions creates the file at the defined path with given options.
 If FileOptions.ExistOk is true and the file already exists, no action is taken and false is returned.
 Parent directories must exist.
 
+An existing path that is not a file returns ErrNotFile. This includes a broken symlink,
+whose target is never created.
+
 FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
 and defaults to DefaultFileMode.
 
 Returns true if a new file was created, false otherwise.
 */
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
-	if path.Exists() {
+	exists, err := lexists(path)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
 		if !path.IsFile() {
 			return false, pathErr(ErrNotFile, *path)
 		}
@@ -90,8 +99,13 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 		options.Mode = DefaultFileMode
 	}
 
-	file, err := os.OpenFile(path.String(), os.O_RDWR|os.O_CREATE|os.O_TRUNC, options.Mode)
+	// O_EXCL refuses a path created since the check, symlinks included, so an
+	// existing file is never truncated and no symlink target is created.
+	file, err := os.OpenFile(path.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, options.Mode)
 	if err != nil {
+		if options.ExistOk && errors.Is(err, fs.ErrExist) && path.IsFile() {
+			return false, nil
+		}
 		return false, wrapErr(ErrCreate, err, *path)
 	}
 
@@ -116,13 +130,20 @@ func MkDir(path *Path) error {
 MkDirWithOptions creates the directory at the defined path with given options.
 If ExistOk is true and the directory already exists, no action is taken.
 
+An existing path that is not a directory returns ErrNotDir. This includes a broken symlink.
+
 DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
 and defaults to DefaultDirMode.
 
 Returns true if a new directory was created, false otherwise.
 */
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
-	if path.Exists() {
+	exists, err := lexists(path)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
 		if !path.IsDir() {
 			return false, pathErr(ErrNotDir, *path)
 		}
@@ -136,7 +157,6 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 		options.Mode = DefaultDirMode
 	}
 
-	var err error
 	if options.CreateAll {
 		err = os.MkdirAll(path.String(), options.Mode)
 	} else {
@@ -144,6 +164,10 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	}
 
 	if err != nil {
+		// Another process may have created the directory since the check.
+		if options.ExistOk && errors.Is(err, fs.ErrExist) && path.IsDir() {
+			return false, nil
+		}
 		return false, wrapErr(ErrCreate, err, *path)
 	}
 
@@ -155,10 +179,15 @@ CreateSymlink creates a symlink at the symlinkPath that points to symlinkTarget.
 
 symlinkTarget may be relative or absolute.
 
-symlinkPath may not exist, but parent directory should.
+symlinkPath may not exist, but parent directory should. A broken symlink at
+symlinkPath exists too and returns ErrExist.
 */
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
-	if symlinkPath.Exists() {
+	exists, err := lexists(symlinkPath)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return pathErr(ErrExist, *symlinkPath)
 	}
 
@@ -166,7 +195,7 @@ func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 		return pathErr(ErrParentNotExist, *symlinkPath)
 	}
 
-	err := os.Symlink(symlinkTarget.String(), symlinkPath.String())
+	err = os.Symlink(symlinkTarget.String(), symlinkPath.String())
 	if err != nil {
 		return wrapErr(ErrCreate, err, *symlinkPath)
 	}

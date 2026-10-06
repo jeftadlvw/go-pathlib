@@ -1,7 +1,9 @@
 package pathlib
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 )
 
@@ -9,14 +11,19 @@ import (
 Copy copies the source path to the destination path.
 
 If the source path is a directory, the whole directory tree is copied. All other files
-and file types are copied as-is.
+and file types are copied as-is. A symlink is copied as a symlink, and this includes
+a broken symlink.
 
 Copying a directory requires the target directory to be empty.
 
 The source path must exist. Destination parent directories must exist.
 */
 func Copy(src *Path, destination *Path) error {
-	if !src.Exists() {
+	srcExists, err := lexists(src)
+	if err != nil {
+		return err
+	}
+	if !srcExists {
 		return pathErr(ErrNotExist, *src)
 	}
 
@@ -48,8 +55,14 @@ func copyFile(source *Path, destination *Path) error {
 		return err
 	}
 
-	// Ensure the target file does not exist
-	if destination.Exists() {
+	// Ensure the target file does not exist. A broken symlink exists too, and
+	// writing through it would create its target.
+	destinationExists, err := lexists(destination)
+	if err != nil {
+		return err
+	}
+
+	if destinationExists {
 		if destination.IsFile() {
 			return pathErr(ErrFileExist, *destination)
 		} else if destination.IsDir() {
@@ -66,8 +79,9 @@ func copyFile(source *Path, destination *Path) error {
 	}
 	defer sourceFile.Close()
 
-	// Create the destination file
-	destinationFile, err := os.OpenFile(destination.String(), os.O_RDWR|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
+	// Create the destination file. O_EXCL refuses a path created since the check,
+	// symlinks included, so nothing is overwritten or written through.
+	destinationFile, err := os.OpenFile(destination.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, srcInfo.Mode())
 	if err != nil {
 		return wrapErr(ErrCreate, err, *destination)
 	}
@@ -129,7 +143,12 @@ func copyDir(src *Path, dst *Path) error {
 		return err
 	}
 
-	if dst.Exists() {
+	dstExists, err := lexists(dst)
+	if err != nil {
+		return err
+	}
+
+	if dstExists {
 		if dst.IsFile() {
 			// Ensure the target directory is not a file
 			return pathErr(ErrTypeMismatch, *src, *dst)
@@ -188,25 +207,35 @@ Move moves the file or directory at the source path to the destination path.
 If the destination is on the same filesystem, this is equivalent to a rename operation.
 
 Fails if destination already exists, except if the source path is a directory, and the target path
-is an empty directory.
+is an empty directory. A broken symlink at the destination exists too.
+
+A symlink is moved as a symlink, and this includes a broken symlink.
 
 Destination parent directories must exist.
 */
 func Move(src *Path, dst *Path) error {
-	if !src.Exists() {
+	srcExists, err := lexists(src)
+	if err != nil {
+		return err
+	}
+	if !srcExists {
 		return pathErr(ErrNotExist, *src)
 	}
 
 	// Destination path may not exist, except if source is a directory
 	// and destination is an empty directory too.
-	if src.IsDir() && dst.IsEmptyDir() {
-		// do nothing
-	} else if dst.Exists() {
-		return pathErr(ErrExist, *dst)
+	if !(src.IsDir() && dst.IsEmptyDir()) {
+		dstExists, err := lexists(dst)
+		if err != nil {
+			return err
+		}
+		if dstExists {
+			return pathErr(ErrExist, *dst)
+		}
 	}
 
 	// Try renaming first (works if on same filesystem)
-	err := os.Rename(src.String(), dst.String())
+	err = os.Rename(src.String(), dst.String())
 	if err == nil {
 		return nil
 	}
@@ -236,15 +265,22 @@ func Rename(src *Path, name string) error {
 Remove removes the file at the specified path
 or removes an empty directory.
 
-Nothing happens if the given path does not exist.
+Nothing happens if the given path does not exist. A symlink is removed itself,
+never its target, and this includes a broken symlink. If the path cannot be
+checked, e.g. for missing permissions, ErrStat is returned.
 */
 func Remove(path *Path) error {
-	if !path.Exists() {
+	exists, err := lexists(path)
+	if err != nil {
+		return err
+	}
+	if !exists {
 		return nil
 	}
 
-	err := os.Remove(path.String())
-	if err != nil {
+	// The path may have vanished since the check, which is the wanted outcome.
+	err = os.Remove(path.String())
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return wrapErr(ErrRemove, err, *path)
 	}
 
@@ -257,11 +293,16 @@ RemoveAll recursively removes the directory and all its entries at the specified
 Nothing happens if the given path does not exist.
 
 Unlike os.RemoveAll, the path must be a directory. Any other existing path returns
-ErrNotDir and is left in place. Use Remove for files. If the path is a symlink to a
-directory, only the symlink is removed.
+ErrNotDir and is left in place, and this includes a broken symlink. Use Remove for
+files and symlinks. If the path is a symlink to a directory, only the symlink is removed.
+If the path cannot be checked, e.g. for missing permissions, ErrStat is returned.
 */
 func RemoveAll(path *Path) error {
-	if !path.Exists() {
+	exists, err := lexists(path)
+	if err != nil {
+		return err
+	}
+	if !exists {
 		return nil
 	}
 
@@ -269,7 +310,7 @@ func RemoveAll(path *Path) error {
 		return pathErr(ErrNotDir, *path)
 	}
 
-	err := os.RemoveAll(path.String())
+	err = os.RemoveAll(path.String())
 	if err != nil {
 		return wrapErr(ErrRemove, err, *path)
 	}
