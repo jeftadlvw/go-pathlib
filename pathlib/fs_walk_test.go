@@ -33,6 +33,17 @@ func TestPath_Walk(t *testing.T) {
 			Expect: Expect{WalkedPaths: []string{}},
 		},
 		{
+			Name: "Symlinked root directory is followed",
+			Input: Input{
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					writeTempFile(t, root, "realDir/file.txt", "")
+					return createTempSymlinkAbs(t, root, "realDir", "linkDir")
+				},
+				WalkFunc: func(p *Path) error { return nil },
+			},
+			Expect: Expect{WalkedPaths: []string{"file.txt"}},
+		},
+		{
 			Name: "Directory with files",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
@@ -165,6 +176,55 @@ func TestPath_WalkR(t *testing.T) {
 				WalkRFunc: func(p *Path, localDirError error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{}},
+		},
+		{
+			Name: "Symlinked root directory is followed",
+			Input: Input{
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					writeTempFile(t, root, "realDir/sub/file.txt", "")
+					return createTempSymlinkAbs(t, root, "realDir", "linkDir")
+				},
+				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+			},
+			Expect: Expect{WalkedPaths: []string{"sub", "sub/file.txt"}},
+		},
+		{
+			Name: "Symlinked subdirectory is passed as entry but not entered",
+			Input: Input{
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					writeTempFile(t, root, "outside/hidden.txt", "")
+					dir := createTempDir(t, root, "testDir")
+					writeTempFile(t, dir, "file.txt", "")
+					createTempSymlinkAbs(t, root, "outside", "testDir/linkDir")
+					return dir
+				},
+				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+			},
+			Expect: Expect{WalkedPaths: []string{"file.txt", "linkDir"}},
+		},
+		{
+			Name: "Symlink cycle terminates",
+			Input: Input{
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					dir := createTempDir(t, root, "testDir")
+					createTempSymlinkAbs(t, root, "testDir", "testDir/self")
+					return dir
+				},
+				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+			},
+			Expect: Expect{WalkedPaths: []string{"self"}},
+		},
+		{
+			Name: "Broken symlink is passed as entry",
+			Input: Input{
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					dir := createTempDir(t, root, "testDir")
+					createTempSymlinkAbs(t, root, "nonexistent", "testDir/brokenLink")
+					return dir
+				},
+				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+			},
+			Expect: Expect{WalkedPaths: []string{"brokenLink"}},
 		},
 		{
 			Name: "Flat directory with files",

@@ -63,7 +63,7 @@ type WalkRFunc func(p *Path, localDirError error) error
 
 /*
 Walk walks this directory and calls walkFunc for every entry (files, directories, etc.).
-This path must be a directory. Symlinks are followed.
+This path must be a directory. If this Path is a symlink to a directory, it is followed.
 
 Entries are visited in lexical order by name, making the traversal deterministic.
 
@@ -123,7 +123,11 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 
 /*
 WalkR walks this directory recursively and calls walkFunc for every entry.
-This path must be a directory. Symlinks are followed.
+This path must be a directory. If this Path is a symlink to a directory, it is followed.
+
+Symlinks inside the tree are not followed. A symlink to a directory is passed to
+walkFunc as a single entry, and its contents are not visited. This matches
+filepath.WalkDir and avoids endless walks through symlink cycles.
 
 Within each directory, entries are visited in lexical order by name, making the
 traversal deterministic.

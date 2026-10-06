@@ -7,11 +7,13 @@ import (
 )
 
 /*
-Glob returns all files matching the given pattern within this Path's Posix representation.
+Glob returns all entries matching the given pattern within this Path's Posix representation.
 
 If an error is returned, all entries until that error are returned.
 
 This Path must be a directory.
+
+This function uses GlobWithOptions with DefaultGlobOptions. The same behaviors apply.
 */
 func (p *Path) Glob(pattern string) ([]*Path, error) {
 	return p.GlobContext(context.Background(), pattern)
@@ -30,6 +32,11 @@ GlobWithOptions returns all entries matching the given pattern within this Path'
 If an error is returned, all entries until that error are returned.
 
 This Path must be a directory.
+
+The tree is walked with WalkR, so symlinks to directories inside the tree are matched
+as entries, but their contents are not visited. GlobOptions.Filter judges a symlink by
+its target, so a symlink to a directory counts as a directory and a broken symlink
+is neither a file nor a directory.
 */
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
 	return p.GlobWithOptionsContext(context.Background(), pattern, options)
@@ -139,7 +146,8 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 /*
 HasGlobMatchE returns whether the passed pattern exists within this Path's directory.
 
-This function uses filepath.Glob.
+This function uses GlobWithOptions with GlobOptions{Limit: 1}, so the pattern
+syntax (including "**") and the case-insensitive matching are the same.
 */
 func (p *Path) HasGlobMatchE(pattern string) (bool, error) {
 	matches, err := p.GlobWithOptions(pattern, GlobOptions{Limit: 1})

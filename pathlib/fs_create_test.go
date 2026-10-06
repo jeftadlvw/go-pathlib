@@ -477,6 +477,15 @@ func TestCreateFile(t *testing.T) {
 	info, err := filePath.Stat()
 	require.NoError(t, err)
 	require.Equal(t, DefaultFileMode.Perm(), info.Mode().Perm())
+
+	// An existing file is neither truncated nor overwritten.
+	existingPath := writeTempFile(t, root, "existing.txt", "content")
+	err = CreateFile(existingPath)
+	require.ErrorIs(t, err, ErrFileExist)
+
+	content, err := os.ReadFile(existingPath.String())
+	require.NoError(t, err)
+	require.Equal(t, "content", string(content))
 }
 
 func TestMkDir(t *testing.T) {

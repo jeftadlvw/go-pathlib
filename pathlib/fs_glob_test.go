@@ -435,6 +435,32 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Expect: Expect{HasMatch: false},
 			Error:  false,
 		},
+		{
+			Name: "Double asterisk matches nested entry",
+			Input: Input{
+				Pattern: "**/deep.txt",
+				Setup: func(t *testing.T, root *Path) *Path {
+					dir := createTempDir(t, root, "dir")
+					writeTempFile(t, dir, "a/b/deep.txt", "")
+					return dir
+				},
+			},
+			Expect: Expect{HasMatch: true},
+			Error:  false,
+		},
+		{
+			Name: "Matching is case-insensitive",
+			Input: Input{
+				Pattern: "*.txt",
+				Setup: func(t *testing.T, root *Path) *Path {
+					dir := createTempDir(t, root, "dir")
+					writeTempFile(t, dir, "FILE.TXT", "")
+					return dir
+				},
+			},
+			Expect: Expect{HasMatch: true},
+			Error:  false,
+		},
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
@@ -635,6 +661,35 @@ func TestPath_ListDirs(t *testing.T) {
 		dirs, err := dir.ListDirs(true)
 		require.NoError(t, err)
 		require.Equal(t, []string{"subdir1", "subdir1/nested", "subdir2"}, relPathsSorted(t, dirs, dir))
+	})
+}
+
+func TestGlob_Symlinks(t *testing.T) {
+	// dir contains a regular file, a symlink to a directory outside of dir
+	// and a broken symlink. The symlinked directory is never entered.
+	root := setupTempDir(t)
+	writeTempFile(t, root, "outside/hidden.txt", "")
+	dir := createTempDir(t, root, "dir")
+	writeTempFile(t, dir, "file.txt", "")
+	createTempSymlinkAbs(t, root, "outside", "dir/linkDir")
+	createTempSymlinkAbs(t, root, "nonexistent", "dir/brokenLink")
+
+	t.Run("double asterisk does not enter symlinked directory", func(t *testing.T) {
+		entries, err := dir.Glob("**")
+		require.NoError(t, err)
+		require.Equal(t, []string{"brokenLink", "file.txt", "linkDir"}, relPathsSorted(t, entries, dir))
+	})
+
+	t.Run("symlink to directory counts as directory", func(t *testing.T) {
+		dirs, err := dir.ListDirs(true)
+		require.NoError(t, err)
+		require.Equal(t, []string{"linkDir"}, relPathsSorted(t, dirs, dir))
+	})
+
+	t.Run("broken symlink is neither file nor directory", func(t *testing.T) {
+		files, err := dir.ListFiles(true)
+		require.NoError(t, err)
+		require.Equal(t, []string{"file.txt"}, relPathsSorted(t, files, dir))
 	})
 }
 

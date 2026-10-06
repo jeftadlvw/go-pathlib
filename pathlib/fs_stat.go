@@ -91,7 +91,7 @@ func (p *Path) Lstat() (os.FileInfo, error) {
 IsSymlink returns whether this Path is a symbolic link.
 */
 func (p *Path) IsSymlink() bool {
-	// Symlinks must be checked with Stat instead of Lstat
+	// Symlinks must be checked with Lstat, since Stat follows them
 	return checkFileMode(p, os.ModeSymlink)
 }
 

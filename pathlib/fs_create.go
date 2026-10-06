@@ -51,10 +51,13 @@ func SetPermission(path *Path, mode fs.FileMode) error {
 }
 
 /*
-CreateFile creates the file at the defined path with mode 0644.
-If the file already exists, it will be truncated.
+CreateFile creates the file at the defined path with DefaultFileMode.
+If the file already exists, ErrFileExist is returned and the file is left untouched.
 
 Parent directories must exist.
+
+Unlike os.Create, CreateFile never truncates. Use CreateFileWithOptions with
+FileOptions.ExistOk to accept an existing file, or OpenFile to create or truncate it.
 */
 func CreateFile(path *Path) error {
 	_, err := CreateFileWithOptions(path, DefaultFileOptions())
