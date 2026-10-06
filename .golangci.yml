@@ -1,0 +1,156 @@
+# Config for golangci-lint
+# https://golangci-lint.run/docs/
+
+version: "2"
+
+# https://golangci-lint.run/docs/linters/
+linters:
+  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - depguard
+    - dogsled
+    - durationcheck
+    - embeddedstructfieldcheck
+    - err113
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - forcetypeassert
+    - funcorder
+    - funlen
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - gochecksumtype
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godoclint
+    - godot
+    - godox
+    - goheader
+    - gomoddirectives
+    - goprintffuncname
+    - gosec
+    - govet
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - ireturn
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - mnd
+    - modernize
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noinlineerr
+    - nolintlint
+    - nonamedreturns
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - predeclared
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sloglint
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+  exclusions:
+    presets:
+      - common-false-positives
+    rules:
+      # Disable some rules for test files
+      - path: _test\.go
+        linters:
+          - funlen
+      # Examples print their results to compare them with the Output comment
+      - path: example_test\.go
+        linters:
+          - forbidigo
+  settings:
+    # https://golangci-lint.run/docs/linters/configuration/#depguard
+    depguard:
+      rules:
+        testify:
+          deny:
+            - pkg: github.com/stretchr/testify/assert
+              desc: use github.com/stretchr/testify/require
+
+    # https://golangci-lint.run/docs/linters/configuration/#goconst
+    goconst:
+      # Table-driven tests repeat the inputs they exercise and spelling those
+      # inputs out is what makes a table readable. Hoisting them into constants
+      # would hide what a case actually covers.
+      ignore-tests: true
+
+    # https://golangci-lint.run/docs/linters/configuration/#misspell
+    misspell:
+      locale: US
+
+    # https://golangci-lint.run/docs/linters/configuration/#tagliatelle
+    tagliatelle:
+      case:
+        rules:
+          json: camel
+          yaml: snake
+          xml: kebab
+          toml: snake
+          env: upperSnake
+          envconfig: upperSnake
+
+# https://golangci-lint.run/docs/formatters/
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/jeftadlvw/go-pathlib
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+run:
+  timeout: 5m

@@ -29,6 +29,13 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  prose:
+    name: Check forbidden characters
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make check-chars
+
   bundle:
     name: Generate and compile bundles
     runs-on: ubuntu-latest
