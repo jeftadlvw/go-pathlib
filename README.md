@@ -133,10 +133,9 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | `os` | `pathlib` | Difference |
 | --- | --- | --- |
 | `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
-| `os.WriteFile` | `WriteBytes`, `WriteString` | The file must exist. Create it with `CreateFile` first, or use `OpenFile`. |
-| `os.RemoveAll` | `RemoveAll` | The path must be a directory. Use `Remove` for files. |
-| `os.OpenFile` | `OpenFileWithOptions` | The permission must be within `0777`. Setuid, setgid and sticky bits are refused. |
-| `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**` and matches case-insensitively by default. |
+| `os.WriteFile` | `WriteBytes`, `WriteString` | Creates the file with `DefaultFileMode`. Use `WriteBytesWithOptions` for another mode, or to refuse an existing file. A broken symlink returns `ErrNotFile` instead of creating its target. |
+| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, … | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrPermissionRange`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
+| `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
 
 ## Contributing
