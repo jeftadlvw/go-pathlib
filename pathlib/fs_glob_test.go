@@ -1,8 +1,6 @@
 package pathlib
 
 import (
-	"os"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -10,7 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:maintidx // The table of cases is long by design.
 func TestPath_GlobWithOptions(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Pattern string
 		Options GlobOptions
@@ -44,29 +45,12 @@ func TestPath_GlobWithOptions(t *testing.T) {
 		"dump.JSON",
 	}
 
-	var items []string
-	items = append(items, files...)
-	items = append(items, directories...)
-
-	var topLevelFiles []string
-	for _, file := range files {
-		if !strings.Contains(file, "/") {
-			topLevelFiles = append(topLevelFiles, file)
-		}
-	}
-
-	var topLevelDirs []string
-	for _, dir := range directories {
-		if !strings.Contains(dir, "/") {
-			topLevelDirs = append(topLevelDirs, dir)
-		}
-	}
-
-	var topLevelItems []string
-	topLevelItems = append(topLevelItems, topLevelFiles...)
-	topLevelItems = append(topLevelItems, topLevelDirs...)
+	items := slices.Concat(files, directories)
+	topLevelItems := slices.Concat(topLevelPaths(files), topLevelPaths(directories))
 
 	setupComplexDir := func(t *testing.T, root *Path) *Path {
+		t.Helper()
+
 		for _, dir := range directories {
 			createTempDir(t, root, dir)
 		}
@@ -277,17 +261,12 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Input: Input{
 				Pattern: "**/*", Options: GlobOptions{SkipOnDirError: true},
 				Setup: func(t *testing.T, root *Path) *Path {
-					if runtime.GOOS == "windows" {
-						t.Skip("chmod 0000 does not restrict access on Windows")
-					}
+					t.Helper()
+
 					setupComplexDir(t, root)
 					unreadableDir := createTempDir(t, root, "data/unreadable_logs")
 					writeTempFile(t, unreadableDir, "secret.log", "")
-					err := os.Chmod(unreadableDir.String(), 0000)
-					require.NoError(t, err)
-					t.Cleanup(func() {
-						os.Chmod(unreadableDir.String(), 0755)
-					})
+					lockDir(t, unreadableDir)
 					return root
 				},
 			},
@@ -300,17 +279,12 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Input: Input{
 				Pattern: "**/*", Options: GlobOptions{SkipOnDirError: false},
 				Setup: func(t *testing.T, root *Path) *Path {
-					if runtime.GOOS == "windows" {
-						t.Skip("chmod 0000 does not restrict access on Windows")
-					}
+					t.Helper()
+
 					setupComplexDir(t, root)
 					unreadableDir := createTempDir(t, root, "data/unreadable_logs")
 					writeTempFile(t, unreadableDir, "secret.log", "")
-					err := os.Chmod(unreadableDir.String(), 0000)
-					require.NoError(t, err)
-					t.Cleanup(func() {
-						os.Chmod(unreadableDir.String(), 0755)
-					})
+					lockDir(t, unreadableDir)
 					return root
 				},
 			},
@@ -328,6 +302,8 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Input: Input{
 				Pattern: "*", Options: DefaultGlobOptions(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					return writeTempFile(t, root, "a_file.txt", "") // Return the FILE path to glob on
 				},
 			},
@@ -338,7 +314,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Name: "Empty pattern (should error)",
 			Input: Input{
 				Pattern: "", Options: DefaultGlobOptions(),
-				Setup: func(t *testing.T, root *Path) *Path {
+				Setup: func(_ *testing.T, root *Path) *Path {
 					return root
 				},
 			},
@@ -350,6 +326,8 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Input: Input{
 				Pattern: "*", Options: GlobOptions{Filter: 999},
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					return writeTempFile(t, root, "temp.txt", "") // Return the FILE path to glob on
 				},
 			},
@@ -359,6 +337,8 @@ func TestPath_GlobWithOptions(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		globPath := input.Setup(t, root)
 
@@ -390,12 +370,16 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			return
 		}
 
+		// The cases share their slices, so a sorted clone is compared.
+		expect.FoundPaths = slices.Clone(expect.FoundPaths)
 		slices.Sort(expect.FoundPaths)
 		require.Equal(t, expect.FoundPaths, actualRelPaths)
 	})
 }
 
 func TestPath_Glob(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	dir := createTempDir(t, root, "globDir")
 	writeTempFile(t, dir, "a.txt", "")
@@ -416,6 +400,8 @@ func TestPath_Glob(t *testing.T) {
 }
 
 func TestPath_HasGlobMatchE(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Pattern string
 		Setup   func(*testing.T, *Path) *Path
@@ -431,6 +417,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Input: Input{
 				Pattern: "*.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "file.txt", "")
 					return dir
@@ -444,6 +432,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Input: Input{
 				Pattern: "*.csv",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "file.txt", "")
 					return dir
@@ -457,6 +447,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Input: Input{
 				Pattern: "*",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					return createTempDir(t, root, "emptyDir")
 				},
 			},
@@ -468,6 +460,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Input: Input{
 				Pattern: "**/deep.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "a/b/deep.txt", "")
 					return dir
@@ -481,6 +475,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 			Input: Input{
 				Pattern: "*.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "FILE.TXT", "")
 					return dir
@@ -492,6 +488,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 		hasMatch, err := p.HasGlobMatchE(input.Pattern)
@@ -505,6 +503,8 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 }
 
 func TestPath_HasGlobMatch(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	dir := createTempDir(t, root, "dir")
 	writeTempFile(t, dir, "file.txt", "")
@@ -514,6 +514,8 @@ func TestPath_HasGlobMatch(t *testing.T) {
 }
 
 func TestPath_List(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Options ListOptions
 		Setup   func(*testing.T, *Path) *Path
@@ -529,6 +531,8 @@ func TestPath_List(t *testing.T) {
 			Input: Input{
 				Options: DefaultListOptions(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "b.txt", "")
 					writeTempFile(t, dir, "a.txt", "")
@@ -549,6 +553,8 @@ func TestPath_List(t *testing.T) {
 					return o
 				}(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "b.txt", "")
 					writeTempFile(t, dir, "a.txt", "")
@@ -569,6 +575,8 @@ func TestPath_List(t *testing.T) {
 					return o
 				}(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "a.txt", "")
 					writeTempFile(t, dir, "b.txt", "")
@@ -588,6 +596,8 @@ func TestPath_List(t *testing.T) {
 					return o
 				}(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "file.txt", "")
 					createTempDir(t, dir, "subdir")
@@ -606,6 +616,8 @@ func TestPath_List(t *testing.T) {
 					return o
 				}(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir")
 					writeTempFile(t, dir, "file.txt", "")
 					createTempDir(t, dir, "subdir")
@@ -620,6 +632,8 @@ func TestPath_List(t *testing.T) {
 			Input: Input{
 				Options: DefaultListOptions(),
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					return createTempDir(t, root, "emptyDir")
 				},
 			},
@@ -629,6 +643,8 @@ func TestPath_List(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 		entries, err := p.List(input.Options)
@@ -645,12 +661,16 @@ func TestPath_List(t *testing.T) {
 			return
 		}
 
+		// The cases share their slices, so a sorted clone is compared.
+		expect.Entries = slices.Clone(expect.Entries)
 		slices.Sort(expect.Entries)
 		require.Equal(t, expect.Entries, relPaths)
 	})
 }
 
 func TestPath_ListFiles(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	dir := createTempDir(t, root, "dir")
 	writeTempFile(t, dir, "a.txt", "")
@@ -659,12 +679,16 @@ func TestPath_ListFiles(t *testing.T) {
 	writeTempFile(t, subdir, "nested.txt", "")
 
 	t.Run("non-recursive", func(t *testing.T) {
+		t.Parallel()
+
 		files, err := dir.ListFiles(false)
 		require.NoError(t, err)
 		require.Equal(t, []string{"a.txt", "b.log"}, relPathsSorted(t, files, dir))
 	})
 
 	t.Run("recursive", func(t *testing.T) {
+		t.Parallel()
+
 		files, err := dir.ListFiles(true)
 		require.NoError(t, err)
 		require.Equal(t, []string{"a.txt", "b.log", "subdir/nested.txt"}, relPathsSorted(t, files, dir))
@@ -672,6 +696,8 @@ func TestPath_ListFiles(t *testing.T) {
 }
 
 func TestPath_ListDirs(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	dir := createTempDir(t, root, "dir")
 	writeTempFile(t, dir, "a.txt", "")
@@ -680,12 +706,16 @@ func TestPath_ListDirs(t *testing.T) {
 	createTempDir(t, subdir1, "nested")
 
 	t.Run("non-recursive", func(t *testing.T) {
+		t.Parallel()
+
 		dirs, err := dir.ListDirs(false)
 		require.NoError(t, err)
 		require.Equal(t, []string{"subdir1", "subdir2"}, relPathsSorted(t, dirs, dir))
 	})
 
 	t.Run("recursive", func(t *testing.T) {
+		t.Parallel()
+
 		dirs, err := dir.ListDirs(true)
 		require.NoError(t, err)
 		require.Equal(t, []string{"subdir1", "subdir1/nested", "subdir2"}, relPathsSorted(t, dirs, dir))
@@ -693,6 +723,8 @@ func TestPath_ListDirs(t *testing.T) {
 }
 
 func TestGlob_Symlinks(t *testing.T) {
+	t.Parallel()
+
 	// dir contains a regular file, a symlink to a directory outside of dir
 	// and a broken symlink. The symlinked directory is never entered.
 	root := setupTempDir(t)
@@ -703,18 +735,24 @@ func TestGlob_Symlinks(t *testing.T) {
 	createTempSymlinkAbs(t, root, "nonexistent", "dir/brokenLink")
 
 	t.Run("double asterisk does not enter symlinked directory", func(t *testing.T) {
+		t.Parallel()
+
 		entries, err := dir.Glob("**")
 		require.NoError(t, err)
 		require.Equal(t, []string{"brokenLink", "file.txt", "linkDir"}, relPathsSorted(t, entries, dir))
 	})
 
 	t.Run("symlink to directory counts as directory", func(t *testing.T) {
+		t.Parallel()
+
 		dirs, err := dir.ListDirs(true)
 		require.NoError(t, err)
 		require.Equal(t, []string{"linkDir"}, relPathsSorted(t, dirs, dir))
 	})
 
 	t.Run("broken symlink is neither file nor directory", func(t *testing.T) {
+		t.Parallel()
+
 		files, err := dir.ListFiles(true)
 		require.NoError(t, err)
 		require.Equal(t, []string{"file.txt"}, relPathsSorted(t, files, dir))
@@ -722,6 +760,8 @@ func TestGlob_Symlinks(t *testing.T) {
 }
 
 func TestGlob_InvalidInputFailsBeforeWalking(t *testing.T) {
+	t.Parallel()
+
 	// The directory is empty, so the walk callback never runs.
 	dir := setupTempDir(t)
 
@@ -733,6 +773,8 @@ func TestGlob_InvalidInputFailsBeforeWalking(t *testing.T) {
 }
 
 func TestPatternMaxDepth(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]int{
 		"*":         1,
 		"*.txt":     1,
@@ -753,7 +795,11 @@ func TestPatternMaxDepth(t *testing.T) {
 }
 
 func TestGlob_DepthPruning(t *testing.T) {
+	t.Parallel()
+
 	setup := func(t *testing.T) *Path {
+		t.Helper()
+
 		root := setupTempDir(t)
 		writeTempFile(t, root, "top.txt", "")
 		writeTempFile(t, root, "a/mid.txt", "")
@@ -765,6 +811,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 	// FilterFunc is called for every entry the walk visits, so it shows which
 	// directories were read.
 	visitedWith := func(t *testing.T, root *Path, pattern string) ([]string, []string) {
+		t.Helper()
+
 		var visited []string
 		options := DefaultGlobOptions()
 		options.FilterFunc = func(p *Path) bool {
@@ -781,6 +829,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 	}
 
 	t.Run("single level pattern reads only the root", func(t *testing.T) {
+		t.Parallel()
+
 		root := setup(t)
 		matches, visited := visitedWith(t, root, "*")
 		require.Equal(t, []string{"a", "top.txt"}, matches)
@@ -788,6 +838,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 	})
 
 	t.Run("two level pattern reads one level below the root", func(t *testing.T) {
+		t.Parallel()
+
 		root := setup(t)
 		matches, visited := visitedWith(t, root, "a/*.txt")
 		require.Equal(t, []string{"a/mid.txt"}, matches)
@@ -795,6 +847,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 	})
 
 	t.Run("double asterisk reads the whole tree", func(t *testing.T) {
+		t.Parallel()
+
 		root := setup(t)
 		matches, visited := visitedWith(t, root, "**/*.txt")
 		require.Equal(t, []string{"a/b/c/deeper.txt", "a/b/deep.txt", "a/mid.txt", "top.txt"}, matches)
@@ -802,6 +856,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 	})
 
 	t.Run("character class is not pruned", func(t *testing.T) {
+		t.Parallel()
+
 		// "[^x]" matches "/", so the pattern matches a path with two parts.
 		root := setup(t)
 		matches, _ := visitedWith(t, root, "a[^x]mid.txt")
@@ -810,6 +866,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 }
 
 func TestGlob_DepthPruningKeepsSymlinkSiblings(t *testing.T) {
+	t.Parallel()
+
 	// A symlink to a directory is no directory for the walk. Returning SkipDir
 	// for it would skip the rest of its directory instead of its contents.
 	root := setupTempDir(t)
@@ -824,6 +882,8 @@ func TestGlob_DepthPruningKeepsSymlinkSiblings(t *testing.T) {
 }
 
 func TestList_NonRecursiveIgnoresUnreadableSubdirectories(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	writeTempFile(t, root, "top.txt", "")
 	locked := createTempDir(t, root, "locked")
@@ -851,4 +911,15 @@ func TestList_NonRecursiveIgnoresUnreadableSubdirectories(t *testing.T) {
 	options.Recursive = true
 	_, err = root.List(options)
 	require.ErrorIs(t, err, ErrAccess)
+}
+
+// topLevelPaths returns the paths without a separator, in their order.
+func topLevelPaths(paths []string) []string {
+	var topLevel []string
+	for _, p := range paths {
+		if !strings.Contains(p, "/") {
+			topLevel = append(topLevel, p)
+		}
+	}
+	return topLevel
 }

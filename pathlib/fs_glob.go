@@ -61,22 +61,9 @@ ctx. The entries collected before cancellation are returned alongside ctx.Err(),
 wrapped as ErrWalk.
 */
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
-	err := requireDir(p)
+	err := validateGlob(p, pattern, options)
 	if err != nil {
 		return nil, err
-	}
-
-	if pattern == "" {
-		return nil, pathErr(ErrEmptyPattern, *p)
-	}
-
-	err = validatePattern(pattern)
-	if err != nil {
-		return nil, wrapErr(ErrBadPattern, err, *p)
-	}
-
-	if options.FilterFunc == nil && options.Filter > GlobOptionFilterDirectories {
-		return nil, pathErr(ErrInvalidFilter, *p)
 	}
 
 	var entries []*Path
@@ -88,62 +75,6 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 	// Directories at the deepest level the pattern can match are not entered.
 	// 0 means the pattern can match at any depth.
 	maxDepth := patternMaxDepth(pattern)
-
-	applyPatternFunc := func(entry *Path, dirEntry fs.DirEntry) error {
-		addToEntries := false
-
-		if options.FilterFunc == nil {
-			// Handle GlobOptions.Filter option
-			switch options.Filter {
-			case GlobOptionFilterFiles:
-				addToEntries = entry.IsFile()
-			case GlobOptionFilterDirectories:
-				addToEntries = entry.IsDir()
-			case GlobOptionFilterAll:
-				addToEntries = true
-			default:
-				return pathErr(ErrInvalidFilter, *entry)
-			}
-		} else {
-			// Handle GlobOptions.FilterFunc option
-			addToEntries = options.FilterFunc(entry)
-		}
-
-		// The entry path is joined with the original path and any subdirectories.
-		// For pattern matching, we don't want the original path included, because
-		// the pattern is matched starting from the original path.
-		entryForMatching, err := entry.RelativeTo(p)
-		if err != nil {
-			return err
-		}
-
-		// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
-		matchesPattern, err := entryForMatching.MatchesPatternE(pattern, options.CaseSensitivity)
-		if err != nil {
-			return err
-		}
-
-		depth := strings.Count(entryForMatching.path, canonicalPathSeparator) + 1
-
-		if addToEntries && matchesPattern {
-			entries = append(entries, entry)
-		}
-
-		// Handle GlobOptions.Limit option.
-		// If a limit exists and the number of entries is greater than or equal to the limit,
-		// stop any further tree walking.
-		if limitExists && len(entries) >= limit {
-			return SkipAll
-		}
-
-		// Nothing below this directory can match. dirEntry does not follow
-		// symlinks, so SkipDir is only returned where the walk would descend.
-		if maxDepth > 0 && depth >= maxDepth && dirEntry.IsDir() {
-			return SkipDir
-		}
-
-		return nil
-	}
 
 	err = p.walkRContext(ctx, func(entry *Path, dirEntry fs.DirEntry, localDirError error) error {
 		if localDirError != nil {
@@ -157,7 +88,19 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			return localDirError
 		}
 
-		return applyPatternFunc(entry, dirEntry)
+		matched, matchErr := matchGlobEntry(p, entry, dirEntry, pattern, options, maxDepth)
+		if matched {
+			entries = append(entries, entry)
+		}
+
+		// Handle GlobOptions.Limit option.
+		// If a limit exists and the number of entries is greater than or equal to the limit,
+		// stop any further tree walking.
+		if limitExists && len(entries) >= limit {
+			return SkipAll
+		}
+
+		return matchErr
 	})
 
 	return entries, err
@@ -273,4 +216,92 @@ func sortSliceOfPaths(slice []*Path) []*Path {
 	})
 
 	return slice
+}
+
+/*
+validateGlob checks the arguments of a glob below p. It returns the errors of
+[requireDir], [ErrEmptyPattern] for an empty pattern, [ErrBadPattern] for an
+invalid pattern, and [ErrInvalidFilter] for an unknown filter.
+*/
+func validateGlob(p *Path, pattern string, options GlobOptions) error {
+	err := requireDir(p)
+	if err != nil {
+		return err
+	}
+
+	if pattern == "" {
+		return pathErr(ErrEmptyPattern, *p)
+	}
+
+	err = validatePattern(pattern)
+	if err != nil {
+		return wrapErr(ErrBadPattern, err, *p)
+	}
+
+	if options.FilterFunc == nil && !options.Filter.Valid() {
+		return pathErr(ErrInvalidFilter, *p)
+	}
+
+	return nil
+}
+
+/*
+matchGlobEntry reports whether entry, found while globbing root, passes the
+filter of options and matches pattern. It returns [SkipDir] alongside the result
+when nothing below entry can match, because entry lies at maxDepth.
+*/
+func matchGlobEntry(
+	root, entry *Path, dirEntry fs.DirEntry, pattern string, options GlobOptions, maxDepth int,
+) (bool, error) {
+	included, err := globIncludes(entry, options)
+	if err != nil {
+		return false, err
+	}
+
+	// The entry path is joined with the original path and any subdirectories.
+	// For pattern matching, we don't want the original path included, because
+	// the pattern is matched starting from the original path.
+	entryForMatching, err := entry.RelativeTo(root)
+	if err != nil {
+		return false, err
+	}
+
+	// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
+	matchesPattern, err := entryForMatching.MatchesPatternE(pattern, options.CaseSensitivity)
+	if err != nil {
+		return false, err
+	}
+
+	matched := included && matchesPattern
+
+	// Nothing below this directory can match. dirEntry does not follow
+	// symlinks, so SkipDir is only returned where the walk would descend.
+	depth := strings.Count(entryForMatching.path, canonicalPathSeparator) + 1
+	if maxDepth > 0 && depth >= maxDepth && dirEntry.IsDir() {
+		return matched, SkipDir
+	}
+
+	return matched, nil
+}
+
+/*
+globIncludes reports whether entry passes the filter of options, which is
+[GlobOptions.FilterFunc] if set, or [GlobOptions.Filter] otherwise. An unknown
+filter returns [ErrInvalidFilter].
+*/
+func globIncludes(entry *Path, options GlobOptions) (bool, error) {
+	if options.FilterFunc != nil {
+		return options.FilterFunc(entry), nil
+	}
+
+	switch options.Filter {
+	case GlobOptionFilterFiles:
+		return entry.IsFile(), nil
+	case GlobOptionFilterDirectories:
+		return entry.IsDir(), nil
+	case GlobOptionFilterAll:
+		return true, nil
+	default:
+		return false, pathErr(ErrInvalidFilter, *entry)
+	}
 }

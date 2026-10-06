@@ -187,14 +187,6 @@ func (p *Path) Copy() *Path {
 	}
 }
 
-// copyWithNewPath creates a copy of this Path with a different path portion,
-// preserving the Windows anchor fields.
-func (p *Path) copyWithNewPath(newPath string) *Path {
-	c := p.Copy()
-	c.path = newPath
-	return c
-}
-
 /*
 String returns this Path in platform-native form.
 
@@ -253,7 +245,7 @@ func (p *Path) TrimWindowsAnchor() *Path {
 MarshalText marshals this Path's Posix representation into a byte array.
 Implements the encoding.TextMarshaler interface.
 */
-func (p *Path) MarshalText() (text []byte, err error) {
+func (p *Path) MarshalText() ([]byte, error) {
 	return []byte(p.ToPosix()), nil
 }
 
@@ -271,4 +263,12 @@ never shares a *Path with its caller, so this only changes Paths the caller owns
 func (p *Path) UnmarshalText(text []byte) error {
 	*p = *NewPathFromWindows(string(text))
 	return nil
+}
+
+// copyWithNewPath creates a copy of this Path with a different path portion,
+// preserving the Windows anchor fields.
+func (p *Path) copyWithNewPath(newPath string) *Path {
+	c := p.Copy()
+	c.path = newPath
+	return c
 }

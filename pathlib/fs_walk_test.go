@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"runtime"
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+// errSimulated is returned by walk callbacks to abort a walk.
+var errSimulated = errors.New("simulated error")
+
 func TestPath_Walk(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		RootSetup func(*testing.T, *Path) *Path // Function to set up the directory for walking
 		WalkFunc  func(p *Path) error
@@ -27,8 +30,11 @@ func TestPath_Walk(t *testing.T) {
 		{
 			Name: "Empty directory",
 			Input: Input{
-				RootSetup: func(t *testing.T, root *Path) *Path { return createTempDir(t, root, "emptyDir") },
-				WalkFunc:  func(p *Path) error { return nil },
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+					return createTempDir(t, root, "emptyDir")
+				},
+				WalkFunc: func(_ *Path) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{}},
 		},
@@ -36,10 +42,12 @@ func TestPath_Walk(t *testing.T) {
 			Name: "Symlinked root directory is followed",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "realDir/file.txt", "")
 					return createTempSymlinkAbs(t, root, "realDir", "linkDir")
 				},
-				WalkFunc: func(p *Path) error { return nil },
+				WalkFunc: func(_ *Path) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"file.txt"}},
 		},
@@ -47,12 +55,14 @@ func TestPath_Walk(t *testing.T) {
 			Name: "Directory with files",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file1.txt", "")
 					writeTempFile(t, dir, "file2.log", "")
 					return dir
 				},
-				WalkFunc: func(p *Path) error { return nil },
+				WalkFunc: func(_ *Path) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"file1.txt", "file2.log"}},
 		},
@@ -60,21 +70,26 @@ func TestPath_Walk(t *testing.T) {
 			Name: "Directory with subdirectories (should not recurse)",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file.txt", "")
 					subdir := createTempDir(t, dir, "subdir")
 					writeTempFile(t, subdir, "nested.txt", "") // Should not be walked
 					return dir
 				},
-				WalkFunc: func(p *Path) error { return nil },
+				WalkFunc: func(_ *Path) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"file.txt", "subdir"}}, // subdir itself is walked, but not its contents
 		},
 		{
 			Name: "Non-directory path",
 			Input: Input{
-				RootSetup: func(t *testing.T, root *Path) *Path { return writeTempFile(t, root, "file.txt", "") },
-				WalkFunc:  func(p *Path) error { return nil },
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+					return writeTempFile(t, root, "file.txt", "")
+				},
+				WalkFunc: func(_ *Path) error { return nil },
 			},
 			Expect: Expect{Error: true},
 		},
@@ -82,12 +97,14 @@ func TestPath_Walk(t *testing.T) {
 			Name: "WalkFunc returns error",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file1.log", "")
 					return dir
 				},
-				WalkFunc: func(p *Path) error {
-					return errors.New("simulated error")
+				WalkFunc: func(_ *Path) error {
+					return errSimulated
 				},
 			},
 			Expect: Expect{WalkedPaths: []string{}, Error: true},
@@ -96,6 +113,8 @@ func TestPath_Walk(t *testing.T) {
 			Name: "WalkFunc returns SkipAll",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file1.txt", "")
 					writeTempFile(t, dir, "file2.log", "")
@@ -104,7 +123,7 @@ func TestPath_Walk(t *testing.T) {
 				},
 				WalkFunc: func() func(*Path) error {
 					first := true
-					return func(p *Path) error {
+					return func(_ *Path) error {
 						if first {
 							first = false
 							return SkipAll
@@ -117,7 +136,9 @@ func TestPath_Walk(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, _ bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.RootSetup(t, root)
 
@@ -147,6 +168,8 @@ func TestPath_Walk(t *testing.T) {
 
 		// Ensure consistent order for comparison
 		slices.Sort(walkedEntries)
+		// The cases share their slices, so a sorted clone is compared.
+		expect.WalkedPaths = slices.Clone(expect.WalkedPaths)
 		slices.Sort(expect.WalkedPaths)
 
 		require.Len(t, walkedEntries, len(expect.WalkedPaths))
@@ -157,11 +180,13 @@ func TestPath_Walk(t *testing.T) {
 	})
 }
 
+//nolint:maintidx // The table of cases is long by design.
 func TestPath_WalkR(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
-		RootSetup   func(*testing.T, *Path) *Path // Function to set up the directory for walking
-		CleanupFunc func(*testing.T, *Path)
-		WalkRFunc   func(p *Path, localDirError error) error
+		RootSetup func(*testing.T, *Path) *Path // Function to set up the directory for walking
+		WalkRFunc func(p *Path, localDirError error) error
 	}
 	type Expect struct {
 		WalkedPaths []string // Relative paths from the rootSetup
@@ -172,8 +197,11 @@ func TestPath_WalkR(t *testing.T) {
 		{
 			Name: "Empty directory",
 			Input: Input{
-				RootSetup: func(t *testing.T, root *Path) *Path { return createTempDir(t, root, "emptyDir") },
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+					return createTempDir(t, root, "emptyDir")
+				},
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{}},
 		},
@@ -181,10 +209,12 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Symlinked root directory is followed",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "realDir/sub/file.txt", "")
 					return createTempSymlinkAbs(t, root, "realDir", "linkDir")
 				},
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"sub", "sub/file.txt"}},
 		},
@@ -192,13 +222,15 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Symlinked subdirectory is passed as entry but not entered",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "outside/hidden.txt", "")
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file.txt", "")
 					createTempSymlinkAbs(t, root, "outside", "testDir/linkDir")
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"file.txt", "linkDir"}},
 		},
@@ -206,11 +238,13 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Symlink cycle terminates",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					createTempSymlinkAbs(t, root, "testDir", "testDir/self")
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"self"}},
 		},
@@ -218,11 +252,13 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Broken symlink is passed as entry",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					createTempSymlinkAbs(t, root, "nonexistent", "testDir/brokenLink")
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"brokenLink"}},
 		},
@@ -230,12 +266,14 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Flat directory with files",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file1.txt", "")
 					writeTempFile(t, dir, "file2.log", "")
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{"file1.txt", "file2.log"}},
 		},
@@ -243,6 +281,8 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Nested directories with files",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file.txt", "")
 					subdir1 := createTempDir(t, dir, "subdir1")
@@ -251,7 +291,7 @@ func TestPath_WalkR(t *testing.T) {
 					writeTempFile(t, subdir2, "nested2.log", "")
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{WalkedPaths: []string{
 				"file.txt",
@@ -264,8 +304,11 @@ func TestPath_WalkR(t *testing.T) {
 		{
 			Name: "Non-directory initial path",
 			Input: Input{
-				RootSetup: func(t *testing.T, root *Path) *Path { return writeTempFile(t, root, "file.txt", "") },
-				WalkRFunc: func(p *Path, localDirError error) error { return nil },
+				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+					return writeTempFile(t, root, "file.txt", "")
+				},
+				WalkRFunc: func(_ *Path, _ error) error { return nil },
 			},
 			Expect: Expect{Error: true},
 		},
@@ -273,14 +316,16 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "WalkRFunc returns error (aborts entire tree)",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					subdir := createTempDir(t, dir, "subdir")
 					writeTempFile(t, subdir, "file2.log", "")
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error {
+				WalkRFunc: func(p *Path, _ error) error {
 					if p.Base() == "file2.log" {
-						return errors.New("simulated error")
+						return errSimulated
 					}
 					return nil
 				},
@@ -291,6 +336,8 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "WalkRFunc returns SkipDir",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					writeTempFile(t, dir, "file1.txt", "")
 					subdir1 := createTempDir(t, dir, "subdir1")
@@ -299,7 +346,7 @@ func TestPath_WalkR(t *testing.T) {
 					writeTempFile(t, dir, "file3.csv", "")       // Should still be walked
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error {
+				WalkRFunc: func(p *Path, _ error) error {
 					if p.Base() == "subdir1" {
 						return SkipDir // Skip processing subdir1's contents
 					}
@@ -312,13 +359,15 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "WalkRFunc returns SkipAll",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "testDir")
 					subdir1 := createTempDir(t, dir, "subdir1")
 					subdir2 := createTempDir(t, subdir1, "subdir2")
 					writeTempFile(t, subdir2, "deep.txt", "") // Should NOT be walked
 					return dir
 				},
-				WalkRFunc: func(p *Path, localDirError error) error {
+				WalkRFunc: func(p *Path, _ error) error {
 					if p.Base() == "subdir2" {
 						return SkipAll // Stop the entire walk
 					}
@@ -331,30 +380,22 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Error reading directory, walkFunc handles (continues)",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
-					if runtime.GOOS == "windows" {
-						t.Skip("chmod 0000 does not restrict access on Windows")
-					}
+					t.Helper()
+
 					dir := createTempDir(t, root, "root")
 					createTempDir(t, dir, "readable_dir")
 					writeTempFile(t, dir, "readable_dir/file.txt", "")
 
 					unreadableDir := createTempDir(t, dir, "unreadable_dir")
 					writeTempFile(t, unreadableDir, "secret.log", "")
-
-					err := os.Chmod(unreadableDir.String(), 0000)
-					require.NoError(t, err)
+					lockDir(t, unreadableDir)
 
 					createTempDir(t, dir, "another_dir")
 					writeTempFile(t, dir, "another_dir/another_file.txt", "")
 					return dir
 				},
-				CleanupFunc: func(t *testing.T, root *Path) {
-					os.Chmod(root.JoinStrings("root", "unreadable_dir").String(), 0755)
-				},
-				WalkRFunc: func(p *Path, localDirError error) error {
-					if localDirError != nil {
-						return nil
-					}
+				// Directory errors are ignored, so the walk continues.
+				WalkRFunc: func(_ *Path, _ error) error {
 					return nil
 				},
 			},
@@ -375,9 +416,8 @@ func TestPath_WalkR(t *testing.T) {
 			Name: "Error reading directory, walkFunc returns error (stops)",
 			Input: Input{
 				RootSetup: func(t *testing.T, root *Path) *Path {
-					if runtime.GOOS == "windows" {
-						t.Skip("chmod 0000 does not restrict access on Windows")
-					}
+					t.Helper()
+
 					// Entries are walked in lexical order, so naming the siblings
 					// a/b/c makes the traversal deterministic: a_readable is walked,
 					// b_unreadable raises a directory error that aborts the walk, and
@@ -386,13 +426,9 @@ func TestPath_WalkR(t *testing.T) {
 					dir := createTempDir(t, root, "root")
 					createTempDir(t, dir, "a_readable")
 					unreadableDir := createTempDir(t, dir, "b_unreadable")
-					err := os.Chmod(unreadableDir.String(), 0000)
-					require.NoError(t, err)
+					lockDir(t, unreadableDir)
 					createTempDir(t, dir, "c_readable")
 					return dir
-				},
-				CleanupFunc: func(t *testing.T, root *Path) {
-					os.Chmod(root.JoinStrings("root", "b_unreadable").String(), 0755)
 				},
 				WalkRFunc: func(p *Path, localDirError error) error {
 					if localDirError != nil {
@@ -415,37 +451,13 @@ func TestPath_WalkR(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.RootSetup(t, root)
 
-		defer func() {
-			if input.CleanupFunc != nil {
-				input.CleanupFunc(t, root)
-			}
-		}()
-
 		var walkedEntries []string
-		customWalkRFunc := func(path *Path, localDirError error) error {
-			relPath, err := path.RelativeTo(p)
-			if err != nil && !expectError { // Ignore relative path expectError if we expect an overall expectError.
-				return err
-			}
-
-			var inputWalkFuncErr error = nil
-
-			// Original walkFunc for specific test behavior
-			if input.WalkRFunc != nil {
-				inputWalkFuncErr = input.WalkRFunc(path, localDirError)
-			}
-
-			// Record entries that were visited, including those that signal SkipDir or
-			// SkipAll (the entry itself was still visited). Genuine errors are not recorded.
-			if inputWalkFuncErr == nil || errors.Is(inputWalkFuncErr, SkipDir) || errors.Is(inputWalkFuncErr, SkipAll) {
-				walkedEntries = append(walkedEntries, relPath.ToPosix())
-			}
-
-			return inputWalkFuncErr
-		}
+		customWalkRFunc := recordingWalkRFunc(p, input.WalkRFunc, expectError, &walkedEntries)
 
 		err := p.WalkR(customWalkRFunc)
 
@@ -455,19 +467,46 @@ func TestPath_WalkR(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		if len(expect.WalkedPaths) != 0 && len(walkedEntries) != 0 {
-			// Ensure consistent order for comparison
-			slices.Sort(expect.WalkedPaths)
-			slices.Sort(walkedEntries)
-			require.Equal(t, expect.WalkedPaths, walkedEntries)
-		} else {
-			require.Len(t, walkedEntries, len(expect.WalkedPaths))
-		}
+		require.ElementsMatch(t, expect.WalkedPaths, walkedEntries)
 	})
 }
 
+// recordingWalkRFunc returns a WalkRFunc that calls walkRFunc, if set, and
+// records the paths relative to root that it visits in walked. An entry that
+// signals SkipDir or SkipAll was still visited and is recorded, while an entry
+// with another error is not. A failure to build a relative path is returned
+// unless ignoreRelErr is set.
+func recordingWalkRFunc(root *Path, walkRFunc WalkRFunc, ignoreRelErr bool, walked *[]string) WalkRFunc {
+	return func(path *Path, localDirError error) error {
+		relPath, err := path.RelativeTo(root)
+		if err != nil && !ignoreRelErr {
+			return err
+		}
+
+		var inputWalkFuncErr error
+		if walkRFunc != nil {
+			inputWalkFuncErr = walkRFunc(path, localDirError)
+		}
+
+		if inputWalkFuncErr == nil || isSkip(inputWalkFuncErr) {
+			*walked = append(*walked, relPath.ToPosix())
+		}
+
+		return inputWalkFuncErr
+	}
+}
+
+// isSkip reports whether err is SkipDir or SkipAll.
+func isSkip(err error) bool {
+	return errors.Is(err, SkipDir) || errors.Is(err, SkipAll)
+}
+
 func TestPath_WalkContext_Cancellation(t *testing.T) {
+	t.Parallel()
+
 	buildTree := func(t *testing.T) *Path {
+		t.Helper()
+
 		root := setupTempDir(t)
 		dir := createTempDir(t, root, "tree")
 		writeTempFile(t, dir, "a.txt", "")
@@ -478,12 +517,14 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 	}
 
 	t.Run("WalkContext with canceled context returns context.Canceled", func(t *testing.T) {
+		t.Parallel()
+
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
 		var visited int
-		err := dir.WalkContext(ctx, func(p *Path) error {
+		err := dir.WalkContext(ctx, func(_ *Path) error {
 			visited++
 			return nil
 		})
@@ -493,11 +534,13 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 	})
 
 	t.Run("WalkRContext with canceled context returns context.Canceled", func(t *testing.T) {
+		t.Parallel()
+
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		err := dir.WalkRContext(ctx, func(p *Path, localDirError error) error {
+		err := dir.WalkRContext(ctx, func(_ *Path, _ error) error {
 			return nil
 		})
 
@@ -505,11 +548,13 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 	})
 
 	t.Run("WalkRContext canceled mid-walk stops early", func(t *testing.T) {
+		t.Parallel()
+
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 
 		var visited int
-		err := dir.WalkRContext(ctx, func(p *Path, localDirError error) error {
+		err := dir.WalkRContext(ctx, func(_ *Path, _ error) error {
 			visited++
 			cancel() // cancel after the first visited entry
 			return nil
@@ -520,6 +565,8 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 	})
 
 	t.Run("GlobContext with canceled context returns context.Canceled", func(t *testing.T) {
+		t.Parallel()
+
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -530,6 +577,8 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 	})
 
 	t.Run("context variants with Background behave like the plain calls", func(t *testing.T) {
+		t.Parallel()
+
 		dir := buildTree(t)
 
 		plain, err := dir.Glob("*.txt")
@@ -543,10 +592,10 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 }
 
 func TestWalk_DirAccessErrorGrouping(t *testing.T) {
+	t.Parallel()
+
 	t.Run("ErrOpen and ErrReadDir are members of the ErrAccess group", func(t *testing.T) {
-		// Precise matching still works.
-		require.ErrorIs(t, ErrOpen, ErrOpen)
-		require.ErrorIs(t, ErrReadDir, ErrReadDir)
+		t.Parallel()
 
 		// Both are catchable through the shared parent group.
 		require.ErrorIs(t, ErrOpen, ErrAccess)
@@ -558,18 +607,15 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 	})
 
 	t.Run("localDirError from a real walk matches ErrAccess", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("chmod 0000 does not restrict access on Windows")
-		}
+		t.Parallel()
 
 		root := setupTempDir(t)
 		dir := createTempDir(t, root, "root")
 		unreadableDir := createTempDir(t, dir, "unreadable")
-		require.NoError(t, os.Chmod(unreadableDir.String(), 0000))
-		t.Cleanup(func() { os.Chmod(unreadableDir.String(), 0755) })
+		lockDir(t, unreadableDir)
 
 		var captured error
-		err := dir.WalkR(func(p *Path, localDirError error) error {
+		err := dir.WalkR(func(_ *Path, localDirError error) error {
 			if localDirError != nil {
 				captured = localDirError
 			}
@@ -583,33 +629,33 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 }
 
 func TestWalkR_CallbackErrors(t *testing.T) {
+	t.Parallel()
+
 	t.Run("callback error is wrapped as ErrWalk", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		dir := createTempDir(t, root, "root")
 		createTempDir(t, dir, "sub")
 
-		errCallback := errors.New("callback failed")
-		err := dir.WalkR(func(p *Path, localDirError error) error {
-			return errCallback
+		err := dir.WalkR(func(_ *Path, _ error) error {
+			return errSimulated
 		})
 		require.ErrorIs(t, err, ErrWalk)
-		require.ErrorIs(t, err, errCallback)
+		require.ErrorIs(t, err, errSimulated)
 		require.ErrorAs(t, err, new(*PathlibError))
 	})
 
 	t.Run("unchanged localDirError is returned as is", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("chmod 0000 does not restrict access on Windows")
-		}
+		t.Parallel()
 
 		root := setupTempDir(t)
 		dir := createTempDir(t, root, "root")
 		unreadableDir := createTempDir(t, dir, "unreadable")
-		require.NoError(t, os.Chmod(unreadableDir.String(), 0000))
-		t.Cleanup(func() { os.Chmod(unreadableDir.String(), 0755) })
+		lockDir(t, unreadableDir)
 
 		var captured error
-		err := dir.WalkR(func(p *Path, localDirError error) error {
+		err := dir.WalkR(func(_ *Path, localDirError error) error {
 			if localDirError != nil {
 				captured = localDirError
 			}
@@ -621,6 +667,8 @@ func TestWalkR_CallbackErrors(t *testing.T) {
 }
 
 func TestWalkR_PreOrder(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	writeTempFile(t, root, "a/1.txt", "")
 	writeTempFile(t, root, "a/2.txt", "")
@@ -628,6 +676,8 @@ func TestWalkR_PreOrder(t *testing.T) {
 	writeTempFile(t, root, "b.txt", "")
 
 	walk := func(t *testing.T, skip string) []string {
+		t.Helper()
+
 		var visited []string
 		err := root.WalkR(func(p *Path, localDirError error) error {
 			require.NoError(t, localDirError)
@@ -644,19 +694,27 @@ func TestWalkR_PreOrder(t *testing.T) {
 	}
 
 	t.Run("directory is visited before its entries", func(t *testing.T) {
+		t.Parallel()
+
 		require.Equal(t, []string{"a", "a/1.txt", "a/2.txt", "a/sub", "a/sub/x.txt", "b.txt"}, walk(t, ""))
 	})
 
 	t.Run("SkipDir on a directory skips its contents", func(t *testing.T) {
+		t.Parallel()
+
 		require.Equal(t, []string{"a", "b.txt"}, walk(t, "a"))
 	})
 
 	t.Run("SkipDir on a file skips the rest of its directory", func(t *testing.T) {
+		t.Parallel()
+
 		require.Equal(t, []string{"a", "a/1.txt", "b.txt"}, walk(t, "a/1.txt"))
 	})
 }
 
 func TestWalkR_SkipDirDoesNotReadDirectory(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	locked := createTempDir(t, root, "locked")
 	writeTempFile(t, locked, "secret.txt", "")
@@ -677,6 +735,8 @@ func TestWalkR_SkipDirDoesNotReadDirectory(t *testing.T) {
 }
 
 func TestWalkR_UnreadableDirectoryIsPassedTwice(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	locked := createTempDir(t, root, "locked")
 	lockDir(t, locked)
@@ -694,6 +754,8 @@ func TestWalkR_UnreadableDirectoryIsPassedTwice(t *testing.T) {
 }
 
 func TestWalkR_UnreadableRootIsPassedOnce(t *testing.T) {
+	t.Parallel()
+
 	root := createTempDir(t, setupTempDir(t), "root")
 	lockDir(t, root)
 

@@ -38,6 +38,6 @@ func Example_errorHandling() {
 	// true
 	// true
 	// true
-	// pathlib.read
+	// PATHLIB_READ
 	// missing.txt
 }

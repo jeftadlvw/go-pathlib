@@ -9,7 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:maintidx // The table of cases is long by design.
 func TestCopy(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		SrcRel string
 		DstRel string
@@ -27,6 +30,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "dst/new_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "hello world")
 					createTempDir(t, root, "dst")
 				},
@@ -42,6 +47,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "dst/existing_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "src content")
 					writeTempFile(t, root, "dst/existing_file.txt", "dst content")
 				},
@@ -55,6 +62,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "dst_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "content")
 					createTempDir(t, root, "dst_dir")
 				},
@@ -68,6 +77,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src_empty_dir",
 				DstRel: "dst/new_empty_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "src_empty_dir")
 					createTempDir(t, root, "dst")
 				},
@@ -83,6 +94,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src_dir",
 				DstRel: "dst/new_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					srcDir := createTempDir(t, root, "src_dir")
 					writeTempFile(t, srcDir, "file1.txt", "content1")
 					writeTempFile(t, srcDir, "file2.log", "content2")
@@ -100,6 +113,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src_parent",
 				DstRel: "dst/copied_parent",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					srcParent := createTempDir(t, root, "src_parent")
 					writeTempFile(t, srcParent, "root_file.txt", "")
 					subdir1 := createTempDir(t, srcParent, "subdir1")
@@ -134,6 +149,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src_dir",
 				DstRel: "dst_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					srcDir := createTempDir(t, root, "src_dir")
 					writeTempFile(t, srcDir, "file.txt", "")
 					dstDir := createTempDir(t, root, "dst_dir")
@@ -149,6 +166,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "link_to_file",
 				DstRel: "dst/new_link",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "symlink target content")
 					createTempSymlinkAbs(t, root, "target.txt", "link_to_file")
 					createTempDir(t, root, "dst")
@@ -165,6 +184,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "link_to_file",
 				DstRel: "dst/new_link",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "symlink target content")
 					createTempSymlinkRel(t, root, "target.txt", "link_to_file")
 					createTempDir(t, root, "dst")
@@ -181,6 +202,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "link_to_dir",
 				DstRel: "dst/new_link_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "target_dir")
 					createTempSymlinkAbs(t, root, "target_dir", "link_to_dir")
 					createTempDir(t, root, "dst")
@@ -197,6 +220,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "non_existent_src",
 				DstRel: "dst/target",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "dst")
 				},
 			},
@@ -209,6 +234,8 @@ func TestCopy(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "non_existent_parent/target.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "")
 				},
 			},
@@ -218,6 +245,8 @@ func TestCopy(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		input.Setup(t, root)
 
@@ -233,7 +262,9 @@ func TestCopy(t *testing.T) {
 
 			// Verify the state of the *entire* root to capture all changes correctly.
 			finalRootState := readDirEntries(t, root, root)
-			slices.Sort(expect.State) // Ensure expectation is sorted
+			// The cases share their slices, so a sorted clone is compared.
+			expect.State = slices.Clone(expect.State)
+			slices.Sort(expect.State)
 			require.Equal(t, expect.State, finalRootState)
 
 			// Additional checks for symlinks
@@ -334,6 +365,8 @@ func TestCopy_RelativeSymlinkTarget(t *testing.T) {
 }
 
 func TestMove(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		SrcRel string
 		DstRel string
@@ -350,6 +383,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "dst/moved_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "content")
 					createTempDir(t, root, "dst")
 				},
@@ -365,6 +400,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "dst/existing_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "new content")
 					writeTempFile(t, root, "dst/existing_file.txt", "old content")
 				},
@@ -378,6 +415,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src_dir",
 				DstRel: "dst/moved_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "src_dir")
 					createTempDir(t, root, "dst")
 				},
@@ -393,6 +432,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src_dir",
 				DstRel: "dst/moved_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					srcDir := createTempDir(t, root, "src_dir")
 					writeTempFile(t, srcDir, "file.txt", "")
 					createTempDir(t, srcDir, "subdir")
@@ -414,6 +455,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src_dir",
 				DstRel: "dst/existing_empty_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					srcDir := createTempDir(t, root, "src_dir")
 					writeTempFile(t, srcDir, "file.txt", "")
 					createTempDir(t, root, "dst/existing_empty_dir")
@@ -430,6 +473,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "non_existent_src",
 				DstRel: "dst/target",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "dst")
 				},
 			},
@@ -442,6 +487,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "non_existent_parent/target.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "")
 				},
 			},
@@ -454,6 +501,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src/file.txt",
 				DstRel: "dst_dir", // This *is* a directory
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "src/file.txt", "content")
 					dstDir := createTempDir(t, root, "dst_dir")
 					writeTempFile(t, dstDir, "other_file.txt", "") // Make it non-empty
@@ -470,6 +519,8 @@ func TestMove(t *testing.T) {
 				SrcRel: "src_dir",
 				DstRel: "dst_dir", // This *is* a directory
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "src_dir")
 					writeTempFile(t, root.JoinStrings("src_dir"), "file.txt", "")
 					dstDir := createTempDir(t, root, "dst_dir")
@@ -484,6 +535,8 @@ func TestMove(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		input.Setup(t, root) // Setup initial state
 
@@ -499,12 +552,16 @@ func TestMove(t *testing.T) {
 		}
 
 		finalRootState := readDirEntries(t, root, root)
+		// The cases share their slices, so a sorted clone is compared.
+		expect.FinalState = slices.Clone(expect.FinalState)
 		slices.Sort(expect.FinalState)
 		require.Equal(t, expect.FinalState, finalRootState)
 	})
 }
 
 func TestRemoveAll(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		RelPath string
 		Setup   func(*testing.T, *Path) // Setup for the path to remove
@@ -516,6 +573,8 @@ func TestRemoveAll(t *testing.T) {
 			Input: Input{
 				RelPath: "empty_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "empty_dir")
 				},
 			},
@@ -526,6 +585,8 @@ func TestRemoveAll(t *testing.T) {
 			Input: Input{
 				RelPath: "dir_with_files",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					dir := createTempDir(t, root, "dir_with_files")
 					writeTempFile(t, dir, "file1.txt", "")
 					writeTempFile(t, dir, "file2.log", "")
@@ -538,6 +599,8 @@ func TestRemoveAll(t *testing.T) {
 			Input: Input{
 				RelPath: "nested_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					dir := createTempDir(t, root, "nested_dir")
 					writeTempFile(t, dir, "file.txt", "")
 					subdir1 := createTempDir(t, dir, "subdir1")
@@ -551,7 +614,7 @@ func TestRemoveAll(t *testing.T) {
 			Name: "Remove non-existent path (no-op)",
 			Input: Input{
 				RelPath: "non_existent_path",
-				Setup:   func(t *testing.T, root *Path) { /* no setup */ },
+				Setup:   func(_ *testing.T, _ *Path) { /* no setup */ },
 			},
 			Error: false,
 		},
@@ -560,6 +623,8 @@ func TestRemoveAll(t *testing.T) {
 			Input: Input{
 				RelPath: "a_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "a_file.txt", "")
 				},
 			},
@@ -570,6 +635,8 @@ func TestRemoveAll(t *testing.T) {
 			Input: Input{
 				RelPath: "broken_link",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempSymlinkAbs(t, root, "missing", "broken_link")
 				},
 			},
@@ -577,7 +644,9 @@ func TestRemoveAll(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect any, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ any, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		targetPath := root.JoinStrings(input.RelPath)
 		input.Setup(t, root) // Set up the path to be removed
@@ -594,6 +663,8 @@ func TestRemoveAll(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Setup func(*testing.T, *Path) *Path
 	}
@@ -602,6 +673,8 @@ func TestRemove(t *testing.T) {
 		{
 			Name: "Remove existing file",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "content")
 			}},
 			Error: false,
@@ -609,13 +682,15 @@ func TestRemove(t *testing.T) {
 		{
 			Name: "Remove empty directory",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "emptyDir")
 			}},
 			Error: false,
 		},
 		{
 			Name: "Remove non-existent path (no-op)",
-			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+			Input: Input{Setup: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			}},
 			Error: false,
@@ -623,6 +698,8 @@ func TestRemove(t *testing.T) {
 		{
 			Name: "Remove non-empty directory (should error)",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				dir := createTempDir(t, root, "nonEmptyDir")
 				writeTempFile(t, dir, "file.txt", "")
 				return dir
@@ -631,7 +708,9 @@ func TestRemove(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect any, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ any, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 		err := Remove(p)
@@ -646,6 +725,8 @@ func TestRemove(t *testing.T) {
 }
 
 func TestRename(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		NewName string
 		Setup   func(*testing.T, *Path) *Path
@@ -661,6 +742,8 @@ func TestRename(t *testing.T) {
 			Input: Input{
 				NewName: "renamed.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					return writeTempFile(t, root, "original.txt", "content")
 				},
 			},
@@ -672,6 +755,8 @@ func TestRename(t *testing.T) {
 			Input: Input{
 				NewName: "renamed_dir",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					dir := createTempDir(t, root, "original_dir")
 					writeTempFile(t, dir, "child.txt", "")
 					return dir
@@ -685,6 +770,8 @@ func TestRename(t *testing.T) {
 			Input: Input{
 				NewName: "existing.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "existing.txt", "existing")
 					return writeTempFile(t, root, "original.txt", "original")
 				},
@@ -695,6 +782,8 @@ func TestRename(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 
@@ -706,12 +795,16 @@ func TestRename(t *testing.T) {
 		}
 
 		finalState := readDirEntries(t, root, root)
+		// The cases share their slices, so a sorted clone is compared.
+		expect.FinalEntries = slices.Clone(expect.FinalEntries)
 		slices.Sort(expect.FinalEntries)
 		require.Equal(t, expect.FinalEntries, finalState)
 	})
 }
 
 func TestRemoveAll_SymlinkToDirectoryRemovesOnlyLink(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	target := createTempDir(t, root, "target_dir")
 	file := writeTempFile(t, target, "file.txt", "")
@@ -726,7 +819,11 @@ func TestRemoveAll_SymlinkToDirectoryRemovesOnlyLink(t *testing.T) {
 }
 
 func TestRemove_Symlinks(t *testing.T) {
+	t.Parallel()
+
 	t.Run("broken symlink is removed", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		link := createTempSymlinkAbs(t, root, "missing", "link")
 
@@ -735,6 +832,8 @@ func TestRemove_Symlinks(t *testing.T) {
 	})
 
 	t.Run("symlink to file removes only the link", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		target := writeTempFile(t, root, "target.txt", "content")
 		link := createTempSymlinkAbs(t, root, "target.txt", "link")
@@ -746,6 +845,8 @@ func TestRemove_Symlinks(t *testing.T) {
 }
 
 func TestRemove_PathBelowFileIsNoop(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	file := writeTempFile(t, root, "file.txt", "")
 
@@ -755,6 +856,8 @@ func TestRemove_PathBelowFileIsNoop(t *testing.T) {
 }
 
 func TestRemove_UncheckablePathIsAnError(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	dir := createTempDir(t, root, "locked")
 	file := writeTempFile(t, dir, "file.txt", "")
@@ -772,6 +875,8 @@ func TestRemove_UncheckablePathIsAnError(t *testing.T) {
 }
 
 func TestRemoveAll_SymlinkToFileRemovesOnlyLink(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	target := writeTempFile(t, root, "target.txt", "content")
 	link := createTempSymlinkAbs(t, root, "target.txt", "link")
@@ -782,7 +887,11 @@ func TestRemoveAll_SymlinkToFileRemovesOnlyLink(t *testing.T) {
 }
 
 func TestCopy_BrokenSymlinks(t *testing.T) {
+	t.Parallel()
+
 	t.Run("broken symlink is copied as symlink", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		src := createTempSymlinkRel(t, root, "missing", "link")
 		dst := root.JoinStrings("copy")
@@ -795,6 +904,8 @@ func TestCopy_BrokenSymlinks(t *testing.T) {
 	})
 
 	t.Run("directory containing a broken symlink is copied", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		src := createTempDir(t, root, "src")
 		writeTempFile(t, src, "file.txt", "")
@@ -807,6 +918,8 @@ func TestCopy_BrokenSymlinks(t *testing.T) {
 	})
 
 	t.Run("file is not copied through a broken symlink", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		src := writeTempFile(t, root, "src.txt", "content")
 		link := createTempSymlinkAbs(t, root, "target.txt", "link")
@@ -818,6 +931,8 @@ func TestCopy_BrokenSymlinks(t *testing.T) {
 	})
 
 	t.Run("directory is not copied onto a broken symlink", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		src := createTempDir(t, root, "src")
 		link := createTempSymlinkAbs(t, root, "target_dir", "link")
@@ -830,7 +945,11 @@ func TestCopy_BrokenSymlinks(t *testing.T) {
 }
 
 func TestMove_BrokenSymlinks(t *testing.T) {
+	t.Parallel()
+
 	t.Run("broken symlink is moved", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		src := createTempSymlinkRel(t, root, "missing", "link")
 		dst := root.JoinStrings("moved")
@@ -841,6 +960,8 @@ func TestMove_BrokenSymlinks(t *testing.T) {
 	})
 
 	t.Run("file is not moved onto a broken symlink", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		src := writeTempFile(t, root, "src.txt", "content")
 		link := createTempSymlinkAbs(t, root, "missing", "link")

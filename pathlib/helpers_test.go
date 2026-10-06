@@ -27,6 +27,8 @@ func platformNativeUNC(posixForm string) string {
 }
 
 // onWindows returns windowsVal on Windows, posixVal on other platforms.
+//
+//nolint:ireturn // T is the type of the caller's values.
 func onWindows[T any](posixVal, windowsVal T) T {
 	if runningOnWindows {
 		return windowsVal
@@ -35,6 +37,8 @@ func onWindows[T any](posixVal, windowsVal T) T {
 }
 
 func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, expectError bool)) {
+	t.Helper()
+
 	for _, test := range cases {
 		caseName := test.Name
 		if strings.TrimSpace(caseName) == "" {
@@ -42,18 +46,26 @@ func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc
 		}
 
 		t.Run(caseName, func(t *testing.T) {
+			t.Parallel()
+
 			testFunc(t, test.Input, test.Expect, test.Error)
 		})
 	}
 }
 
-func runForResults[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expectError E)) {
-	runForResultsE(t, cases, func(t *testing.T, input I, expect E, error bool) {
+func runForResults[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E)) {
+	t.Helper()
+
+	runForResultsE(t, cases, func(t *testing.T, input I, expect E, _ bool) {
+		t.Helper()
+
 		testFunc(t, input, expect)
 	})
 }
 
 func setupTempDir(t *testing.T) *Path {
+	t.Helper()
+
 	tempDir := t.TempDir()
 	return NewPath(tempDir)
 }
@@ -65,6 +77,7 @@ func setupTempDir(t *testing.T) *Path {
 func setupRelativeTempDir(t *testing.T) *Path {
 	t.Helper()
 
+	//nolint:usetesting // t.TempDir is absolute, and the directory must be relative.
 	dir, err := os.MkdirTemp(".", "_tmp-")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
@@ -77,12 +90,14 @@ func setupRelativeTempDir(t *testing.T) *Path {
 // writeTempFile creates a file with content inside a given root.
 // Returns the Path to the created file.
 func writeTempFile(t *testing.T, root *Path, relPath string, content string) *Path {
+	t.Helper()
+
 	filePath := root.JoinStrings(relPath)
 
-	err := os.MkdirAll(filePath.Parent().String(), 0755) // Ensure parent directories exist
+	err := os.MkdirAll(filePath.Parent().String(), 0755) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 
-	err = os.WriteFile(filePath.String(), []byte(content), 0644)
+	err = os.WriteFile(filePath.String(), []byte(content), 0644) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 
 	return filePath
@@ -91,8 +106,10 @@ func writeTempFile(t *testing.T, root *Path, relPath string, content string) *Pa
 // createTempDir creates a directory inside a given root.
 // Returns the Path to the created directory.
 func createTempDir(t *testing.T, root *Path, relPath string) *Path {
+	t.Helper()
+
 	dirPath := root.JoinStrings(relPath)
-	err := os.MkdirAll(dirPath.String(), 0755)
+	err := os.MkdirAll(dirPath.String(), 0755) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 	return dirPath
 }
@@ -103,9 +120,11 @@ func createTempDir(t *testing.T, root *Path, relPath string) *Path {
 // Both paths are made absolute for symlink creation.
 // Returns the Path to the created symlink.
 func createTempSymlinkAbs(t *testing.T, root *Path, targetRelPath string, linkRelPath string) *Path {
+	t.Helper()
+
 	targetPath := root.JoinStrings(targetRelPath)
 	linkPath := root.JoinStrings(linkRelPath)
-	err := os.MkdirAll(linkPath.Parent().String(), 0755) // Ensure parent dir exists for the link
+	err := os.MkdirAll(linkPath.Parent().String(), 0755) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 
 	// Create absolute symlinks
@@ -120,9 +139,11 @@ func createTempSymlinkAbs(t *testing.T, root *Path, targetRelPath string, linkRe
 // Only linkRelPath is made absolute for symlink creation. targetRelPath is kept relative.
 // Returns the Path to the created symlink.
 func createTempSymlinkRel(t *testing.T, root *Path, targetRelPath string, linkRelPath string) *Path {
+	t.Helper()
+
 	targetPath := NewPath(targetRelPath)
 	linkPath := root.JoinStrings(linkRelPath)
-	err := os.MkdirAll(linkPath.Parent().String(), 0755) // Ensure parent dir exists for the link
+	err := os.MkdirAll(linkPath.Parent().String(), 0755) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 
 	// Create relative symlink
@@ -134,11 +155,13 @@ func createTempSymlinkRel(t *testing.T, root *Path, targetRelPath string, linkRe
 // readDirEntries reads all entries (files and directories) recursively within a given Path,
 // returning their paths relative to the `root` Path, sorted.
 func readDirEntries(t *testing.T, root *Path, dir *Path) []string {
+	t.Helper()
+
 	var entries []string
 	if !dir.Exists() {
 		return entries
 	}
-	err := filepath.WalkDir(dir.String(), func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir.String(), func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -164,6 +187,8 @@ func readDirEntries(t *testing.T, root *Path, dir *Path) []string {
 
 // relPathsSorted collects paths relative to base, sorts them, and returns the sorted slice.
 func relPathsSorted(t *testing.T, entries []*Path, base *Path) []string {
+	t.Helper()
+
 	relPaths := make([]string, len(entries))
 	for i, e := range entries {
 		rel, err := e.RelativeTo(base)
@@ -185,7 +210,7 @@ func lockDir(t *testing.T, dir *Path) {
 	}
 
 	require.NoError(t, os.Chmod(dir.String(), 0000))
-	t.Cleanup(func() { _ = os.Chmod(dir.String(), 0755) })
+	t.Cleanup(func() { _ = os.Chmod(dir.String(), 0755) }) //nolint:gosec // Fixtures use common permissions.
 }
 
 // requireLExists asserts whether p exists, without following symlinks.

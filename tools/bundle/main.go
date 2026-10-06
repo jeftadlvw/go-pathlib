@@ -9,6 +9,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/format"
 	"go/parser"
@@ -21,15 +22,24 @@ import (
 	"github.com/jeftadlvw/go-pathlib/pathlib"
 )
 
+var (
+	// errUnknownGroup is returned for an artifact that names a group the
+	// manifest does not define.
+	errUnknownGroup = errors.New("unknown group")
+	// errBuildConstraints is returned for a source file with build constraints,
+	// which cannot hold for a single-file bundle.
+	errBuildConstraints = errors.New("carries build constraints, cannot merge into a single file")
+)
+
 // Manifest is the bundle.manifest schema: groups (a prefix + dependency edges),
 // the release artifacts to emit, and how to render the license preamble.
 type Manifest struct {
 	Package     string            `json:"package"`
-	SourceDir   string            `json:"source_dir"`
-	DistDir     string            `json:"dist_dir"`
+	SourceDir   string            `json:"sourceDir"`
+	DistDir     string            `json:"distDir"`
 	License     string            `json:"license"`
-	LicenseMode string            `json:"license_mode"` // "full" | "spdx"
-	LicenseFile string            `json:"license_file"`
+	LicenseMode string            `json:"licenseMode"` // "full" | "spdx"
+	LicenseFile string            `json:"licenseFile"`
 	Groups      map[string]string `json:"groups"` // group name -> filename prefix
 	Artifacts   []Artifact        `json:"artifacts"`
 }
@@ -39,6 +49,16 @@ type Manifest struct {
 type Artifact struct {
 	Name   string   `json:"name"`
 	Groups []string `json:"groups"`
+}
+
+// source is the part of one source file that goes into a bundle.
+type source struct {
+	// imports maps each import path (quoted) to its alias, or "" if it has none.
+	imports map[string]string
+	// doc is the package doc of the file, or "" if it has none.
+	doc string
+	// body is everything after the import block, verbatim.
+	body string
 }
 
 func main() {
@@ -81,6 +101,7 @@ func main() {
 			log.Fatalf("artifact %q: write: %v", art.Name, err)
 		}
 
+		//nolint:forbidigo // The command reports its progress on stdout.
 		fmt.Printf("bundled %-5s  %2d files  %6d bytes  ->  %s  (groups: %s)\n",
 			art.Name, len(files), len(content), outFile.String(), strings.Join(art.Groups, "+"))
 	}
@@ -95,7 +116,7 @@ func gatherFiles(srcDir *pathlib.Path, m *Manifest, groups []string) ([]*pathlib
 	for _, g := range groups {
 		prefix, ok := m.Groups[g]
 		if !ok {
-			return nil, fmt.Errorf("unknown group %q", g)
+			return nil, fmt.Errorf("%w %q", errUnknownGroup, g)
 		}
 
 		pattern := prefix + "*.go"
@@ -129,42 +150,21 @@ func merge(files []*pathlib.Path, m *Manifest) (string, error) {
 	var bodies []string
 
 	for _, fp := range files {
-		src, err := pathlib.ReadFileToString(fp)
+		src, err := parseSource(fset, fp)
 		if err != nil {
-			return "", fmt.Errorf("read %s: %w", fp.Base(), err)
-		}
-		if strings.Contains(src, "//go:build") || strings.Contains(src, "// +build") {
-			return "", fmt.Errorf("%s carries build constraints, cannot merge into a single file", fp.Base())
+			return "", err
 		}
 
-		af, err := parser.ParseFile(fset, fp.String(), src, parser.ImportsOnly|parser.ParseComments)
-		if err != nil {
-			return "", fmt.Errorf("parse %s: %w", fp.Base(), err)
-		}
-
-		for _, imp := range af.Imports {
-			alias := ""
-			if imp.Name != nil {
-				alias = imp.Name.Name
-			}
-			imports[imp.Path.Value] = alias
+		for path, alias := range src.imports {
+			imports[path] = alias
 		}
 
 		// The package doc lives above the package clause in exactly one file.
-		if af.Doc != nil && pkgDoc == "" {
-			pkgDoc = src[offset(fset, af.Doc.Pos()):offset(fset, af.Doc.End())]
+		if pkgDoc == "" {
+			pkgDoc = src.doc
 		}
 
-		// Everything after the import block (or the package clause, if no
-		// imports) is the body, taken verbatim so comments stay byte-identical.
-		var bodyStart int
-		n := len(af.Decls)
-		if n > 0 {
-			bodyStart = offset(fset, af.Decls[n-1].End())
-		} else {
-			bodyStart = offset(fset, af.Name.End())
-		}
-		bodies = append(bodies, strings.TrimSpace(src[bodyStart:]))
+		bodies = append(bodies, src.body)
 	}
 
 	var b strings.Builder
@@ -176,23 +176,7 @@ func merge(files []*pathlib.Path, m *Manifest) (string, error) {
 	}
 	fmt.Fprintf(&b, "package %s\n\n", m.Package)
 
-	paths := make([]string, 0, len(imports))
-	for p := range imports {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-	if len(paths) > 0 {
-		b.WriteString("import (\n")
-		for _, p := range paths {
-			alias := imports[p]
-			if alias != "" {
-				fmt.Fprintf(&b, "\t%s %s\n", alias, p)
-			} else {
-				fmt.Fprintf(&b, "\t%s\n", p)
-			}
-		}
-		b.WriteString(")\n")
-	}
+	writeImports(&b, imports)
 
 	for _, body := range bodies {
 		b.WriteString("\n")
@@ -205,6 +189,72 @@ func merge(files []*pathlib.Path, m *Manifest) (string, error) {
 		return "", fmt.Errorf("gofmt merged output: %w", err)
 	}
 	return string(out), nil
+}
+
+// parseSource reads the source file fp and splits it into its imports, package
+// doc, and body. A file with build constraints returns errBuildConstraints.
+func parseSource(fset *token.FileSet, fp *pathlib.Path) (source, error) {
+	src, err := pathlib.ReadFileToString(fp)
+	if err != nil {
+		return source{}, fmt.Errorf("read %s: %w", fp.Base(), err)
+	}
+	if strings.Contains(src, "//go:build") || strings.Contains(src, "// +build") {
+		return source{}, fmt.Errorf("%s %w", fp.Base(), errBuildConstraints)
+	}
+
+	af, err := parser.ParseFile(fset, fp.String(), src, parser.ImportsOnly|parser.ParseComments)
+	if err != nil {
+		return source{}, fmt.Errorf("parse %s: %w", fp.Base(), err)
+	}
+
+	parsed := source{imports: map[string]string{}}
+	for _, imp := range af.Imports {
+		alias := ""
+		if imp.Name != nil {
+			alias = imp.Name.Name
+		}
+		parsed.imports[imp.Path.Value] = alias
+	}
+
+	if af.Doc != nil {
+		parsed.doc = src[offset(fset, af.Doc.Pos()):offset(fset, af.Doc.End())]
+	}
+
+	// Everything after the import block (or the package clause, if no
+	// imports) is the body, taken verbatim so comments stay byte-identical.
+	bodyStart := offset(fset, af.Name.End())
+	n := len(af.Decls)
+	if n > 0 {
+		bodyStart = offset(fset, af.Decls[n-1].End())
+	}
+	parsed.body = strings.TrimSpace(src[bodyStart:])
+
+	return parsed, nil
+}
+
+// writeImports writes the import block for imports to b, sorted by path. It
+// writes nothing if there are no imports.
+func writeImports(b *strings.Builder, imports map[string]string) {
+	if len(imports) == 0 {
+		return
+	}
+
+	paths := make([]string, 0, len(imports))
+	for p := range imports {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	b.WriteString("import (\n")
+	for _, p := range paths {
+		alias := imports[p]
+		if alias != "" {
+			fmt.Fprintf(b, "\t%s %s\n", alias, p)
+		} else {
+			fmt.Fprintf(b, "\t%s\n", p)
+		}
+	}
+	b.WriteString(")\n")
 }
 
 // preamble builds the generated-code marker plus the license header: the full

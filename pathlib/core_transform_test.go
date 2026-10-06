@@ -8,6 +8,8 @@ import (
 )
 
 func TestPath_Joins(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[[]string, *Path]{
 		{Input: []string{"/", "."}, Expect: NewPath("/")},
 		{Input: []string{"/", "foo"}, Expect: NewPath("/foo")},
@@ -24,18 +26,18 @@ func TestPath_Joins(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input []string, expect *Path) {
+		t.Helper()
+
 		require.NotEmpty(t, input)
 
 		basePath := NewPath(input[0])
 		joinedStrPath := basePath.JoinStrings(input[1:]...)
 
-		var strCvtPath []*Path = nil
+		strCvtPath := make([]*Path, 0, len(input)-1)
 		for _, pathStr := range input[1:] {
 			strCvtPath = append(strCvtPath, NewPath(pathStr))
 		}
 		joinedPathsPath := basePath.Join(strCvtPath...)
-
-		// TODO Test with n randomly generated strings
 
 		require.Equal(t, expect, joinedStrPath)
 		require.Equal(t, expect, joinedPathsPath)
@@ -43,6 +45,8 @@ func TestPath_Joins(t *testing.T) {
 }
 
 func TestPath_WithName(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Original string
 		NewName  string
@@ -65,6 +69,8 @@ func TestPath_WithName(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input Input, expect *Path) {
+		t.Helper()
+
 		path := NewPath(input.Original)
 		changedName := path.WithName(input.NewName)
 

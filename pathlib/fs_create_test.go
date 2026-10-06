@@ -11,6 +11,8 @@ import (
 )
 
 func TestCreateFileWithOptions(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		RelPath string
 		Options FileOptions
@@ -29,13 +31,13 @@ func TestCreateFileWithOptions(t *testing.T) {
 		},
 		{
 			Name:   "ExistOk=true, file exists",
-			Input:  Input{"existing_file.txt", FileOptions{ExistOk: true, Mode: DefaultFileMode}},
+			Input:  Input{"existing_file.txt", FileOptions{ExistOk: true, Mode: DefaultFileMode()}},
 			Expect: Expect{Created: false, Content: "original content"},
 			Error:  false,
 		},
 		{
 			Name:   "ExistOk=false, file exists",
-			Input:  Input{"existing_file.txt", FileOptions{ExistOk: false, Mode: DefaultFileMode}},
+			Input:  Input{"existing_file.txt", FileOptions{ExistOk: false, Mode: DefaultFileMode()}},
 			Expect: Expect{Created: false},
 			Error:  true,
 		},
@@ -66,6 +68,8 @@ func TestCreateFileWithOptions(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		targetPath := root.JoinStrings(input.RelPath)
 
@@ -84,34 +88,35 @@ func TestCreateFileWithOptions(t *testing.T) {
 
 		if expectError {
 			require.Error(t, err)
-		} else {
+			return
+		}
+
+		require.NoError(t, err)
+		require.Equal(t, expect.Created, created)
+		require.True(t, targetPath.Exists())
+		require.True(t, targetPath.IsFile())
+
+		info, err := targetPath.Stat()
+		require.NoError(t, err)
+
+		expectedMode := input.Options.Mode
+		if expectedMode == 0 {
+			expectedMode = DefaultFileMode()
+		}
+		require.Equal(t, effectiveFileMode(expectedMode).Perm(), info.Mode().Perm())
+
+		if expect.Content != "" || (input.RelPath == "truncate_me.txt") {
+			// Check content for truncation test, or if specific content is expected
+			content, err := os.ReadFile(targetPath.String())
 			require.NoError(t, err)
-			require.Equal(t, expect.Created, created)
-			require.True(t, targetPath.Exists())
-			require.True(t, targetPath.IsFile())
-
-			if targetPath.Exists() { // Only check permissions/content if it was created/exists
-				info, err := targetPath.Stat()
-				require.NoError(t, err)
-
-				expectedMode := input.Options.Mode
-				if expectedMode == 0 {
-					expectedMode = DefaultFileMode
-				}
-				require.Equal(t, effectiveFileMode(expectedMode).Perm(), info.Mode().Perm())
-
-				if expect.Content != "" || (input.RelPath == "truncate_me.txt") {
-					// Check content for truncation test, or if specific content is expected
-					content, err := os.ReadFile(targetPath.String())
-					require.NoError(t, err)
-					require.Equal(t, expect.Content, string(content))
-				}
-			}
+			require.Equal(t, expect.Content, string(content))
 		}
 	})
 }
 
 func TestMkDirWithOptions(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		RelPath string
 		Options DirOptions
@@ -129,13 +134,13 @@ func TestMkDirWithOptions(t *testing.T) {
 		},
 		{
 			Name:   "ExistOk=true, directory exists",
-			Input:  Input{"existing_dir", DirOptions{ExistOk: true, Mode: DefaultDirMode}},
+			Input:  Input{"existing_dir", DirOptions{ExistOk: true, Mode: DefaultDirMode()}},
 			Expect: Expect{Created: false},
 			Error:  false,
 		},
 		{
 			Name:   "ExistOk=false, directory exists",
-			Input:  Input{"existing_dir", DirOptions{ExistOk: false, Mode: DefaultDirMode}},
+			Input:  Input{"existing_dir", DirOptions{ExistOk: false, Mode: DefaultDirMode()}},
 			Expect: Expect{Created: false},
 			Error:  true,
 		},
@@ -153,7 +158,7 @@ func TestMkDirWithOptions(t *testing.T) {
 		},
 		{
 			Name:   "CreateAll=true, parent directory does not exist",
-			Input:  Input{"nested/deeply/created_dir", DirOptions{CreateAll: true, Mode: DefaultDirMode}},
+			Input:  Input{"nested/deeply/created_dir", DirOptions{CreateAll: true, Mode: DefaultDirMode()}},
 			Expect: Expect{Created: true},
 			Error:  false,
 		},
@@ -166,6 +171,8 @@ func TestMkDirWithOptions(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		targetPath := root.JoinStrings(input.RelPath)
 
@@ -191,7 +198,7 @@ func TestMkDirWithOptions(t *testing.T) {
 			require.NoError(t, err)
 			expectedMode := input.Options.Mode
 			if expectedMode == 0 {
-				expectedMode = DefaultDirMode
+				expectedMode = DefaultDirMode()
 			}
 			require.Equal(t, effectiveDirMode(expectedMode).Perm(), info.Mode().Perm())
 		}
@@ -199,6 +206,8 @@ func TestMkDirWithOptions(t *testing.T) {
 }
 
 func TestPath_SymlinkTo(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		SrcRel      string
 		LinkPathRel string
@@ -212,6 +221,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "target.txt",
 				LinkPathRel: "my_link.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "content")
 				},
 			},
@@ -223,6 +234,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "target_dir",
 				LinkPathRel: "my_link_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "target_dir")
 				},
 			},
@@ -233,7 +246,7 @@ func TestPath_SymlinkTo(t *testing.T) {
 			Input: Input{
 				SrcRel:      "non_existent_target.txt",
 				LinkPathRel: "my_link.txt",
-				Setup:       func(t *testing.T, root *Path) { /* no setup for target */ },
+				Setup:       func(_ *testing.T, _ *Path) { /* no setup for target */ },
 			},
 			Error: true,
 		},
@@ -243,6 +256,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "target.txt",
 				LinkPathRel: "existing_link_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "")
 					writeTempFile(t, root, "existing_link_file.txt", "")
 				},
@@ -255,6 +270,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "target.txt",
 				LinkPathRel: "existing_link_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "")
 					createTempDir(t, root, "existing_link_dir")
 				},
@@ -267,6 +284,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "target.txt",
 				LinkPathRel: "non_existent_dir/my_link.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "")
 				},
 			},
@@ -278,6 +297,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "dir/target.txt",
 				LinkPathRel: "link.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "dir/target.txt", "content")
 				},
 			},
@@ -289,6 +310,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 				SrcRel:      "target.txt", // target is root/target.txt
 				LinkPathRel: "subdir/link.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "content")
 					createTempDir(t, root, "subdir")
 				},
@@ -297,7 +320,9 @@ func TestPath_SymlinkTo(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect any, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ any, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		input.Setup(t, root)
 
@@ -352,6 +377,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 }
 
 func TestPath_ReadSymlinkTarget(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		SymlinkRel string
 		TargetRel  string                  // Only used for setup, defines what the symlink *points to*
@@ -369,6 +396,8 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 				SymlinkRel: "link_to_file",
 				TargetRel:  "actual_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "actual_file.txt", "")
 					createTempSymlinkAbs(t, root, "actual_file.txt", "link_to_file")
 				},
@@ -384,6 +413,8 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 				SymlinkRel: "link_to_dir",
 				TargetRel:  "actual_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "actual_dir")
 					createTempSymlinkAbs(t, root, "actual_dir", "link_to_dir")
 				},
@@ -399,6 +430,8 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 				SymlinkRel: "broken_link",
 				TargetRel:  "non_existent_target",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempSymlinkAbs(t, root, "non_existent_target", "broken_link")
 				},
 			},
@@ -412,6 +445,8 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 			Input: Input{
 				SymlinkRel: "regular_file.txt",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					writeTempFile(t, root, "regular_file.txt", "")
 				},
 			},
@@ -423,6 +458,8 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 			Input: Input{
 				SymlinkRel: "regular_dir",
 				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
 					createTempDir(t, root, "regular_dir")
 				},
 			},
@@ -433,21 +470,23 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 			Name: "Path does not exist",
 			Input: Input{
 				SymlinkRel: "non_existent_path",
-				Setup:      func(t *testing.T, root *Path) { /* no setup */ },
+				Setup:      func(_ *testing.T, _ *Path) { /* no setup */ },
 			},
 			Expect: Expect{},
 			Error:  true,
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect Expect, error bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ Expect, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		input.Setup(t, root)
 
 		symlinkPath := root.JoinStrings(input.SymlinkRel)
 		readTargetPath, err := symlinkPath.ReadSymlinkTarget()
 
-		if error {
+		if expectError {
 			require.Error(t, err)
 			require.Nil(t, readTargetPath)
 		} else {
@@ -465,6 +504,8 @@ func TestPath_ReadSymlinkTarget(t *testing.T) {
 }
 
 func TestCreateFile(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 
 	filePath := root.JoinStrings("new_file.txt")
@@ -475,7 +516,7 @@ func TestCreateFile(t *testing.T) {
 
 	info, err := filePath.Stat()
 	require.NoError(t, err)
-	require.Equal(t, DefaultFileMode.Perm(), info.Mode().Perm())
+	require.Equal(t, DefaultFileMode().Perm(), info.Mode().Perm())
 
 	// An existing file is neither truncated nor overwritten.
 	existingPath := writeTempFile(t, root, "existing.txt", "content")
@@ -488,6 +529,8 @@ func TestCreateFile(t *testing.T) {
 }
 
 func TestMkDir(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 
 	dirPath := root.JoinStrings("new_dir")
@@ -498,10 +541,12 @@ func TestMkDir(t *testing.T) {
 
 	info, err := dirPath.Stat()
 	require.NoError(t, err)
-	require.Equal(t, DefaultDirMode.Perm(), info.Mode().Perm())
+	require.Equal(t, DefaultDirMode().Perm(), info.Mode().Perm())
 }
 
 func TestCreateSymlink(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Setup func(*testing.T, *Path) (target *Path, linkPath *Path)
 	}
@@ -510,6 +555,8 @@ func TestCreateSymlink(t *testing.T) {
 		{
 			Name: "Successful symlink creation",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				target := writeTempFile(t, root, "target.txt", "content")
 				return target, root.JoinStrings("link.txt")
 			}},
@@ -518,6 +565,8 @@ func TestCreateSymlink(t *testing.T) {
 		{
 			Name: "Link path already exists",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				target := writeTempFile(t, root, "target.txt", "content")
 				existing := writeTempFile(t, root, "existing.txt", "")
 				return target, existing
@@ -527,6 +576,8 @@ func TestCreateSymlink(t *testing.T) {
 		{
 			Name: "Link parent directory does not exist",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				target := writeTempFile(t, root, "target.txt", "content")
 				return target, root.JoinStrings("nonexistent_dir", "link.txt")
 			}},
@@ -534,7 +585,9 @@ func TestCreateSymlink(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect any, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ any, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		target, linkPath := input.Setup(t, root)
 		err := CreateSymlink(target, linkPath)
@@ -548,6 +601,8 @@ func TestCreateSymlink(t *testing.T) {
 }
 
 func TestSetPermission(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping permission test on Windows")
 	}
@@ -555,6 +610,8 @@ func TestSetPermission(t *testing.T) {
 	root := setupTempDir(t)
 
 	t.Run("file", func(t *testing.T) {
+		t.Parallel()
+
 		filePath := writeTempFile(t, root, "file.txt", "content")
 
 		err := SetPermission(filePath, 0600)
@@ -574,6 +631,8 @@ func TestSetPermission(t *testing.T) {
 	})
 
 	t.Run("directory", func(t *testing.T) {
+		t.Parallel()
+
 		dirPath := createTempDir(t, root, "permdir")
 
 		err := SetPermission(dirPath, 0700)
@@ -592,6 +651,8 @@ func TestSetPermission(t *testing.T) {
 	})
 
 	t.Run("non-existent path", func(t *testing.T) {
+		t.Parallel()
+
 		nonExistent := root.JoinStrings("does_not_exist")
 		err := SetPermission(nonExistent, 0644)
 		require.Error(t, err)
@@ -599,7 +660,11 @@ func TestSetPermission(t *testing.T) {
 }
 
 func TestCreate_BrokenSymlinks(t *testing.T) {
+	t.Parallel()
+
 	t.Run("CreateFileWithOptions does not create the link target", func(t *testing.T) {
+		t.Parallel()
+
 		for _, existOk := range []bool{false, true} {
 			root := setupTempDir(t)
 			link := createTempSymlinkAbs(t, root, "target.txt", "link")
@@ -612,6 +677,8 @@ func TestCreate_BrokenSymlinks(t *testing.T) {
 	})
 
 	t.Run("MkDirWithOptions does not create the link target", func(t *testing.T) {
+		t.Parallel()
+
 		for _, createAll := range []bool{false, true} {
 			root := setupTempDir(t)
 			link := createTempSymlinkAbs(t, root, "target_dir", "link")
@@ -624,6 +691,8 @@ func TestCreate_BrokenSymlinks(t *testing.T) {
 	})
 
 	t.Run("CreateSymlink over a broken symlink", func(t *testing.T) {
+		t.Parallel()
+
 		root := setupTempDir(t)
 		link := createTempSymlinkAbs(t, root, "missing", "link")
 
@@ -635,6 +704,8 @@ func TestCreate_BrokenSymlinks(t *testing.T) {
 }
 
 func TestCreateFileWithOptions_SymlinkToFile(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	target := writeTempFile(t, root, "target.txt", "content")
 	link := createTempSymlinkAbs(t, root, "target.txt", "link")

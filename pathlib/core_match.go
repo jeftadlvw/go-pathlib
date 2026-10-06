@@ -232,30 +232,28 @@ func findPatternInPath(name, pattern string) int {
 
 	// Try to find pattern parts as a contiguous sequence in name parts
 	for startIdx := 0; startIdx <= len(nameParts)-len(patternParts); startIdx++ {
-		allMatch := true
-		for i, pp := range patternParts {
-			matched, err := path.Match(pp, nameParts[startIdx+i])
-			if err != nil || !matched {
-				allMatch = false
-				break
-			}
+		if !partsMatchAt(nameParts, patternParts, startIdx) {
+			continue
 		}
-		if allMatch {
-			// Calculate byte position
-			pos := 0
-			for i := range startIdx {
-				if i > 0 {
-					pos++
-				}
-				pos += len(nameParts[i])
-			}
-			if startIdx > 0 {
-				pos++ // trailing /
-			}
-			return pos
+		if startIdx == 0 {
+			return 0
 		}
+		// The match starts after the preceding parts and their trailing /
+		return len(strings.Join(nameParts[:startIdx], "/")) + 1
 	}
 	return -1
+}
+
+// partsMatchAt reports whether each pattern part matches the name part at the
+// same offset from startIdx.
+func partsMatchAt(nameParts, patternParts []string, startIdx int) bool {
+	for i, pp := range patternParts {
+		matched, err := path.Match(pp, nameParts[startIdx+i])
+		if err != nil || !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // findMatchLengthAt returns the length of the match starting at the given position.
@@ -303,6 +301,7 @@ generateRandomString generates a random string with a random length.
 
 This is a utility function used by tests and extensions.
 */
+//nolint:gosec // The strings are not used for security.
 func generateRandomString(minLength, maxLength int) string {
 	// Generate a random length between minLength and maxLength
 	length := rand.IntN(maxLength-minLength+1) + minLength

@@ -12,32 +12,33 @@ import (
 )
 
 func TestPathInterfaceImplementations(t *testing.T) {
+	t.Parallel()
+
 	path := NewPath("foo")
 
 	t.Run("TextMarshaler", func(t *testing.T) {
+		t.Parallel()
+
 		_, ok := any(path).(encoding.TextMarshaler)
 		require.True(t, ok)
 	})
 
 	t.Run("TextUnMarshaler", func(t *testing.T) {
+		t.Parallel()
+
 		_, ok := any(path).(encoding.TextUnmarshaler)
 		require.True(t, ok)
 	})
 }
 
 func TestPathInputOutputDisplay(t *testing.T) {
+	t.Parallel()
+
 	type ExpectMatrix struct {
 		AsPosixOnPosix     string
 		AsPosixOnWindows   string
 		AsWindowsOnPosix   string
 		AsWindowsOnWindows string
-	}
-
-	type ExpectMatrixMask struct {
-		AsPosix   bool
-		AsWindows bool
-		OnPosix   bool
-		OnWindows bool
 	}
 
 	cases := []TestCase[string, ExpectMatrix]{
@@ -168,142 +169,14 @@ func TestPathInputOutputDisplay(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input string, expect ExpectMatrix) {
-		runTests := func(t *testing.T, expect string, input string, expectPath *Path, inputPath *Path, expectMatrixMask ExpectMatrixMask) {
-			/*
-				// Do not test internal representation, because they may differ based on the constructor.
-				t.Run("internal repr", func(t *testing.T) {
-					require.Equal(t, *expectPath, *inputPath)
-				})
-			*/
-
-			t.Run("ToString_posix", func(t *testing.T) {
-				if !expectMatrixMask.OnPosix {
-					t.Skip("Test not targeted to Posix runtime")
-				}
-
-				if runningOnWindows {
-					t.Skip("Cannot run Posix test on Windows runtime")
-				}
-
-				require.Equal(t, expect, inputPath.String())
-				require.Equal(t, expect, inputPath.ToPosix())
-			})
-
-			t.Run("ToString_windows", func(t *testing.T) {
-				if !expectMatrixMask.OnWindows {
-					t.Skip("Test not targeted to Windows runtime")
-				}
-
-				if notRunningOnWindows {
-					t.Skip("Running Windows test in Non-Windows runtime")
-				}
-
-				require.Equal(t, expect, inputPath.String())
-				require.Equal(t, expect, inputPath.ToWindows())
-			})
-
-			t.Run("internal_toWindows", func(t *testing.T) {
-				if !expectMatrixMask.OnWindows {
-					t.Skip("Test not targeted to Windows runtime")
-				}
-
-				require.Equal(t, expect, inputPath.ToWindows())
-			})
-
-			t.Run("matching_posix_repr", func(t *testing.T) {
-				// This test fails if a Posix path contains "\\" and is checked on Windows,
-				// because on Posix, "\\" is allowed and not escaped.
-
-				if expectMatrixMask.OnWindows && expectMatrixMask.AsPosix && strings.Contains(input, "\\") {
-					t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
-				}
-
-				if expectMatrixMask.OnPosix && expectMatrixMask.AsWindows && inputPath.isWindowsAnchoredPath() {
-					t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
-				}
-
-				require.Equal(t, expectPath.ToPosix(), inputPath.ToPosix())
-			})
-
-			t.Run("TextMarshalling", func(t *testing.T) {
-				if expectMatrixMask.OnWindows && expectMatrixMask.AsPosix && strings.Contains(input, "\\") {
-					t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
-				}
-
-				if expectMatrixMask.OnPosix && expectMatrixMask.AsWindows && inputPath.isWindowsAnchoredPath() {
-					t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
-				}
-
-				marshaled, err := inputPath.MarshalText()
-				require.NoError(t, err)
-
-				require.Equal(t, expectPath.ToPosix(), string(marshaled))
-			})
-
-			t.Run("TextUnmarshalling", func(t *testing.T) {
-				if strings.Contains(input, "\\") && expectMatrixMask.AsPosix {
-					t.Skip("Posix paths with literal backslashes cannot round-trip through text unmarshalling")
-				}
-
-				if expectMatrixMask.OnPosix && expectMatrixMask.AsWindows && inputPath.isWindowsAnchoredPath() {
-					t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
-				}
-
-				var emptyPath = &Path{}
-
-				marshaled, err := inputPath.MarshalText()
-				require.NoError(t, err)
-
-				err = emptyPath.UnmarshalText(marshaled)
-				require.NoError(t, err)
-
-				require.Equal(t, expectPath.ToPosix(), emptyPath.ToPosix())
-			})
-
-			escapeSequences := "\n\r\t\\"
-
-			t.Run("JsonMarshalling", func(t *testing.T) {
-				if strings.ContainsAny(input, escapeSequences) {
-					t.Skip("Input contained escape sequences")
-				}
-
-				if expectMatrixMask.OnPosix && expectMatrixMask.AsWindows && inputPath.isWindowsAnchoredPath() {
-					t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
-				}
-
-				marshaled, err := json.Marshal([]*Path{inputPath})
-				require.NoError(t, err)
-
-				require.Equal(t, fmt.Sprintf(`["%s"]`, expectPath.ToPosix()), string(marshaled))
-			})
-
-			t.Run("JsonUnmarshalling", func(t *testing.T) {
-				if strings.ContainsAny(input, escapeSequences) {
-					t.Skip("Input contained escape sequences")
-				}
-
-				if expectMatrixMask.OnPosix && expectMatrixMask.AsWindows && inputPath.isWindowsAnchoredPath() {
-					t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
-				}
-
-				var emptyPaths []*Path
-
-				jsonInput := fmt.Sprintf(`["%s"]`, inputPath.ToPosix())
-
-				err := json.Unmarshal([]byte(jsonInput), &emptyPaths)
-				require.NoError(t, err)
-
-				require.Len(t, emptyPaths, 1)
-				require.Equal(t, expectPath.ToPosix(), (*emptyPaths[0]).ToPosix())
-			})
-		}
+		t.Helper()
 
 		t.Run("AsPosixOnPosix", func(t *testing.T) {
 			t.Parallel()
 
 			inputPath := NewPathFromPosix(input)
 			expectPath := NewPathFromPosix(expect.AsPosixOnPosix)
-			runTests(t, expect.AsPosixOnPosix, input, expectPath, inputPath, ExpectMatrixMask{
+			runDisplayTests(t, expect.AsPosixOnPosix, input, expectPath, inputPath, displayMask{
 				AsPosix: true,
 				OnPosix: true,
 			})
@@ -314,7 +187,7 @@ func TestPathInputOutputDisplay(t *testing.T) {
 
 			inputPath := NewPathFromPosix(input)
 			expectPath := NewPathFromWindows(expect.AsPosixOnWindows)
-			runTests(t, expect.AsPosixOnWindows, input, expectPath, inputPath, ExpectMatrixMask{
+			runDisplayTests(t, expect.AsPosixOnWindows, input, expectPath, inputPath, displayMask{
 				AsPosix:   true,
 				OnWindows: true,
 			})
@@ -325,7 +198,7 @@ func TestPathInputOutputDisplay(t *testing.T) {
 
 			inputPath := NewPathFromWindows(input)
 			expectPath := NewPathFromPosix(expect.AsWindowsOnPosix)
-			runTests(t, expect.AsWindowsOnPosix, input, expectPath, inputPath, ExpectMatrixMask{
+			runDisplayTests(t, expect.AsWindowsOnPosix, input, expectPath, inputPath, displayMask{
 				AsWindows: true,
 				OnPosix:   true,
 			})
@@ -336,7 +209,7 @@ func TestPathInputOutputDisplay(t *testing.T) {
 
 			inputPath := NewPathFromWindows(input)
 			expectPath := NewPathFromWindows(expect.AsWindowsOnWindows)
-			runTests(t, expect.AsWindowsOnWindows, input, expectPath, inputPath, ExpectMatrixMask{
+			runDisplayTests(t, expect.AsWindowsOnWindows, input, expectPath, inputPath, displayMask{
 				AsWindows: true,
 				OnWindows: true,
 			})
@@ -345,6 +218,8 @@ func TestPathInputOutputDisplay(t *testing.T) {
 }
 
 func TestNewCwd(t *testing.T) {
+	t.Parallel()
+
 	// call standard library function
 	pathlibCwdPath, err := NewCwd()
 	require.NoError(t, err)
@@ -359,6 +234,8 @@ func TestNewCwd(t *testing.T) {
 }
 
 func TestNewHome(t *testing.T) {
+	t.Parallel()
+
 	pathlibHomePath, err := NewHome()
 	require.NoError(t, err)
 
@@ -370,6 +247,8 @@ func TestNewHome(t *testing.T) {
 }
 
 func TestNewConfig(t *testing.T) {
+	t.Parallel()
+
 	pathlibConfigPath, err := NewConfig()
 	require.NoError(t, err)
 
@@ -381,6 +260,8 @@ func TestNewConfig(t *testing.T) {
 }
 
 func TestNewCache(t *testing.T) {
+	t.Parallel()
+
 	pathlibCachePath, err := NewCache()
 	require.NoError(t, err)
 
@@ -392,6 +273,8 @@ func TestNewCache(t *testing.T) {
 }
 
 func TestPathFromParts(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[[]string, *Path]{
 		{Input: []string{"."}, Expect: NewPath(".")},
 		{Input: []string{".."}, Expect: NewPath("..")},
@@ -405,11 +288,15 @@ func TestPathFromParts(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input []string, expect *Path) {
+		t.Helper()
+
 		require.Equal(t, *expect, *PathFromParts(input...))
 	})
 }
 
 func TestPath_Copy(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, any]{
 		{Input: NewPath("foo/bar")},
 		{Input: NewPath("../foo/bar")},
@@ -421,7 +308,9 @@ func TestPath_Copy(t *testing.T) {
 		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
 	}
 
-	runForResults(t, cases, func(t *testing.T, input *Path, expect any) {
+	runForResults(t, cases, func(t *testing.T, input *Path, _ any) {
+		t.Helper()
+
 		pointerCopy := input
 		copiedPath := input.Copy()
 
@@ -436,3 +325,196 @@ func TestPath_Copy(t *testing.T) {
 
 // platformNativeUNC returns the expected platform-native representation of a UNC anchor.
 // On Posix it returns forward slashes, on Windows backslashes.
+
+// displayMask selects the representation and runtime a display test targets.
+type displayMask struct {
+	AsPosix   bool
+	AsWindows bool
+	OnPosix   bool
+	OnWindows bool
+}
+
+// runDisplayTests checks that inputPath, built from input, displays and encodes
+// as expect, and as expectPath does. The internal representations are not
+// compared, because they differ between constructors.
+func runDisplayTests(t *testing.T, expect, input string, expectPath, inputPath *Path, mask displayMask) {
+	t.Helper()
+
+	runDisplayStringTests(t, expect, inputPath, mask)
+
+	skips := newDisplaySkips(input, inputPath, mask)
+	runDisplayTextTests(t, expectPath, inputPath, skips)
+	runDisplayJSONTests(t, expectPath, inputPath, skips)
+}
+
+// runDisplayStringTests checks the string forms of inputPath against expect.
+func runDisplayStringTests(t *testing.T, expect string, inputPath *Path, mask displayMask) {
+	t.Helper()
+
+	t.Run("ToString_posix", func(t *testing.T) {
+		t.Parallel()
+
+		if !mask.OnPosix {
+			t.Skip("Test not targeted to Posix runtime")
+		}
+
+		if runningOnWindows {
+			t.Skip("Cannot run Posix test on Windows runtime")
+		}
+
+		require.Equal(t, expect, inputPath.String())
+		require.Equal(t, expect, inputPath.ToPosix())
+	})
+
+	t.Run("ToString_windows", func(t *testing.T) {
+		t.Parallel()
+
+		if !mask.OnWindows {
+			t.Skip("Test not targeted to Windows runtime")
+		}
+
+		if notRunningOnWindows {
+			t.Skip("Running Windows test in Non-Windows runtime")
+		}
+
+		require.Equal(t, expect, inputPath.String())
+		require.Equal(t, expect, inputPath.ToWindows())
+	})
+
+	t.Run("internal_toWindows", func(t *testing.T) {
+		t.Parallel()
+
+		if !mask.OnWindows {
+			t.Skip("Test not targeted to Windows runtime")
+		}
+
+		require.Equal(t, expect, inputPath.ToWindows())
+	})
+}
+
+// displaySkips holds the reasons to skip encoding tests of a display case.
+type displaySkips struct {
+	// backslashReadAsPosixOnWindows is set for a Posix path with a backslash on
+	// Windows. On Posix, "\\" is allowed and not escaped, so its state is undefined.
+	backslashReadAsPosixOnWindows bool
+	// anchorNotPosix is set for a Windows anchor that Posix cannot represent.
+	anchorNotPosix bool
+	// backslashAsPosix is set for a Posix path with a literal backslash.
+	backslashAsPosix bool
+	// hasEscapeSequences is set for an input with escape sequences.
+	hasEscapeSequences bool
+}
+
+// newDisplaySkips returns the reasons to skip encoding tests of inputPath,
+// built from input for mask.
+func newDisplaySkips(input string, inputPath *Path, mask displayMask) displaySkips {
+	return displaySkips{
+		backslashReadAsPosixOnWindows: mask.OnWindows && mask.AsPosix && strings.Contains(input, "\\"),
+		anchorNotPosix:                mask.OnPosix && mask.AsWindows && inputPath.isWindowsAnchoredPath(),
+		backslashAsPosix:              strings.Contains(input, "\\") && mask.AsPosix,
+		hasEscapeSequences:            strings.ContainsAny(input, "\n\r\t\\"),
+	}
+}
+
+// runDisplayTextTests checks that inputPath matches and text encodes as
+// expectPath does.
+func runDisplayTextTests(t *testing.T, expectPath, inputPath *Path, skips displaySkips) {
+	t.Helper()
+
+	t.Run("matching_posix_repr", func(t *testing.T) {
+		t.Parallel()
+
+		if skips.backslashReadAsPosixOnWindows {
+			t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
+		}
+
+		if skips.anchorNotPosix {
+			t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
+		}
+
+		require.Equal(t, expectPath.ToPosix(), inputPath.ToPosix())
+	})
+
+	t.Run("TextMarshalling", func(t *testing.T) {
+		t.Parallel()
+
+		if skips.backslashReadAsPosixOnWindows {
+			t.Skip("Undefined path part state due to existing backslash read as Posix on Windows")
+		}
+
+		if skips.anchorNotPosix {
+			t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
+		}
+
+		marshaled, err := inputPath.MarshalText()
+		require.NoError(t, err)
+
+		require.Equal(t, expectPath.ToPosix(), string(marshaled))
+	})
+
+	t.Run("TextUnmarshalling", func(t *testing.T) {
+		t.Parallel()
+
+		if skips.backslashAsPosix {
+			t.Skip("Posix paths with literal backslashes cannot round-trip through text unmarshalling")
+		}
+
+		if skips.anchorNotPosix {
+			t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
+		}
+
+		var emptyPath = &Path{}
+
+		marshaled, err := inputPath.MarshalText()
+		require.NoError(t, err)
+
+		err = emptyPath.UnmarshalText(marshaled)
+		require.NoError(t, err)
+
+		require.Equal(t, expectPath.ToPosix(), emptyPath.ToPosix())
+	})
+}
+
+// runDisplayJSONTests checks that inputPath JSON encodes as expectPath does.
+func runDisplayJSONTests(t *testing.T, expectPath, inputPath *Path, skips displaySkips) {
+	t.Helper()
+
+	t.Run("JsonMarshalling", func(t *testing.T) {
+		t.Parallel()
+
+		if skips.hasEscapeSequences {
+			t.Skip("Input contained escape sequences")
+		}
+
+		if skips.anchorNotPosix {
+			t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
+		}
+
+		marshaled, err := json.Marshal([]*Path{inputPath})
+		require.NoError(t, err)
+
+		require.Equal(t, fmt.Sprintf(`["%s"]`, expectPath.ToPosix()), string(marshaled))
+	})
+
+	t.Run("JsonUnmarshalling", func(t *testing.T) {
+		t.Parallel()
+
+		if skips.hasEscapeSequences {
+			t.Skip("Input contained escape sequences")
+		}
+
+		if skips.anchorNotPosix {
+			t.Skip("NewPathFromPosix cannot represent Windows anchors for posix comparison")
+		}
+
+		var emptyPaths []*Path
+
+		jsonInput := fmt.Sprintf(`["%s"]`, inputPath.ToPosix())
+
+		err := json.Unmarshal([]byte(jsonInput), &emptyPaths)
+		require.NoError(t, err)
+
+		require.Len(t, emptyPaths, 1)
+		require.Equal(t, expectPath.ToPosix(), (*emptyPaths[0]).ToPosix())
+	})
+}

@@ -66,7 +66,7 @@ func TestPathlibError(t *testing.T) {
 		t.Parallel()
 
 		for _, code := range []string{"", "lower", "Mixed", "A.B", "A__B", "_A", "A_", "A1"} {
-			require.Panics(t, func() { defineError(ErrPathlib, code, "message") }, code)
+			require.Panics(t, func() { _ = defineError(ErrPathlib, code, "message") }, code)
 		}
 	})
 }
@@ -81,8 +81,8 @@ func TestRaisedError(t *testing.T) {
 
 		err := wrapErr(ErrOpen, fs.ErrPermission, p)
 
-		pathErr := errors.Unwrap(err)
-		require.IsType(t, &PathError{}, pathErr)
+		var pathErr *PathError
+		require.ErrorAs(t, errors.Unwrap(err), &pathErr)
 		require.Equal(t, fs.ErrPermission, errors.Unwrap(pathErr))
 	})
 
@@ -286,6 +286,8 @@ func TestPermissionError(t *testing.T) {
 }
 
 func jsonString(t *testing.T, s string) string {
+	t.Helper()
+
 	encoded, err := json.Marshal(s)
 	require.NoError(t, err)
 	return string(encoded)

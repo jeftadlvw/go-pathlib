@@ -8,6 +8,8 @@ import (
 )
 
 func TestMatchesPatternE(t *testing.T) {
+	t.Parallel()
+
 	type matchInput struct {
 		Path    string
 		Pattern string
@@ -45,6 +47,8 @@ func TestMatchesPatternE(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
 			p := NewPath(tc.Input.Path)
 			match, err := p.MatchesPatternE(tc.Input.Pattern, tc.Input.Opts...)
 			matchNoErr := p.MatchesPattern(tc.Input.Pattern, tc.Input.Opts...)
@@ -63,6 +67,8 @@ func TestMatchesPatternE(t *testing.T) {
 }
 
 func TestMatchesPatternE_BadPattern(t *testing.T) {
+	t.Parallel()
+
 	_, err := NewPath("a/b").MatchesPatternE("a/[")
 	require.ErrorIs(t, err, ErrBadPattern)
 	require.ErrorIs(t, err, path.ErrBadPattern)

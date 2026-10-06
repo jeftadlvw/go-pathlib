@@ -104,23 +104,13 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 		return false, err
 	}
 
-	exists, err := lexists(path)
-	if err != nil {
+	exists, err := checkCreateTarget(path, path.IsFile, options.ExistOk, ErrNotFile, ErrFileExist)
+	if err != nil || exists {
 		return false, err
 	}
 
-	if exists {
-		if !path.IsFile() {
-			return false, pathErr(ErrNotFile, *path)
-		}
-		if options.ExistOk {
-			return false, nil
-		}
-		return false, pathErr(ErrFileExist, *path)
-	}
-
 	if options.Mode == 0 {
-		options.Mode = DefaultFileMode
+		options.Mode = DefaultFileMode()
 	}
 
 	// O_EXCL refuses a path created since the check, symlinks included, so an
@@ -174,23 +164,13 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 		return false, err
 	}
 
-	exists, err := lexists(path)
-	if err != nil {
+	exists, err := checkCreateTarget(path, path.IsDir, options.ExistOk, ErrNotDir, ErrDirExist)
+	if err != nil || exists {
 		return false, err
 	}
 
-	if exists {
-		if !path.IsDir() {
-			return false, pathErr(ErrNotDir, *path)
-		}
-		if options.ExistOk {
-			return false, nil
-		}
-		return false, pathErr(ErrDirExist, *path)
-	}
-
 	if options.Mode == 0 {
-		options.Mode = DefaultDirMode
+		options.Mode = DefaultDirMode()
 	}
 
 	if options.CreateAll {
@@ -240,4 +220,34 @@ func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 	}
 
 	return nil
+}
+
+/*
+checkCreateTarget checks the path an entry is created at and reports whether
+the path exists. isKind reports whether the existing path has the kind of the
+created entry.
+
+An existing path of another kind returns notKind, and an existing path of the
+kind returns exist unless existOk is set. A path that cannot be checked returns
+[ErrStat].
+*/
+func checkCreateTarget(path *Path, isKind func() bool, existOk bool, notKind, exist *PathlibError) (bool, error) {
+	exists, err := lexists(path)
+	if err != nil {
+		return false, err
+	}
+
+	if !exists {
+		return false, nil
+	}
+
+	if !isKind() {
+		return true, pathErr(notKind, *path)
+	}
+
+	if !existOk {
+		return true, pathErr(exist, *path)
+	}
+
+	return true, nil
 }

@@ -186,6 +186,10 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, err
 	return NewPath(dirName), dispose, nil
 }
 
+/*
+TempBaseDir returns the directory of the operating system for temporary files,
+as reported by [os.TempDir].
+*/
 func TempBaseDir() *Path {
 	return NewPath(os.TempDir())
 }

@@ -45,194 +45,16 @@ func Copy(src *Path, destination *Path) error {
 		return pathErr(ErrParentNotExist, *destination)
 	}
 
-	if src.IsSymlink() { // A symlink is a special file, thus checking that first
+	switch {
+	case src.IsSymlink(): // A symlink is a special file, thus checking that first
 		return copySymlink(src, destination)
-	} else if src.IsFile() {
+	case src.IsFile():
 		return copyFile(src, destination)
-	} else if src.IsDir() {
+	case src.IsDir():
 		return copyDir(src, destination)
-	} else {
+	default:
 		return pathErr(ErrCopyType, *src)
 	}
-}
-
-/*
-copyFile copies a file.
-
-Assumes source and destination parent directories exist.
-*/
-func copyFile(source *Path, destination *Path) error {
-	// Get source file info for permissions
-	srcInfo, err := source.Stat()
-	if err != nil {
-		return err
-	}
-
-	// Ensure the target file does not exist. A broken symlink exists too, and
-	// writing through it would create its target.
-	destinationExists, err := lexists(destination)
-	if err != nil {
-		return err
-	}
-
-	if destinationExists {
-		if destination.IsFile() {
-			return pathErr(ErrFileExist, *destination)
-		} else if destination.IsDir() {
-			return pathErr(ErrTypeMismatch, *source, *destination)
-		} else {
-			return pathErr(ErrExist, *destination)
-		}
-	}
-
-	// Open source file
-	sourceFile, err := os.Open(source.String())
-	if err != nil {
-		return wrapErr(ErrOpen, err, *source)
-	}
-	defer sourceFile.Close()
-
-	// Create the destination file. O_EXCL refuses a path created since the check,
-	// symlinks included, so nothing is overwritten or written through.
-	destinationFile, err := os.OpenFile(destination.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, srcInfo.Mode())
-	if err != nil {
-		return wrapErr(ErrCreate, err, *destination)
-	}
-
-	// Copy contents
-	_, err = io.Copy(destinationFile, sourceFile)
-	if err != nil {
-		_ = destinationFile.Close()
-		return wrapErr(ErrCopy, err, *source, *destination)
-	}
-
-	// Closing flushes the content, so its error means the copy is incomplete.
-	err = destinationFile.Close()
-	if err != nil {
-		return wrapErr(ErrCopy, err, *source, *destination)
-	}
-
-	return nil
-}
-
-/*
-copySymlink copies a symlink.
-
-Assumes source and destination parent directories exist.
-*/
-func copySymlink(source *Path, destination *Path) error {
-	// All checks should be already done by called functions
-
-	originalSymlinkTarget, err := source.ReadSymlinkTarget()
-	if err != nil {
-		return err
-	}
-
-	// The original target might be relative to source. If so, make it relative to destination.
-	if originalSymlinkTarget.IsRelative() {
-		originalSymlinkTarget, err = rebaseSymlinkTarget(originalSymlinkTarget, source, destination)
-		if err != nil {
-			return err
-		}
-	}
-
-	return CreateSymlink(originalSymlinkTarget, destination)
-}
-
-/*
-rebaseSymlinkTarget returns the relative target of the source symlink as seen
-from the destination symlink, so both point to the same path.
-
-A relative source or destination is relative to the working directory, as the
-operating system resolves it. Both parents are made absolute first, so they
-share a base.
-*/
-func rebaseSymlinkTarget(target *Path, source *Path, destination *Path) (*Path, error) {
-	sourceParent, err := source.Parent().MakeAbsolute()
-	if err != nil {
-		return nil, err
-	}
-
-	destinationParent, err := destination.Parent().MakeAbsolute()
-	if err != nil {
-		return nil, err
-	}
-
-	absoluteTarget, err := target.AbsoluteFrom(sourceParent)
-	if err != nil {
-		return nil, err
-	}
-
-	return absoluteTarget.RelativeTo(destinationParent)
-}
-
-/*
-copyDir copies a directory recursively.
-
-Assumes source and destination parent directories exist.
-*/
-func copyDir(src *Path, dst *Path) error {
-	// Get source file info for permissions
-	srcInfo, err := src.Stat()
-	if err != nil {
-		return err
-	}
-
-	dstExists, err := lexists(dst)
-	if err != nil {
-		return err
-	}
-
-	if dstExists {
-		if dst.IsFile() {
-			// Ensure the target directory is not a file
-			return pathErr(ErrTypeMismatch, *src, *dst)
-		} else if dst.IsDir() {
-			// Ensure destination directory is empty
-			file, openErr := os.Open(dst.String())
-			if openErr != nil {
-				return wrapErr(ErrOpen, openErr, *dst)
-			}
-
-			defer file.Close()
-
-			entries, readDirErr := file.ReadDir(1)
-			if readDirErr != nil && readDirErr != io.EOF {
-				return wrapErr(ErrReadDir, readDirErr, *dst)
-			}
-
-			if len(entries) != 0 {
-				return pathErr(ErrNotEmptyDir, *dst)
-			}
-		} else {
-			return pathErr(ErrExist, *dst)
-		}
-	} else {
-		// Create the destination directory if it doesn't exist
-		err := os.Mkdir(dst.String(), srcInfo.Mode())
-		if err != nil {
-			return wrapErr(ErrCreate, err, *dst)
-		}
-	}
-
-	// Read directory entries
-	entries, err := os.ReadDir(src.String())
-	if err != nil {
-		return wrapErr(ErrReadDir, err, *src)
-	}
-
-	// Copy each entry
-	for _, entry := range entries {
-		srcEntry := src.JoinStrings(entry.Name())
-		dstEntry := dst.JoinStrings(entry.Name())
-
-		err := Copy(srcEntry, dstEntry)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 /*
@@ -344,4 +166,220 @@ func RemoveAll(path *Path) error {
 	}
 
 	return nil
+}
+
+/*
+copyFile copies a file.
+
+Assumes source and destination parent directories exist.
+*/
+func copyFile(source *Path, destination *Path) error {
+	// Get source file info for permissions
+	srcInfo, err := source.Stat()
+	if err != nil {
+		return err
+	}
+
+	err = requireCopyFileDestinationFree(source, destination)
+	if err != nil {
+		return err
+	}
+
+	// Open source file
+	sourceFile, err := os.Open(source.String())
+	if err != nil {
+		return wrapErr(ErrOpen, err, *source)
+	}
+	// The source is only read, so closing it cannot lose data.
+	defer func() { _ = sourceFile.Close() }()
+
+	// Create the destination file. O_EXCL refuses a path created since the check,
+	// symlinks included, so nothing is overwritten or written through.
+	destinationFile, err := os.OpenFile(destination.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, srcInfo.Mode())
+	if err != nil {
+		return wrapErr(ErrCreate, err, *destination)
+	}
+
+	// Copy contents
+	_, err = io.Copy(destinationFile, sourceFile)
+	if err != nil {
+		_ = destinationFile.Close()
+		return wrapErr(ErrCopy, err, *source, *destination)
+	}
+
+	// Closing flushes the content, so its error means the copy is incomplete.
+	err = destinationFile.Close()
+	if err != nil {
+		return wrapErr(ErrCopy, err, *source, *destination)
+	}
+
+	return nil
+}
+
+/*
+copySymlink copies a symlink.
+
+Assumes source and destination parent directories exist.
+*/
+func copySymlink(source *Path, destination *Path) error {
+	// All checks should be already done by called functions
+
+	originalSymlinkTarget, err := source.ReadSymlinkTarget()
+	if err != nil {
+		return err
+	}
+
+	// The original target might be relative to source. If so, make it relative to destination.
+	if originalSymlinkTarget.IsRelative() {
+		originalSymlinkTarget, err = rebaseSymlinkTarget(originalSymlinkTarget, source, destination)
+		if err != nil {
+			return err
+		}
+	}
+
+	return CreateSymlink(originalSymlinkTarget, destination)
+}
+
+/*
+rebaseSymlinkTarget returns the relative target of the source symlink as seen
+from the destination symlink, so both point to the same path.
+
+A relative source or destination is relative to the working directory, as the
+operating system resolves it. Both parents are made absolute first, so they
+share a base.
+*/
+func rebaseSymlinkTarget(target *Path, source *Path, destination *Path) (*Path, error) {
+	sourceParent, err := source.Parent().MakeAbsolute()
+	if err != nil {
+		return nil, err
+	}
+
+	destinationParent, err := destination.Parent().MakeAbsolute()
+	if err != nil {
+		return nil, err
+	}
+
+	absoluteTarget, err := target.AbsoluteFrom(sourceParent)
+	if err != nil {
+		return nil, err
+	}
+
+	return absoluteTarget.RelativeTo(destinationParent)
+}
+
+/*
+copyDir copies a directory recursively.
+
+Assumes source and destination parent directories exist.
+*/
+func copyDir(src *Path, dst *Path) error {
+	err := prepareCopyDirDestination(src, dst)
+	if err != nil {
+		return err
+	}
+
+	// Read directory entries
+	entries, err := os.ReadDir(src.String())
+	if err != nil {
+		return wrapErr(ErrReadDir, err, *src)
+	}
+
+	// Copy each entry
+	for _, entry := range entries {
+		srcEntry := src.JoinStrings(entry.Name())
+		dstEntry := dst.JoinStrings(entry.Name())
+
+		err := Copy(srcEntry, dstEntry)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+/*
+prepareCopyDirDestination makes dst ready to receive the entries of the source
+directory src. A missing dst is created with the mode of src. An existing dst
+must be an empty directory.
+*/
+func prepareCopyDirDestination(src *Path, dst *Path) error {
+	// Get source file info for permissions
+	srcInfo, err := src.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstExists, err := lexists(dst)
+	if err != nil {
+		return err
+	}
+
+	if !dstExists {
+		err = os.Mkdir(dst.String(), srcInfo.Mode())
+		if err != nil {
+			return wrapErr(ErrCreate, err, *dst)
+		}
+		return nil
+	}
+
+	switch {
+	case dst.IsFile():
+		return pathErr(ErrTypeMismatch, *src, *dst)
+	case dst.IsDir():
+		return requireEmptyDir(dst)
+	default:
+		return pathErr(ErrExist, *dst)
+	}
+}
+
+/*
+requireEmptyDir returns [ErrNotEmptyDir] if the directory dir has entries.
+*/
+func requireEmptyDir(dir *Path) error {
+	file, err := os.Open(dir.String())
+	if err != nil {
+		return wrapErr(ErrOpen, err, *dir)
+	}
+
+	// The directory is only read, so closing it cannot lose data.
+	defer func() { _ = file.Close() }()
+
+	entries, err := file.ReadDir(1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return wrapErr(ErrReadDir, err, *dir)
+	}
+
+	if len(entries) != 0 {
+		return pathErr(ErrNotEmptyDir, *dir)
+	}
+
+	return nil
+}
+
+/*
+requireCopyFileDestinationFree returns an error if anything exists at the
+destination of a file copied from source. An existing file returns
+[ErrFileExist], a directory returns [ErrTypeMismatch], and any other entry
+returns [ErrExist]. A path that cannot be checked returns [ErrStat].
+*/
+func requireCopyFileDestinationFree(source *Path, destination *Path) error {
+	// A broken symlink exists too, and writing through it would create its target.
+	exists, err := lexists(destination)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	switch {
+	case destination.IsFile():
+		return pathErr(ErrFileExist, *destination)
+	case destination.IsDir():
+		return pathErr(ErrTypeMismatch, *source, *destination)
+	default:
+		return pathErr(ErrExist, *destination)
+	}
 }

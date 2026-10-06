@@ -87,7 +87,7 @@ func (p *Path) IsOnCaseSensitiveFs() bool {
 	// Get file name, close and defer removal
 	tempFilePathStr := tempFile.Name()
 	_ = tempFile.Close()
-	defer os.Remove(tempFilePathStr)
+	defer func() { _ = os.Remove(tempFilePathStr) }()
 
 	tempFilePath := NewPath(tempFilePathStr)
 
@@ -130,13 +130,14 @@ func switchCaseAtIndex(s string, index int) string {
 	}
 
 	// Switch the case of the letter
-	if unicode.IsUpper(r) {
+	switch {
+	case unicode.IsUpper(r):
 		// If it's an uppercase letter, convert it to lowercase
 		runes[index] = unicode.ToLower(r)
-	} else if unicode.IsLower(r) {
+	case unicode.IsLower(r):
 		// If it's a lowercase letter, convert it to uppercase
 		runes[index] = unicode.ToUpper(r)
-	} else {
+	default:
 		// It's a letter, but neither upper nor lower (e.g., titlecase).
 		// In this function's scope, we only handle upper/lower switching.
 		// Return the original string as no standard case switch occurred.

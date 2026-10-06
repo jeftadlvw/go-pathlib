@@ -8,6 +8,8 @@ import (
 )
 
 func TestPath_AbsoluteAndRelative(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, bool]{
 		{Input: NewPath("."), Expect: false},
 		{Input: NewPath(".."), Expect: false},
@@ -29,12 +31,16 @@ func TestPath_AbsoluteAndRelative(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		t.Helper()
+
 		require.Equal(t, expect, input.IsAbsolute())
 		require.Equal(t, !expect, input.IsRelative())
 	})
 }
 
 func TestPath_RelativeTo(t *testing.T) {
+	t.Parallel()
+
 	// what to apply on b to get to a
 
 	cases := []TestCase[[]*Path, *Path]{
@@ -66,6 +72,8 @@ func TestPath_RelativeTo(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
+		t.Helper()
+
 		require.Len(t, input, 2)
 
 		a := input[0]
@@ -80,6 +88,8 @@ func TestPath_RelativeTo(t *testing.T) {
 }
 
 func TestPath_RelativeFrom(t *testing.T) {
+	t.Parallel()
+
 	// what to apply on a to get to b
 
 	cases := []TestCase[[]*Path, *Path]{
@@ -111,6 +121,8 @@ func TestPath_RelativeFrom(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
+		t.Helper()
+
 		require.Len(t, input, 2)
 
 		a := input[0]
@@ -125,6 +137,8 @@ func TestPath_RelativeFrom(t *testing.T) {
 }
 
 func TestPath_Absolute(t *testing.T) {
+	t.Parallel()
+
 	wdPath, err := NewCwd()
 	require.NoError(t, err)
 
@@ -141,6 +155,8 @@ func TestPath_Absolute(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect *Path) {
+		t.Helper()
+
 		absolutePath, err := input.MakeAbsolute()
 		require.NoError(t, err)
 
@@ -149,6 +165,8 @@ func TestPath_Absolute(t *testing.T) {
 }
 
 func TestPath_AbsoluteFrom(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[[]*Path, *Path]{
 		{Input: []*Path{NewPath("."), NewPath(".")}, Error: true},
 		{Input: []*Path{NewPath("/"), NewPath(".")}, Expect: NewPath("/")},
@@ -163,6 +181,8 @@ func TestPath_AbsoluteFrom(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
+		t.Helper()
+
 		require.Len(t, input, 2)
 
 		base := input[0]
@@ -177,6 +197,8 @@ func TestPath_AbsoluteFrom(t *testing.T) {
 }
 
 func TestPath_EqualsCaseSensitive(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
 		{Input: []string{"", "a"}, Expect: false},
@@ -198,6 +220,8 @@ func TestPath_EqualsCaseSensitive(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input []string, expect bool) {
+		t.Helper()
+
 		require.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
@@ -213,6 +237,8 @@ func TestPath_EqualsCaseSensitive(t *testing.T) {
 }
 
 func TestPath_EqualsCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[[]string, bool]{
 		{Input: []string{"", ""}, Expect: true},
 		{Input: []string{"", "a"}, Expect: false},
@@ -234,6 +260,8 @@ func TestPath_EqualsCaseInsensitive(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input []string, expect bool) {
+		t.Helper()
+
 		require.Len(t, input, 2)
 
 		basePath := NewPath(input[0])
@@ -253,6 +281,8 @@ func TestPath_EqualsCaseInsensitive(t *testing.T) {
 // of the runtime OS. The previous implementation path.Clean'd the raw string,
 // which never converted separators and mangled anchors.
 func TestPath_EqualsStringContract(t *testing.T) {
+	t.Parallel()
+
 	bases := []string{
 		`C:\foo\bar`,
 		`C:\dir\README.md`,
@@ -270,6 +300,8 @@ func TestPath_EqualsStringContract(t *testing.T) {
 	for _, b := range bases {
 		for _, o := range others {
 			t.Run(fmt.Sprintf("[%s]_vs_[%s]", b, o), func(t *testing.T) {
+				t.Parallel()
+
 				p := NewPathFromWindows(b)
 				// EqualsString must equal Equals(NewPathFromPosix(other)) on both
 				// the case-sensitive and case-insensitive paths.
@@ -285,6 +317,8 @@ func TestPath_EqualsStringContract(t *testing.T) {
 }
 
 func TestPath_EqualsWindowsSeparatorEquivalence(t *testing.T) {
+	t.Parallel()
+
 	cases := [][2]string{
 		{`C:\foo\bar`, `C:/foo/bar`},
 		{`\\host\share\foo`, `//host/share/foo`},
@@ -298,6 +332,8 @@ func TestPath_EqualsWindowsSeparatorEquivalence(t *testing.T) {
 }
 
 func TestPath_EqualsStringBackslashIsPosixNameChar(t *testing.T) {
+	t.Parallel()
+
 	// EqualsString reads other as a Posix path on every platform, so a backslash
 	// is a filename character: "a\b" is a single component and never equals the
 	// two-component "a/b".
@@ -318,6 +354,8 @@ func TestPath_EqualsStringBackslashIsPosixNameChar(t *testing.T) {
 // string is not recognized and does not round-trip. Drive roots and UNC paths
 // must be compared with Equals(NewPathFromWindows(s)) instead.
 func TestPath_EqualsStringWindowsAnchorLimitation(t *testing.T) {
+	t.Parallel()
+
 	for _, s := range []string{`C:\`, `\\host\share`, `\\host\share\foo`} {
 		p := NewPathFromWindows(s)
 		require.False(t, p.EqualsString(p.ToPosix()),
@@ -329,6 +367,8 @@ func TestPath_EqualsStringWindowsAnchorLimitation(t *testing.T) {
 }
 
 func TestPath_EqualsNil(t *testing.T) {
+	t.Parallel()
+
 	var nilPath *Path
 	p := NewPathFromPosix("foo")
 
@@ -343,6 +383,8 @@ func TestPath_EqualsNil(t *testing.T) {
 }
 
 func TestPath_EqualsIsNotPointerIdentity(t *testing.T) {
+	t.Parallel()
+
 	// Two separately constructed Paths are different pointers, so == is false,
 	// but they denote the same path.
 	a := NewPathFromPosix("foo/bar")
@@ -352,6 +394,8 @@ func TestPath_EqualsIsNotPointerIdentity(t *testing.T) {
 }
 
 func TestCompareOption_ZeroValueIsCaseSensitive(t *testing.T) {
+	t.Parallel()
+
 	var zero CompareOption
 	require.Equal(t, CaseSensitive, zero)
 
@@ -366,6 +410,8 @@ func TestCompareOption_ZeroValueIsCaseSensitive(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, opts []CompareOption, expect bool) {
+		t.Helper()
+
 		require.Equal(t, expect, upper.Equals(lower, opts...), "Equals")
 		require.Equal(t, expect, upper.EqualsString(lower.ToPosix(), opts...), "EqualsString")
 		require.Equal(t, expect, upper.MatchesPattern("dir/*.txt", opts...), "MatchesPattern")

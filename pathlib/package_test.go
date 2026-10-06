@@ -15,6 +15,8 @@ import (
 // and does not import "testing" outside of tests. A test cannot observe output
 // that is suppressed while testing, so the source is checked instead.
 func TestLibraryDoesNotPrint(t *testing.T) {
+	t.Parallel()
+
 	files, err := filepath.Glob("*.go")
 	require.NoError(t, err)
 
@@ -37,14 +39,30 @@ func TestLibraryDoesNotPrint(t *testing.T) {
 				return true
 			}
 
-			pkg, ok := selector.X.(*ast.Ident)
-			if ok && pkg.Name == "os" && (selector.Sel.Name == "Stdout" || selector.Sel.Name == "Stderr") {
-				t.Errorf("%s uses os.%s", fileSet.Position(selector.Pos()), selector.Sel.Name)
-			}
-			if ok && pkg.Name == "fmt" && strings.HasPrefix(selector.Sel.Name, "Print") {
-				t.Errorf("%s uses fmt.%s", fileSet.Position(selector.Pos()), selector.Sel.Name)
+			name, prints := printingSelector(selector)
+			if prints {
+				t.Errorf("%s uses %s", fileSet.Position(selector.Pos()), name)
 			}
 			return true
 		})
+	}
+}
+
+// printingSelector returns the qualified name of selector and whether it writes
+// to stdout or stderr, as os.Stdout or fmt.Println do.
+func printingSelector(selector *ast.SelectorExpr) (string, bool) {
+	pkg, ok := selector.X.(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+
+	name := pkg.Name + "." + selector.Sel.Name
+	switch pkg.Name {
+	case "os":
+		return name, selector.Sel.Name == "Stdout" || selector.Sel.Name == "Stderr"
+	case "fmt":
+		return name, strings.HasPrefix(selector.Sel.Name, "Print")
+	default:
+		return name, false
 	}
 }

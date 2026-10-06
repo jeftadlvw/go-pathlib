@@ -9,6 +9,8 @@ import (
 )
 
 func TestPath_Resolve(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		PathStr string
 		Setup   func(*testing.T, *Path) *Path // Function to set up the path in the temp dir
@@ -16,20 +18,26 @@ func TestPath_Resolve(t *testing.T) {
 
 	cases := []TestCase[Input, string]{
 		{
-			Name:   "Regular file",
-			Input:  Input{PathStr: "file.txt", Setup: func(t *testing.T, root *Path) *Path { return writeTempFile(t, root, "file.txt", "content") }},
+			Name: "Regular file",
+			Input: Input{PathStr: "file.txt", Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+				return writeTempFile(t, root, "file.txt", "content")
+			}},
 			Expect: "file.txt",
 			Error:  false,
 		},
 		{
-			Name:   "Directory",
-			Input:  Input{PathStr: "dir", Setup: func(t *testing.T, root *Path) *Path { return createTempDir(t, root, "dir") }},
+			Name: "Directory",
+			Input: Input{PathStr: "dir", Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+				return createTempDir(t, root, "dir")
+			}},
 			Expect: "dir",
 			Error:  false,
 		},
 		{
 			Name:  "Non-existent path",
-			Input: Input{PathStr: "nonexistent", Setup: func(t *testing.T, root *Path) *Path { return root.JoinStrings("nonexistent") }},
+			Input: Input{PathStr: "nonexistent", Setup: func(_ *testing.T, root *Path) *Path { return root.JoinStrings("nonexistent") }},
 			Error: true,
 		},
 		{
@@ -37,6 +45,8 @@ func TestPath_Resolve(t *testing.T) {
 			Input: Input{
 				PathStr: "linkToFile.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "target.txt", "content")
 					return createTempSymlinkAbs(t, root, "target.txt", "linkToFile.txt")
 				},
@@ -49,6 +59,8 @@ func TestPath_Resolve(t *testing.T) {
 			Input: Input{
 				PathStr: "linkToDir",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					createTempDir(t, root, "targetDir")
 					return createTempSymlinkAbs(t, root, "targetDir", "linkToDir")
 				},
@@ -61,6 +73,8 @@ func TestPath_Resolve(t *testing.T) {
 			Input: Input{
 				PathStr: "link1",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "final.txt", "content")
 					createTempSymlinkAbs(t, root, "final.txt", "link2")
 					return createTempSymlinkAbs(t, root, "link2", "link1")
@@ -74,6 +88,8 @@ func TestPath_Resolve(t *testing.T) {
 			Input: Input{
 				PathStr: "brokenLink",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					return createTempSymlinkAbs(t, root, "nonexistentTarget", "brokenLink")
 				},
 			},
@@ -84,6 +100,8 @@ func TestPath_Resolve(t *testing.T) {
 			Input: Input{
 				PathStr: "dir/../file.txt",
 				Setup: func(t *testing.T, root *Path) *Path {
+					t.Helper()
+
 					writeTempFile(t, root, "file.txt", "content")
 					createTempDir(t, root, "dir")
 					return root.JoinStrings("dir/../file.txt")
@@ -95,6 +113,8 @@ func TestPath_Resolve(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input Input, expect string, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 
@@ -127,10 +147,14 @@ func TestPath_Resolve(t *testing.T) {
 }
 
 func TestPath_IsFile(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
 		{
 			Name: "Regular file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "content")
 			},
 			Expect: true,
@@ -138,13 +162,15 @@ func TestPath_IsFile(t *testing.T) {
 		{
 			Name: "Directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "dir")
 			},
 			Expect: false,
 		},
 		{
 			Name: "Non-existent path",
-			Input: func(t *testing.T, root *Path) *Path {
+			Input: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			},
 			Expect: false,
@@ -152,6 +178,8 @@ func TestPath_IsFile(t *testing.T) {
 		{
 			Name: "Symlink to file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				writeTempFile(t, root, "target.txt", "content")
 				return createTempSymlinkAbs(t, root, "target.txt", "link.txt")
 			},
@@ -160,6 +188,8 @@ func TestPath_IsFile(t *testing.T) {
 		{
 			Name: "Symlink to directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				createTempDir(t, root, "targetDir")
 				return createTempSymlinkAbs(t, root, "targetDir", "linkDir")
 			},
@@ -168,6 +198,8 @@ func TestPath_IsFile(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.IsFile())
@@ -175,10 +207,14 @@ func TestPath_IsFile(t *testing.T) {
 }
 
 func TestPath_IsDir(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
 		{
 			Name: "Directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "dir")
 			},
 			Expect: true,
@@ -186,13 +222,15 @@ func TestPath_IsDir(t *testing.T) {
 		{
 			Name: "Regular file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "content")
 			},
 			Expect: false,
 		},
 		{
 			Name: "Non-existent path",
-			Input: func(t *testing.T, root *Path) *Path {
+			Input: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			},
 			Expect: false,
@@ -200,6 +238,8 @@ func TestPath_IsDir(t *testing.T) {
 		{
 			Name: "Symlink to directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				createTempDir(t, root, "targetDir")
 				return createTempSymlinkAbs(t, root, "targetDir", "linkDir")
 			},
@@ -208,6 +248,8 @@ func TestPath_IsDir(t *testing.T) {
 		{
 			Name: "Symlink to file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				writeTempFile(t, root, "target.txt", "content")
 				return createTempSymlinkAbs(t, root, "target.txt", "link.txt")
 			},
@@ -216,6 +258,8 @@ func TestPath_IsDir(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.IsDir())
@@ -223,10 +267,14 @@ func TestPath_IsDir(t *testing.T) {
 }
 
 func TestPath_IsEmptyDir(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
 		{
 			Name: "Empty directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "emptyDir")
 			},
 			Expect: true,
@@ -234,6 +282,8 @@ func TestPath_IsEmptyDir(t *testing.T) {
 		{
 			Name: "Non-empty directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				dir := createTempDir(t, root, "nonEmptyDir")
 				writeTempFile(t, dir, "file.txt", "content")
 				return dir
@@ -243,6 +293,8 @@ func TestPath_IsEmptyDir(t *testing.T) {
 		{
 			Name: "Directory with subdirectory only",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				dir := createTempDir(t, root, "dirWithSubdir")
 				createTempDir(t, dir, "subdir")
 				return dir
@@ -252,13 +304,15 @@ func TestPath_IsEmptyDir(t *testing.T) {
 		{
 			Name: "Regular file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "")
 			},
 			Expect: false,
 		},
 		{
 			Name: "Non-existent path",
-			Input: func(t *testing.T, root *Path) *Path {
+			Input: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			},
 			Expect: false,
@@ -266,6 +320,8 @@ func TestPath_IsEmptyDir(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.IsEmptyDir())
@@ -273,10 +329,14 @@ func TestPath_IsEmptyDir(t *testing.T) {
 }
 
 func TestPath_Exists(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
 		{
 			Name: "Existing file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "content")
 			},
 			Expect: true,
@@ -284,13 +344,15 @@ func TestPath_Exists(t *testing.T) {
 		{
 			Name: "Existing directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "dir")
 			},
 			Expect: true,
 		},
 		{
 			Name: "Non-existent path",
-			Input: func(t *testing.T, root *Path) *Path {
+			Input: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			},
 			Expect: false,
@@ -298,6 +360,8 @@ func TestPath_Exists(t *testing.T) {
 		{
 			Name: "Symlink to existing file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				writeTempFile(t, root, "target.txt", "")
 				return createTempSymlinkAbs(t, root, "target.txt", "link.txt")
 			},
@@ -306,6 +370,8 @@ func TestPath_Exists(t *testing.T) {
 		{
 			Name: "Broken symlink",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempSymlinkAbs(t, root, "nonexistent_target", "broken_link")
 			},
 			Expect: false,
@@ -313,6 +379,8 @@ func TestPath_Exists(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.Exists())
@@ -320,10 +388,14 @@ func TestPath_Exists(t *testing.T) {
 }
 
 func TestPath_IsSymlink(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
 		{
 			Name: "Symlink to file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				writeTempFile(t, root, "target.txt", "")
 				return createTempSymlinkAbs(t, root, "target.txt", "link.txt")
 			},
@@ -332,6 +404,8 @@ func TestPath_IsSymlink(t *testing.T) {
 		{
 			Name: "Symlink to directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				createTempDir(t, root, "targetDir")
 				return createTempSymlinkAbs(t, root, "targetDir", "linkDir")
 			},
@@ -340,6 +414,8 @@ func TestPath_IsSymlink(t *testing.T) {
 		{
 			Name: "Broken symlink",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempSymlinkAbs(t, root, "nonexistent", "broken_link")
 			},
 			Expect: true,
@@ -347,6 +423,8 @@ func TestPath_IsSymlink(t *testing.T) {
 		{
 			Name: "Regular file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "")
 			},
 			Expect: false,
@@ -354,13 +432,15 @@ func TestPath_IsSymlink(t *testing.T) {
 		{
 			Name: "Directory",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "dir")
 			},
 			Expect: false,
 		},
 		{
 			Name: "Non-existent path",
-			Input: func(t *testing.T, root *Path) *Path {
+			Input: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			},
 			Expect: false,
@@ -368,6 +448,8 @@ func TestPath_IsSymlink(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.IsSymlink())
@@ -375,6 +457,8 @@ func TestPath_IsSymlink(t *testing.T) {
 }
 
 func TestPath_Stat(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Setup func(*testing.T, *Path) *Path
 	}
@@ -383,6 +467,8 @@ func TestPath_Stat(t *testing.T) {
 		{
 			Name: "Stat regular file",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "hello")
 			}},
 			Error: false,
@@ -390,20 +476,24 @@ func TestPath_Stat(t *testing.T) {
 		{
 			Name: "Stat directory",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempDir(t, root, "dir")
 			}},
 			Error: false,
 		},
 		{
 			Name: "Stat non-existent path",
-			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
+			Input: Input{Setup: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			}},
 			Error: true,
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect any, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ any, expectError bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 		info, err := p.Stat()
@@ -417,6 +507,8 @@ func TestPath_Stat(t *testing.T) {
 }
 
 func TestPath_Lstat(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 
 	writeTempFile(t, root, "target.txt", "content")
@@ -429,18 +521,24 @@ func TestPath_Lstat(t *testing.T) {
 }
 
 func TestDeviceMethods(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	filePath := writeTempFile(t, root, "regular.txt", "content")
 	dirPath := createTempDir(t, root, "subdir")
 	nonExistent := root.JoinStrings("does_not_exist")
 
 	t.Run("IsBlockDevice", func(t *testing.T) {
+		t.Parallel()
+
 		require.False(t, filePath.IsBlockDevice(), "regular file is not a block device")
 		require.False(t, dirPath.IsBlockDevice(), "directory is not a block device")
 		require.False(t, nonExistent.IsBlockDevice(), "non-existent path is not a block device")
 	})
 
 	t.Run("IsCharDevice", func(t *testing.T) {
+		t.Parallel()
+
 		require.False(t, filePath.IsCharDevice(), "regular file is not a char device")
 		require.False(t, dirPath.IsCharDevice(), "directory is not a char device")
 		require.False(t, nonExistent.IsCharDevice(), "non-existent path is not a char device")
@@ -452,12 +550,16 @@ func TestDeviceMethods(t *testing.T) {
 	})
 
 	t.Run("IsFiFoPipe", func(t *testing.T) {
+		t.Parallel()
+
 		require.False(t, filePath.IsFiFoPipe(), "regular file is not a FIFO pipe")
 		require.False(t, dirPath.IsFiFoPipe(), "directory is not a FIFO pipe")
 		require.False(t, nonExistent.IsFiFoPipe(), "non-existent path is not a FIFO pipe")
 	})
 
 	t.Run("IsSocket", func(t *testing.T) {
+		t.Parallel()
+
 		require.False(t, filePath.IsSocket(), "regular file is not a socket")
 		require.False(t, dirPath.IsSocket(), "directory is not a socket")
 		require.False(t, nonExistent.IsSocket(), "non-existent path is not a socket")
@@ -465,6 +567,8 @@ func TestDeviceMethods(t *testing.T) {
 }
 
 func TestFsErrorsAreWrapped(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	missing := root.JoinStrings("missing")
 
@@ -487,20 +591,30 @@ func TestFsErrorsAreWrapped(t *testing.T) {
 }
 
 func TestPath_LExists(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[func(*testing.T, *Path) *Path, bool]{
 		{
-			Name:   "File",
-			Input:  func(t *testing.T, root *Path) *Path { return writeTempFile(t, root, "file.txt", "") },
+			Name: "File",
+			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+				return writeTempFile(t, root, "file.txt", "")
+			},
 			Expect: true,
 		},
 		{
-			Name:   "Directory",
-			Input:  func(t *testing.T, root *Path) *Path { return createTempDir(t, root, "dir") },
+			Name: "Directory",
+			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+				return createTempDir(t, root, "dir")
+			},
 			Expect: true,
 		},
 		{
 			Name: "Symlink to file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				writeTempFile(t, root, "target.txt", "")
 				return createTempSymlinkAbs(t, root, "target.txt", "link.txt")
 			},
@@ -509,18 +623,22 @@ func TestPath_LExists(t *testing.T) {
 		{
 			Name: "Broken symlink",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return createTempSymlinkAbs(t, root, "nonexistent_target", "broken_link")
 			},
 			Expect: true,
 		},
 		{
 			Name:   "Missing path",
-			Input:  func(t *testing.T, root *Path) *Path { return root.JoinStrings("missing") },
+			Input:  func(_ *testing.T, root *Path) *Path { return root.JoinStrings("missing") },
 			Expect: false,
 		},
 		{
 			Name: "Path below a file",
 			Input: func(t *testing.T, root *Path) *Path {
+				t.Helper()
+
 				return writeTempFile(t, root, "file.txt", "").JoinStrings("child")
 			},
 			Expect: false,
@@ -528,6 +646,8 @@ func TestPath_LExists(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input func(*testing.T, *Path) *Path, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.LExists())
@@ -539,6 +659,8 @@ func TestPath_LExists(t *testing.T) {
 }
 
 func TestLexists_UncheckablePathIsAnError(t *testing.T) {
+	t.Parallel()
+
 	root := setupTempDir(t)
 	dir := createTempDir(t, root, "locked")
 	file := writeTempFile(t, dir, "file.txt", "")

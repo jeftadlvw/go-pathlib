@@ -15,23 +15,19 @@ SkipDir and SkipAll are control signals returned from a WalkFunc or WalkRFunc.
 They are aliases of io/fs.SkipDir and io/fs.SkipAll, so they interoperate with
 the standard library's walk sentinels.
 */
+//nolint:errname,gochecknoglobals // The sentinels alias the io/fs ones by name and value.
 var (
-
-	/*
-	 	SkipDir skips the remaining entries of the current directory. If it's returned
-	  	for a directory entry, it skips that directory's contents. If it's returned for a file, it
-	   	skips the remaining entries of the containing directory.
-
-	    Aliases io/fs.SkipDir.
-	*/
+	// SkipDir skips the remaining entries of the current directory. If it's returned
+	// for a directory entry, it skips that directory's contents. If it's returned for a file, it
+	// skips the remaining entries of the containing directory.
+	//
+	// Aliases io/fs.SkipDir.
 	SkipDir = fs.SkipDir
 
-	/*
-	 	SkipAll stops the entire walk. Any other non-nil error aborts the walk and is returned
-	  	to the caller.
-
-	   Aliases io/fs.SkipAll.
-	*/
+	// SkipAll stops the entire walk. Any other non-nil error aborts the walk and is returned
+	// to the caller.
+	//
+	// Aliases io/fs.SkipAll.
 	SkipAll = fs.SkipAll
 )
 
@@ -94,22 +90,10 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 		return err
 	}
 
-	// Open and read are kept as separate steps so failures can be reported with
-	// distinct sentinels (ErrOpen vs ErrReadDir). See sortDirEntries for why this
-	// is preferred over os.ReadDir.
-	file, err := os.Open(p.String())
+	entries, err := readDirSorted(p)
 	if err != nil {
-		return wrapErr(ErrOpen, err, *p)
+		return err
 	}
-
-	// Read all entries up front so they can be sorted into a deterministic order.
-	entries, err := file.ReadDir(-1)
-	file.Close()
-	if err != nil {
-		return wrapErr(ErrReadDir, err, *p)
-	}
-
-	sortDirEntries(entries)
 
 	for _, entry := range entries {
 		err := ctx.Err()
@@ -214,6 +198,32 @@ func sortDirEntries(entries []os.DirEntry) {
 }
 
 /*
+readDirSorted reads the entries of dir and sorts them with sortDirEntries. A
+failure to open dir returns [ErrOpen], and a failure to read it returns
+[ErrReadDir].
+*/
+func readDirSorted(dir *Path) ([]os.DirEntry, error) {
+	// Open and read are kept as separate steps so failures can be reported with
+	// distinct sentinels. See sortDirEntries for why this is preferred over
+	// os.ReadDir.
+	file, err := os.Open(dir.String())
+	if err != nil {
+		return nil, wrapErr(ErrOpen, err, *dir)
+	}
+
+	// Read all entries up front so they can be sorted into a deterministic order.
+	entries, err := file.ReadDir(-1)
+	// The directory is only read, so closing it cannot lose data.
+	_ = file.Close()
+	if err != nil {
+		return nil, wrapErr(ErrReadDir, err, *dir)
+	}
+
+	sortDirEntries(entries)
+	return entries, nil
+}
+
+/*
 walkR calls walkFunc for all entries below dir, recursively and in pre-order. A
 subdirectory is passed to walkFunc before it is read, so SkipDir avoids reading it.
 dirEntry is the entry of dir in its parent directory, or nil for the walked root.
@@ -231,25 +241,12 @@ func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEn
 	// entries. A subdirectory that vanished or changed since it was read fails to
 	// open or read below and is handed to walkFunc like any other directory error.
 
-	// Open and read are kept as separate steps so an open failure and a read
-	// failure can be reported with distinct sentinels (ErrOpen vs ErrReadDir);
-	// see sortDirEntries for why this is preferred over os.ReadDir.
-	file, err := os.Open(dir.String())
+	entries, err := readDirSorted(dir)
 	if err != nil {
 		// Give walkFunc a chance to inspect and ignore the directory error. A nil
 		// or SkipDir result skips this directory. Anything else aborts.
-		return handleDirErr(dir, dirEntry, wrapErr(ErrOpen, err, *dir), walkFunc)
+		return handleDirErr(dir, dirEntry, err, walkFunc)
 	}
-
-	// Read all entries up front so they can be sorted into a deterministic order.
-	// A read failure is surfaced through walkFunc the same way an open failure is.
-	entries, readErr := file.ReadDir(-1)
-	file.Close()
-	if readErr != nil {
-		return handleDirErr(dir, dirEntry, wrapErr(ErrReadDir, readErr, *dir), walkFunc)
-	}
-
-	sortDirEntries(entries)
 
 	for _, entry := range entries {
 		err := ctx.Err()

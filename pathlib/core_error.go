@@ -35,6 +35,7 @@ matches the kind.
 
 Kinds are package-level values and are immutable.
 */
+//nolint:revive // The name is part of the published API.
 type PathlibError struct {
 	// parent is the group the kind belongs to, or nil for the root.
 	parent *PathlibError

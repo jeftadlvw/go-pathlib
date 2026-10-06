@@ -76,21 +76,9 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 		opts.Mode = defaultOpenMode
 	}
 
-	// determine file open mode from the mode string
-	var fileOpenMode int
-	switch opts.Mode {
-	case "r":
-		fileOpenMode = os.O_RDONLY
-	case "w":
-		fileOpenMode = os.O_WRONLY | os.O_TRUNC
-	case "rw":
-		fileOpenMode = os.O_RDWR | os.O_TRUNC
-	case "wa":
-		fileOpenMode = os.O_WRONLY | os.O_APPEND
-	case "rwa":
-		fileOpenMode = os.O_RDWR | os.O_APPEND
-	default:
-		return nil, permModeErr(opts.Mode, *path)
+	fileOpenMode, err := openModeFlags(opts.Mode, path)
+	if err != nil {
+		return nil, err
 	}
 
 	if opts.CreateIfNotExists {
@@ -98,44 +86,16 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 			// On Windows, O_CREATE|O_RDONLY either fails for existing read-only files
 			// (O_CREATE requires write access) or returns a writable handle for new files.
 			// Separate creation from opening to guarantee a read-only handle.
-			_, err := os.Stat(path.String())
-			pathExists := err == nil
-
-			if !pathExists {
-				f, createErr := os.OpenFile(path.String(), os.O_CREATE|os.O_WRONLY, opts.Permission)
-
-				if createErr != nil {
-					return nil, wrapErr(ErrCreate, createErr, *path)
-				}
-
-				_ = f.Close()
+			err = createIfMissing(path, opts.Permission)
+			if err != nil {
+				return nil, err
 			}
 		} else {
-			fileOpenMode = fileOpenMode | os.O_CREATE
+			fileOpenMode |= os.O_CREATE
 		}
 	}
 
-	file, err := os.OpenFile(path.String(), fileOpenMode, opts.Permission)
-	if err != nil {
-		return nil, wrapErr(ErrOpen, err, *path)
-	}
-
-	// Fun fact: Unix-based operating systems support opening a file descriptor
-	// on directory paths in readonly mode. Fuck that inconsistency and return an error
-	// if the path is a directory.
-	stat, err := os.Stat(path.String())
-
-	if err != nil {
-		_ = file.Close()
-		return nil, wrapErr(ErrStat, err, *path)
-	}
-
-	if stat.IsDir() {
-		_ = file.Close()
-		return nil, pathErr(ErrIsDir, *path)
-	}
-
-	return file, nil
+	return openNonDir(path, fileOpenMode, opts.Permission)
 }
 
 /*
@@ -256,23 +216,13 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 		return 0, err
 	}
 
-	// Check the path itself, so a broken symlink is not written through.
-	exists, err := lexists(path)
+	err = checkWritable(path, options.ExistOk)
 	if err != nil {
 		return 0, err
 	}
 
-	if exists {
-		if !path.IsFile() {
-			return 0, pathErr(ErrNotFile, *path)
-		}
-		if !options.ExistOk {
-			return 0, pathErr(ErrFileExist, *path)
-		}
-	}
-
 	if options.Mode == 0 {
-		options.Mode = DefaultFileMode
+		options.Mode = DefaultFileMode()
 	}
 
 	flag |= os.O_WRONLY | os.O_CREATE
@@ -299,4 +249,101 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 	}
 
 	return n, nil
+}
+
+/*
+openModeFlags returns the flags for [os.OpenFile] that implement the open mode
+of [OpenOptions]. An unsupported mode returns [ErrUnsupportedMode].
+*/
+func openModeFlags(mode string, path *Path) (int, error) {
+	switch mode {
+	case "r":
+		return os.O_RDONLY, nil
+	case "w":
+		return os.O_WRONLY | os.O_TRUNC, nil
+	case "rw":
+		return os.O_RDWR | os.O_TRUNC, nil
+	case "wa":
+		return os.O_WRONLY | os.O_APPEND, nil
+	case "rwa":
+		return os.O_RDWR | os.O_APPEND, nil
+	default:
+		return 0, permModeErr(mode, *path)
+	}
+}
+
+/*
+createIfMissing creates an empty file with permission perm at path if nothing
+exists there. A failed creation returns [ErrCreate].
+*/
+func createIfMissing(path *Path, perm os.FileMode) error {
+	_, err := os.Stat(path.String())
+	if err == nil {
+		return nil
+	}
+
+	f, err := os.OpenFile(path.String(), os.O_CREATE|os.O_WRONLY, perm)
+	if err != nil {
+		return wrapErr(ErrCreate, err, *path)
+	}
+
+	_ = f.Close()
+	return nil
+}
+
+/*
+openNonDir opens the file at path with flag and perm as [os.OpenFile] does. A
+file that cannot be opened returns [ErrOpen], a failed check of the opened path
+returns [ErrStat], and a directory returns [ErrIsDir].
+*/
+func openNonDir(path *Path, flag int, perm os.FileMode) (*os.File, error) {
+	file, err := os.OpenFile(path.String(), flag, perm)
+	if err != nil {
+		return nil, wrapErr(ErrOpen, err, *path)
+	}
+
+	// Fun fact: Unix-based operating systems support opening a file descriptor
+	// on directory paths in readonly mode. We don't do that and return an error
+	// if the path is a directory.
+	stat, err := os.Stat(path.String())
+
+	if err != nil {
+		_ = file.Close()
+		return nil, wrapErr(ErrStat, err, *path)
+	}
+
+	if stat.IsDir() {
+		_ = file.Close()
+		return nil, pathErr(ErrIsDir, *path)
+	}
+
+	return file, nil
+}
+
+/*
+checkWritable checks that path can be written with the ExistOk option of
+[FileOptions] set to existOk. An existing path that is no file returns
+[ErrNotFile], and an existing file returns [ErrFileExist] unless existOk is set.
+A path that cannot be checked returns [ErrStat].
+*/
+func checkWritable(path *Path, existOk bool) error {
+	// Check the path itself, so a broken symlink is not written through.
+	exists, err := lexists(path)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	if !path.IsFile() {
+		return pathErr(ErrNotFile, *path)
+	}
+
+	if !existOk {
+		return pathErr(ErrFileExist, *path)
+	}
+
+	return nil
 }

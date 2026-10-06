@@ -8,6 +8,8 @@ import (
 )
 
 func TestPath_Parent(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: "."},
 		{Input: NewPath(".."), Expect: "."},
@@ -24,11 +26,15 @@ func TestPath_Parent(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.Parent().path)
 	})
 }
 
 func TestPath_Parts(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, []string]{
 		{Input: NewPath("."), Expect: []string{"."}},
 		{Input: NewPath(".."), Expect: []string{".."}},
@@ -45,11 +51,15 @@ func TestPath_Parts(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect []string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.Parts())
 	})
 }
 
 func TestPath_Base(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: "."},
 		{Input: NewPath(".."), Expect: ".."},
@@ -68,11 +78,15 @@ func TestPath_Base(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.Base())
 	})
 }
 
 func TestPath_Split(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, []string]{
 		{Input: NewPath("."), Expect: []string{".", "."}},
 		{Input: NewPath(".."), Expect: []string{".", ".."}},
@@ -89,6 +103,8 @@ func TestPath_Split(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect []string) {
+		t.Helper()
+
 		require.Len(t, expect, 2)
 
 		inputPartParent, inputPartBase := input.Split()
@@ -99,6 +115,8 @@ func TestPath_Split(t *testing.T) {
 }
 
 func TestPath_Stem(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: "."},
 		{Input: NewPath(".."), Expect: ".."},
@@ -133,11 +151,15 @@ func TestPath_Stem(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.Stem())
 	})
 }
 
 func TestPath_HasExtensions(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, bool]{
 		{Input: NewPath("."), Expect: false},
 		{Input: NewPath(".."), Expect: false},
@@ -163,11 +185,15 @@ func TestPath_HasExtensions(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		t.Helper()
+
 		require.Equal(t, expect, input.HasExtensions())
 	})
 }
 
 func TestPath_Extension(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: ""},
 		{Input: NewPath(".."), Expect: ""},
@@ -193,11 +219,15 @@ func TestPath_Extension(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.Extension())
 	})
 }
 
 func TestPath_ExtensionParts(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, []string]{
 		{Input: NewPath("."), Expect: []string{}},
 		{Input: NewPath(".."), Expect: []string{}},
@@ -223,6 +253,8 @@ func TestPath_ExtensionParts(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect []string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.ExtensionParts())
 
 		// if the expected parts match, ExtensionCount should also be correct.
@@ -231,6 +263,8 @@ func TestPath_ExtensionParts(t *testing.T) {
 }
 
 func TestPath_Anchor(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: ""},
 		{Input: NewPath(".."), Expect: ""},
@@ -263,11 +297,15 @@ func TestPath_Anchor(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.Anchor())
 	})
 }
 
 func TestPath_WindowsVolume(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: ""},
 		{Input: NewPath("/"), Expect: ""},
@@ -289,11 +327,15 @@ func TestPath_WindowsVolume(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.WindowsVolume())
 	})
 }
 
 func TestPath_WindowsUncRoot(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, string]{
 		{Input: NewPath("."), Expect: ""},
 		{Input: NewPath("/"), Expect: ""},
@@ -314,11 +356,15 @@ func TestPath_WindowsUncRoot(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
+		t.Helper()
+
 		require.Equal(t, expect, input.WindowsUncRoot())
 	})
 }
 
 func TestPath_HasDotName(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]bool{
 		".config":      true,
 		".a":           true,
@@ -337,6 +383,8 @@ func TestPath_HasDotName(t *testing.T) {
 }
 
 func TestPath_HasBackslash(t *testing.T) {
+	t.Parallel()
+
 	cases := []TestCase[*Path, bool]{
 		{Name: "Posix name with backslash", Input: NewPathFromPosix(`a\b`), Expect: true},
 		{Name: "Posix path without backslash", Input: NewPathFromPosix("a/b"), Expect: false},
@@ -353,6 +401,8 @@ func TestPath_HasBackslash(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		t.Helper()
+
 		require.Equal(t, expect, input.HasBackslash())
 	})
 }

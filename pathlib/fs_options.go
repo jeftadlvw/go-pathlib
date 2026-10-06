@@ -4,19 +4,36 @@ import (
 	"io/fs"
 )
 
+const (
+	// posixDefaultFileMode is the default mode of a file outside Windows.
+	posixDefaultFileMode fs.FileMode = 0644
+	// posixDefaultDirMode is the default mode of a directory outside Windows.
+	posixDefaultDirMode fs.FileMode = 0755
+	// windowsWritableFileMode is the mode Windows applies to a writable file.
+	windowsWritableFileMode fs.FileMode = 0666
+	// windowsReadOnlyFileMode is the mode Windows applies to a read-only file.
+	windowsReadOnlyFileMode fs.FileMode = 0444
+	// windowsDirMode is the mode Windows applies to every directory.
+	windowsDirMode fs.FileMode = 0777
+)
+
 /*
-DefaultFileMode is the default file permission mode.
+DefaultFileMode returns the default file permission mode.
 On Unix this is 0644 (rw-r--r--). On Windows this is 0666 since Windows
 does not support Unix-style permission granularity.
 */
-var DefaultFileMode = effectiveFileMode(0644)
+func DefaultFileMode() fs.FileMode {
+	return effectiveFileMode(posixDefaultFileMode)
+}
 
 /*
-DefaultDirMode is the default directory permission mode.
+DefaultDirMode returns the default directory permission mode.
 On Unix this is 0755 (rwxr-xr-x). On Windows this is 0777 since Windows
 does not support Unix-style permission granularity for directories.
 */
-var DefaultDirMode = effectiveDirMode(0755)
+func DefaultDirMode() fs.FileMode {
+	return effectiveDirMode(posixDefaultDirMode)
+}
 
 // effectiveFileMode returns the permission mode the OS will actually apply to a file.
 // On Windows, files are either read-write (0666) or read-only (0444).
@@ -25,9 +42,9 @@ func effectiveFileMode(mode fs.FileMode) fs.FileMode {
 		return mode
 	}
 	if mode&0200 != 0 {
-		return 0666
+		return windowsWritableFileMode
 	}
-	return 0444
+	return windowsReadOnlyFileMode
 }
 
 // effectiveDirMode returns the permission mode the OS will actually apply to a directory.
@@ -36,7 +53,7 @@ func effectiveDirMode(mode fs.FileMode) fs.FileMode {
 	if !runningOnWindows {
 		return mode
 	}
-	return 0777
+	return windowsDirMode
 }
 
 /*
@@ -79,7 +96,7 @@ DefaultFileOptions returns the default options for file operations.
 func DefaultFileOptions() FileOptions {
 	return FileOptions{
 		ExistOk: false,
-		Mode:    DefaultFileMode,
+		Mode:    DefaultFileMode(),
 	}
 }
 
@@ -104,20 +121,15 @@ DefaultDirOptions returns the default options for directory operations.
 func DefaultDirOptions() DirOptions {
 	return DirOptions{
 		ExistOk:   false,
-		Mode:      DefaultDirMode,
+		Mode:      DefaultDirMode(),
 		CreateAll: false,
 	}
 }
 
+/*
+FilterFunc reports whether the entry at path is included in a glob result.
+*/
 type FilterFunc func(path *Path) bool
-
-type GlobOptionFilterType uint
-
-const (
-	GlobOptionFilterAll         GlobOptionFilterType = 0
-	GlobOptionFilterFiles       GlobOptionFilterType = 1
-	GlobOptionFilterDirectories GlobOptionFilterType = 2
-)
 
 /*
 GlobOptions contains options for file globbing.

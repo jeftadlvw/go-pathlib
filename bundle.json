@@ -1,10 +1,10 @@
 {
   "package": "pathlib",
-  "source_dir": "pathlib",
-  "dist_dir": "dist",
+  "sourceDir": "pathlib",
+  "distDir": "dist",
   "license": "Apache-2.0",
-  "license_mode": "full",
-  "license_file": "LICENSE",
+  "licenseMode": "full",
+  "licenseFile": "LICENSE",
 
   "groups": {
     "core": "core",

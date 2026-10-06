@@ -99,76 +99,71 @@ func normalizeWindowsPath(p string) *Path {
 	// Volume anchor: "C:\" (rooted) or "C:" (drive-relative).
 	match := windowsVolumeNameRegex.FindString(dirty)
 	if match != "" {
-		anchor := match[:2]        // "C:" (letter + colon)
-		hasRoot := len(match) == 3 // true when match includes the trailing "/"
-
-		rest := dirty[len(match):]
-		cleanedRest := normalizePath(rest)
-
-		// Strip any leading slashes that normalizePath may have returned.
-		cleanedRest = strings.TrimLeft(cleanedRest, canonicalPathSeparator)
-
-		// Remove ".." traversals that cannot go above the drive root.
-		for {
-			if cleanedRest == ".." {
-				cleanedRest = ""
-				break
-			}
-			if strings.HasPrefix(cleanedRest, "../") {
-				cleanedRest = cleanedRest[3:]
-				continue
-			}
-			if cleanedRest == "." {
-				cleanedRest = ""
-				break
-			}
-			break
-		}
-
-		var pathField string
-		if hasRoot {
-			if cleanedRest == "" {
-				pathField = canonicalPathSeparator
-			} else {
-				pathField = canonicalPathSeparator + cleanedRest
-			}
-		} else {
-			pathField = cleanedRest
-		}
-
-		return &Path{
-			path:                 pathField,
-			windowsAnchor:        anchor,
-			windowsPathEncodings: windowsPathStateVolume,
-		}
+		return normalizeWindowsVolumePath(dirty, match)
 	}
 
 	// UNC anchor: "//host/share".
 	match = windowsNetworkPathRegex.FindString(dirty)
 	if match != "" {
-		rest := dirty[len(match):]
-		if rest == "" || rest == canonicalPathSeparator {
-			return &Path{
-				path:                 canonicalPathSeparator,
-				windowsAnchor:        match,
-				windowsPathEncodings: windowsPathStateUNC,
-			}
-		}
-		cleanedRest := normalizePath(rest)
-		if cleanedRest == "." {
-			cleanedRest = canonicalPathSeparator
-		}
-		return &Path{
-			path:                 cleanedRest,
-			windowsAnchor:        match,
-			windowsPathEncodings: windowsPathStateUNC,
-		}
+		return normalizeWindowsUNCPath(dirty, match)
 	}
 
 	// No Windows-specific anchor: treat as a regular path.
 	return &Path{
 		path:                 normalizePath(dirty),
 		windowsPathEncodings: 0,
+	}
+}
+
+// normalizeWindowsVolumePath normalizes dirty, a path with canonical separators
+// that starts with the volume anchor match.
+func normalizeWindowsVolumePath(dirty, match string) *Path {
+	anchor := match[:2] // "C:" (letter + colon)
+	hasRoot := strings.HasSuffix(match, canonicalPathSeparator)
+
+	// Strip any leading slashes that normalizePath may have returned.
+	cleanedRest := strings.TrimLeft(normalizePath(dirty[len(match):]), canonicalPathSeparator)
+	cleanedRest = stripDriveRootTraversal(cleanedRest)
+
+	pathField := cleanedRest
+	if hasRoot {
+		pathField = canonicalPathSeparator + cleanedRest
+	}
+
+	return &Path{
+		path:                 pathField,
+		windowsAnchor:        anchor,
+		windowsPathEncodings: windowsPathStateVolume,
+	}
+}
+
+// stripDriveRootTraversal removes the ".." traversals of rest that cannot go
+// above the drive root. A remaining "." becomes empty.
+func stripDriveRootTraversal(rest string) string {
+	for strings.HasPrefix(rest, "../") {
+		rest = rest[len("../"):]
+	}
+
+	if rest == ".." || rest == "." {
+		return ""
+	}
+
+	return rest
+}
+
+// normalizeWindowsUNCPath normalizes dirty, a path with canonical separators
+// that starts with the UNC anchor match.
+func normalizeWindowsUNCPath(dirty, match string) *Path {
+	// An empty rest cleans to ".", which is the root of the share.
+	cleanedRest := normalizePath(dirty[len(match):])
+	if cleanedRest == "." {
+		cleanedRest = canonicalPathSeparator
+	}
+
+	return &Path{
+		path:                 cleanedRest,
+		windowsAnchor:        match,
+		windowsPathEncodings: windowsPathStateUNC,
 	}
 }
 
@@ -187,15 +182,8 @@ func relPath(basePath, targPath string) (string, error) {
 		return ".", nil
 	}
 
-	base := basePath
-	targ := targPath
-
-	if base == "." {
-		base = ""
-	}
-	if targ == "." {
-		targ = ""
-	}
+	base := emptyIfDot(basePath)
+	targ := emptyIfDot(targPath)
 
 	baseSlashed := len(base) > 0 && base[0] == '/'
 	targSlashed := len(targ) > 0 && targ[0] == '/'
@@ -203,6 +191,32 @@ func relPath(basePath, targPath string) (string, error) {
 		return "", ErrRelImpossible
 	}
 
+	b0, bi, t0 := relCommonPrefix(base, targ)
+
+	if base[b0:bi] == ".." {
+		return "", ErrRelImpossible
+	}
+
+	if b0 != len(base) {
+		// One ".." for every remaining element of base.
+		up := ".." + strings.Repeat("/..", strings.Count(base[b0:], "/"))
+		if t0 != len(targ) {
+			return up + "/" + targ[t0:], nil
+		}
+		return up, nil
+	}
+
+	result := targ[t0:]
+	if result == "" {
+		return ".", nil
+	}
+	return result, nil
+}
+
+// relCommonPrefix walks the elements base and targ have in common. It returns
+// the start b0 and end bi of the first element of base that differs, and the
+// start t0 of the first element of targ that differs.
+func relCommonPrefix(base, targ string) (int, int, int) {
 	bl := len(base)
 	tl := len(targ)
 	var b0, bi, t0, ti int
@@ -214,7 +228,7 @@ func relPath(basePath, targPath string) (string, error) {
 			ti++
 		}
 		if base[b0:bi] != targ[t0:ti] {
-			break
+			return b0, bi, t0
 		}
 		if bi < bl {
 			bi++
@@ -225,34 +239,12 @@ func relPath(basePath, targPath string) (string, error) {
 		b0 = bi
 		t0 = ti
 	}
+}
 
-	if base[b0:bi] == ".." {
-		return "", ErrRelImpossible
+// emptyIfDot returns an empty string for ".", and s otherwise.
+func emptyIfDot(s string) string {
+	if s == "." {
+		return ""
 	}
-
-	if b0 != bl {
-		seps := strings.Count(base[b0:bl], "/")
-		size := 2 + seps*3
-		if tl != t0 {
-			size += 1 + tl - t0
-		}
-		buf := make([]byte, size)
-		n := copy(buf, "..")
-		for range seps {
-			buf[n] = '/'
-			copy(buf[n+1:], "..")
-			n += 3
-		}
-		if t0 != tl {
-			buf[n] = '/'
-			copy(buf[n+1:], targ[t0:])
-		}
-		return string(buf), nil
-	}
-
-	result := targ[t0:]
-	if result == "" {
-		return ".", nil
-	}
-	return result, nil
+	return s
 }

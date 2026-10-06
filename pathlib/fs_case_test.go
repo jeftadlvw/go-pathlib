@@ -8,6 +8,8 @@ import (
 )
 
 func TestPath_IsOnCaseSensitiveFs(t *testing.T) {
+	t.Parallel()
+
 	// This test is tricky because file system case-sensitivity depends on the OS/FS.
 	// We'll create a temp directory and use its behavior to determine the expected outcome.
 	// The function's internal logic already handles the detection.
@@ -60,12 +62,16 @@ func TestPath_IsOnCaseSensitiveFs(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		t.Helper()
+
 		actual := input.IsOnCaseSensitiveFs()
 		require.Equal(t, expect, actual)
 	})
 }
 
 func TestPath_EqualsFs(t *testing.T) {
+	t.Parallel()
+
 	type Input struct {
 		Setup func(*testing.T, *Path) (*Path, *Path)
 	}
@@ -74,6 +80,8 @@ func TestPath_EqualsFs(t *testing.T) {
 		{
 			Name: "Same file",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				f := writeTempFile(t, root, "file.txt", "content")
 				return f, f
 			}},
@@ -82,6 +90,8 @@ func TestPath_EqualsFs(t *testing.T) {
 		{
 			Name: "Symlink and its target",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				f := writeTempFile(t, root, "target.txt", "content")
 				l := createTempSymlinkAbs(t, root, "target.txt", "link.txt")
 				return f, l
@@ -91,6 +101,8 @@ func TestPath_EqualsFs(t *testing.T) {
 		{
 			Name: "Different files",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				f1 := writeTempFile(t, root, "file1.txt", "content")
 				f2 := writeTempFile(t, root, "file2.txt", "content")
 				return f1, f2
@@ -100,6 +112,8 @@ func TestPath_EqualsFs(t *testing.T) {
 		{
 			Name: "One path does not exist",
 			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+				t.Helper()
+
 				f := writeTempFile(t, root, "file.txt", "content")
 				return f, root.JoinStrings("nonexistent")
 			}},
@@ -107,7 +121,7 @@ func TestPath_EqualsFs(t *testing.T) {
 		},
 		{
 			Name: "Both paths do not exist",
-			Input: Input{Setup: func(t *testing.T, root *Path) (*Path, *Path) {
+			Input: Input{Setup: func(_ *testing.T, root *Path) (*Path, *Path) {
 				return root.JoinStrings("a"), root.JoinStrings("b")
 			}},
 			Expect: false,
@@ -115,6 +129,8 @@ func TestPath_EqualsFs(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input Input, expect bool) {
+		t.Helper()
+
 		root := setupTempDir(t)
 		p1, p2 := input.Setup(t, root)
 		require.Equal(t, expect, p1.EqualsFs(p2))
@@ -122,6 +138,8 @@ func TestPath_EqualsFs(t *testing.T) {
 }
 
 func TestPath_EqualsFsNil(t *testing.T) {
+	t.Parallel()
+
 	var nilPath *Path
 	root := setupTempDir(t)
 
