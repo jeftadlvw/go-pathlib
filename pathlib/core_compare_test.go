@@ -327,3 +327,26 @@ func TestPath_EqualsStringWindowsAnchorLimitation(t *testing.T) {
 			"%q: Equals(NewPathFromWindows(...)) is the correct comparison", s)
 	}
 }
+
+func TestPath_EqualsNil(t *testing.T) {
+	var nilPath *Path
+	p := NewPathFromPosix("foo")
+
+	for _, opt := range []CompareOption{CaseSensitive, CaseInsensitive} {
+		require.True(t, nilPath.Equals(nil, opt), "two nil Paths are equal")
+		require.False(t, nilPath.Equals(p, opt), "nil receiver differs from a Path")
+		require.False(t, p.Equals(nil, opt), "a Path differs from a nil argument")
+	}
+
+	require.False(t, nilPath.EqualsString("."), "nil never equals a string, not even \".\"")
+	require.False(t, nilPath.EqualsString(""))
+}
+
+func TestPath_EqualsIsNotPointerIdentity(t *testing.T) {
+	// Two separately constructed Paths are different pointers, so == is false,
+	// but they denote the same path.
+	a := NewPathFromPosix("foo/bar")
+	b := NewPathFromPosix("foo/bar")
+	require.False(t, a == b)
+	require.True(t, a.Equals(b))
+}

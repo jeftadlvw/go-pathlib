@@ -205,8 +205,15 @@ func (p *Path) AbsoluteFrom(o *Path) (*Path, error) {
 /*
 Equals returns whether this and another Path match lexically.
 By default, comparison is case-sensitive.
+
+Equals is nil-safe. Two nil Paths are equal, and a nil Path differs from any
+non-nil Path. Always compare Paths with Equals and never with ==, as == compares pointers.
 */
 func (p *Path) Equals(other *Path, opts ...CompareOption) bool {
+	if p == nil || other == nil {
+		return p == other
+	}
+
 	caseSensitive := CaseSensitive
 	if len(opts) > 0 {
 		caseSensitive = opts[0]
@@ -228,6 +235,8 @@ String() returns the OS-native form and is a portability trap on Windows. To com
 against an OS-native string, or a Windows-formatted one, construct the operand
 explicitly and use Equals(NewPath(s)) for an OS path, or Equals(NewPathFromWindows(s))
 for a Windows path.
+
+A nil Path never equals any string.
 */
 func (p *Path) EqualsString(other string, opts ...CompareOption) bool {
 	return p.Equals(NewPathFromPosix(other), opts...)

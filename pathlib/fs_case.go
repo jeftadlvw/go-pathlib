@@ -11,8 +11,14 @@ EqualsFs returns whether this Path and another Path point to the same file syste
 This comparison is performed using file stats, not string comparison.
 
 Symlinks are resolved.
+
+A nil Path never points to a file, so it is never equal to any Path, nil included.
 */
 func (p *Path) EqualsFs(other *Path) bool {
+	if p == nil || other == nil {
+		return false
+	}
+
 	// No need to call Exists for both paths, as Stat() will return an error
 	// if the path does not exist.
 

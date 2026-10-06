@@ -120,3 +120,12 @@ func TestPath_EqualsFs(t *testing.T) {
 		require.Equal(t, expect, p1.EqualsFs(p2))
 	})
 }
+
+func TestPath_EqualsFsNil(t *testing.T) {
+	var nilPath *Path
+	root := setupTempDir(t)
+
+	require.False(t, nilPath.EqualsFs(nil), "nil points to no file, so it is never equal")
+	require.False(t, nilPath.EqualsFs(root))
+	require.False(t, root.EqualsFs(nil))
+}
