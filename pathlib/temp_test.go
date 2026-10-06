@@ -17,9 +17,9 @@ func TestTempBaseDir(t *testing.T) {
 }
 
 func TestCreateTempFile(t *testing.T) {
-	tempFile, err := CreateTempFile()
+	tempFile, dispose, err := CreateTempFile()
 	require.NoError(t, err)
-	defaultTempFileTests(t, tempFile)
+	defaultTempFileTests(t, tempFile, dispose)
 }
 
 func TestCreateTempFileWithOptions(t *testing.T) {
@@ -27,28 +27,28 @@ func TestCreateTempFileWithOptions(t *testing.T) {
 }
 
 func TestCreateTempDir(t *testing.T) {
-	tempDir, err := CreateTempDir()
+	tempDir, dispose, err := CreateTempDir()
 	require.NoError(t, err)
-	defaultTempDirTests(t, tempDir)
+	defaultTempDirTests(t, tempDir, dispose)
 }
 
 func TestCreateTempDirWithOptions(t *testing.T) {
 	testWithOptions(t, CreateTempDirWithOptions, defaultTempDirTests)
 }
 
-func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPath, error), defaultTests func(*testing.T, *TempPath)) {
+func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*Path, DisposeFunc, error), defaultTests func(*testing.T, *Path, DisposeFunc)) {
 	localTempBaseDir := NewPath(t.TempDir())
 
 	t.Run("nil", func(t *testing.T) {
-		tempFile, err := creationFunc(nil)
+		tempFile, dispose, err := creationFunc(nil)
 		require.NoError(t, err)
-		defaultTests(t, tempFile)
+		defaultTests(t, tempFile, dispose)
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		tempFile, err := creationFunc(&TempPathOptions{})
+		tempFile, dispose, err := creationFunc(&TempPathOptions{})
 		require.NoError(t, err)
-		defaultTests(t, tempFile)
+		defaultTests(t, tempFile, dispose)
 
 		require.True(t, tempFile.Parent().Equals(TempBaseDir(), CaseSensitive))
 	})
@@ -74,9 +74,9 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 				BaseDir: baseDir,
 			}
 
-			tempFile, err := creationFunc(options)
+			tempFile, dispose, err := creationFunc(options)
 			require.NoError(t, err)
-			defaultTests(t, tempFile)
+			defaultTests(t, tempFile, dispose)
 
 			defaultTempPathOptionsTests(t, tempFile, options)
 		})
@@ -88,9 +88,9 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 					Prefix:  prefix,
 				}
 
-				tempFile, err := creationFunc(options)
+				tempFile, dispose, err := creationFunc(options)
 				require.NoError(t, err)
-				defaultTests(t, tempFile)
+				defaultTests(t, tempFile, dispose)
 
 				defaultTempPathOptionsTests(t, tempFile, options)
 			})
@@ -103,21 +103,21 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*TempPat
 				Prefix: prefix,
 			}
 
-			tempFile, err := creationFunc(options)
+			tempFile, dispose, err := creationFunc(options)
 			require.NoError(t, err)
-			defaultTests(t, tempFile)
+			defaultTests(t, tempFile, dispose)
 
 			defaultTempPathOptionsTests(t, tempFile, options)
 		})
 	}
 }
 
-func defaultTempFileTests(t *testing.T, p *TempPath) {
+func defaultTempFileTests(t *testing.T, p *Path, dispose DisposeFunc) {
 	preDisposeStat, err := os.Stat(p.String())
 	require.NoError(t, err)
 	require.False(t, preDisposeStat.IsDir())
 
-	err = p.Dispose()
+	err = dispose()
 	require.NoError(t, err)
 
 	postDisposeStat, err := os.Stat(p.String())
@@ -125,12 +125,12 @@ func defaultTempFileTests(t *testing.T, p *TempPath) {
 	require.Nil(t, postDisposeStat)
 }
 
-func defaultTempDirTests(t *testing.T, p *TempPath) {
+func defaultTempDirTests(t *testing.T, p *Path, dispose DisposeFunc) {
 	preDisposeStat, err := os.Stat(p.String())
 	require.NoError(t, err)
 	require.True(t, preDisposeStat.IsDir())
 
-	err = p.Dispose()
+	err = dispose()
 	require.NoError(t, err)
 
 	postDisposeStat, err := os.Stat(p.String())
@@ -138,7 +138,7 @@ func defaultTempDirTests(t *testing.T, p *TempPath) {
 	require.Nil(t, postDisposeStat)
 }
 
-func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOptions) {
+func defaultTempPathOptionsTests(t *testing.T, p *Path, opts *TempPathOptions) {
 	expectedBaseDir := TempBaseDir()
 	if opts.BaseDir != nil && opts.BaseDir.String() != "" {
 		expectedBaseDir = opts.BaseDir
@@ -148,4 +148,74 @@ func defaultTempPathOptionsTests(t *testing.T, p *TempPath, opts *TempPathOption
 
 	require.True(t, p.Parent().Equals(expectedBaseDir, CaseSensitive))
 	require.True(t, strings.HasPrefix(p.Base(), expectedPrefix))
+}
+
+func TestDisposeFunc_IsIdempotent(t *testing.T) {
+	dir, dispose, err := CreateTempDir()
+	require.NoError(t, err)
+
+	require.NoError(t, dispose())
+	require.NoError(t, dispose(), "a second call is a no-op")
+	requireLExists(t, false, dir)
+}
+
+func TestDisposeFunc_IsNoOpOnError(t *testing.T) {
+	missing := NewPath(t.TempDir()).JoinStrings("missing")
+
+	for name, create := range map[string]func(*TempPathOptions) (*Path, DisposeFunc, error){
+		"CreateTempFileWithOptions": CreateTempFileWithOptions,
+		"CreateTempDirWithOptions":  CreateTempDirWithOptions,
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, dispose, err := create(&TempPathOptions{BaseDir: missing})
+			require.ErrorIs(t, err, ErrNotExist)
+			require.Nil(t, p)
+			require.NotNil(t, dispose)
+			require.NoError(t, dispose())
+		})
+	}
+}
+
+func TestDisposeFunc_RemovesSymlinkNotTarget(t *testing.T) {
+	// A temporary path replaced by a symlink: disposing must not reach the target.
+	root := setupTempDir(t)
+	targetFile := writeTempFile(t, root, "keep.txt", "content")
+	targetDir := createTempDir(t, root, "keep_dir")
+	writeTempFile(t, targetDir, "inner.txt", "")
+
+	t.Run("file", func(t *testing.T) {
+		file, dispose, err := CreateTempFile()
+		require.NoError(t, err)
+		require.NoError(t, os.Remove(file.String()))
+		require.NoError(t, os.Symlink(targetFile.String(), file.String()))
+
+		require.NoError(t, dispose())
+		requireLExists(t, false, file)
+		require.True(t, targetFile.IsFile(), "the symlink target is kept")
+	})
+
+	t.Run("directory", func(t *testing.T) {
+		dir, dispose, err := CreateTempDir()
+		require.NoError(t, err)
+		require.NoError(t, os.Remove(dir.String()))
+		require.NoError(t, os.Symlink(targetDir.String(), dir.String()))
+
+		require.NoError(t, dispose())
+		requireLExists(t, false, dir)
+		require.True(t, targetDir.JoinStrings("inner.txt").IsFile(), "the symlink target's content is kept")
+	})
+}
+
+func TestDisposeFunc_IsIndependentOfReturnedPath(t *testing.T) {
+	// Overwriting the returned Path does not redirect what dispose removes.
+	file, dispose, err := CreateTempFile()
+	require.NoError(t, err)
+
+	keep := writeTempFile(t, setupTempDir(t), "keep.txt", "content")
+	original := file.Copy()
+	require.NoError(t, file.UnmarshalText([]byte(keep.ToPosix())))
+
+	require.NoError(t, dispose())
+	requireLExists(t, false, original)
+	require.True(t, keep.IsFile(), "the file the returned Path now points to is kept")
 }

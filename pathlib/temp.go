@@ -5,32 +5,19 @@ import (
 )
 
 /*
-Disposable interface shows that a struct has resources that must be disposed manually.
+DisposeFunc removes a temporary path created by CreateTempFile or CreateTempDir.
+
+It is returned separately from the path, so code the path is passed to cannot
+remove it. Only the creator, who holds the DisposeFunc, can.
+
+A symlink that replaced the temporary path is removed itself, never its target.
+Calling a DisposeFunc again is a no-op.
 */
-type Disposable interface {
-	// Dispose cleans up struct resources.
-	Dispose() error
-}
+type DisposeFunc func() error
 
-/*
-TempPath is a container for a temporary path.
-*/
-type TempPath struct {
-	Path
-
-	// dispose is an internal function that removes the temporary path.
-	dispose func() error
-}
-
-/*
-Dispose disposes the temporary directory.
-*/
-func (p *TempPath) Dispose() error {
-	if p.dispose == nil {
-		return pathErr(ErrDisposeNil, p.Path)
-	}
-
-	return p.dispose()
+// voidDispose is returned when no temporary path was created.
+func voidDispose() error {
+	return nil
 }
 
 /*
@@ -75,24 +62,26 @@ func (t *TempPathOptions) toUsableValues() (string, string, error) {
 /*
 CreateTempFile creates a new temporary file.
 
-It's the caller's responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call the returned DisposeFunc. It is never
+nil, and a no-op if an error is returned.
 
 Example:
 
-	tempFile, err := CreateTempFile()
+	tempFile, dispose, err := CreateTempFile()
 	if err != nil {
 		// handle error
 	}
-	defer func() { _ = tempFile.Dispose() }()
+	defer func() { _ = dispose() }()
 */
-func CreateTempFile() (*TempPath, error) {
+func CreateTempFile() (*Path, DisposeFunc, error) {
 	return CreateTempFileWithOptions(nil)
 }
 
 /*
 CreateTempFileWithOptions creates a temporary file with further options.
 
-It's the caller's responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call the returned DisposeFunc. It is never
+nil, and a no-op if an error is returned.
 
 Example:
 
@@ -101,56 +90,57 @@ Example:
 		Prefix: "foo"
 	}
 
-	tempFile, err := CreateTempFileWithOptions(options)
+	tempFile, dispose, err := CreateTempFileWithOptions(options)
 	if err != nil {
 		// handle error
 	}
-	defer func() { _ = tempFile.Dispose() }()
+	defer func() { _ = dispose() }()
 */
-func CreateTempFileWithOptions(options *TempPathOptions) (*TempPath, error) {
+func CreateTempFileWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
 	if err != nil {
-		return nil, err
+		return nil, voidDispose, err
 	}
 
 	file, err := os.CreateTemp(tempBaseDir, prefix)
 	if err != nil {
-		return nil, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
+		return nil, voidDispose, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
 	}
 
 	_ = file.Close()
 	pathName := file.Name()
 
-	tempFilePath := *NewPath(pathName)
+	// The DisposeFunc uses its own Path, independent of the returned one.
+	dispose := func() error {
+		return Remove(NewPath(pathName))
+	}
 
-	return &TempPath{
-		Path: tempFilePath,
-		dispose: func() error {
-			return Remove(NewPath(pathName))
-		},
-	}, nil
+	return NewPath(pathName), dispose, nil
 }
 
 /*
 CreateTempDir creates a new temporary directory.
-It's the caller's responsibility to call TempPath.Dispose().
+
+It's the caller's responsibility to call the returned DisposeFunc. It is never
+nil, and a no-op if an error is returned.
 
 Example:
 
-	tempDir, err := CreateTempDir()
+	tempDir, dispose, err := CreateTempDir()
 	if err != nil {
 		// handle error
 	}
-	defer func() { _ = tempDir.Dispose() }()
+	defer func() { _ = dispose() }()
 */
-func CreateTempDir() (*TempPath, error) {
+func CreateTempDir() (*Path, DisposeFunc, error) {
 	return CreateTempDirWithOptions(nil)
 }
 
 /*
 CreateTempDirWithOptions creates a temporary directory with further options.
 
-It's the caller's responsibility to call TempPath.Dispose().
+It's the caller's responsibility to call the returned DisposeFunc. It is never
+nil, and a no-op if an error is returned.
 
 Example:
 
@@ -159,31 +149,29 @@ Example:
 		Prefix: "foo"
 	}
 
-	tempDir, err := CreateTempDirWithOptions(options)
+	tempDir, dispose, err := CreateTempDirWithOptions(options)
 	if err != nil {
 		// handle error
 	}
-	defer func() { _ = tempDir.Dispose() }()
+	defer func() { _ = dispose() }()
 */
-func CreateTempDirWithOptions(options *TempPathOptions) (*TempPath, error) {
+func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
 	if err != nil {
-		return nil, err
+		return nil, voidDispose, err
 	}
 
 	dirName, err := os.MkdirTemp(tempBaseDir, prefix)
 	if err != nil {
-		return nil, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
+		return nil, voidDispose, wrapErr(ErrCreate, err, *tempDirOrDefault(tempBaseDir))
 	}
 
-	tempDirPath := *NewPath(dirName)
+	// The DisposeFunc uses its own Path, independent of the returned one.
+	dispose := func() error {
+		return RemoveAll(NewPath(dirName))
+	}
 
-	return &TempPath{
-		Path: tempDirPath,
-		dispose: func() error {
-			return RemoveAll(NewPath(dirName))
-		},
-	}, nil
+	return NewPath(dirName), dispose, nil
 }
 
 func TempBaseDir() *Path {

@@ -97,11 +97,11 @@ func TestErrNotExist_MatchesBothSentinels(t *testing.T) {
 			return err
 		}},
 		{"CreateTempFileWithOptions with missing BaseDir", func(t *testing.T, root *Path) error {
-			_, err := CreateTempFileWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
+			_, _, err := CreateTempFileWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
 			return err
 		}},
 		{"CreateTempDirWithOptions with missing BaseDir", func(t *testing.T, root *Path) error {
-			_, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
+			_, _, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
 			return err
 		}},
 
@@ -192,7 +192,7 @@ func TestRequireDir_ExistingNonDirectory(t *testing.T) {
 			return err
 		}},
 		{"CreateTempDirWithOptions", func(t *testing.T, root *Path) error {
-			_, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: writeTempFile(t, root, "file.txt", "")})
+			_, _, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: writeTempFile(t, root, "file.txt", "")})
 			return err
 		}},
 	}
