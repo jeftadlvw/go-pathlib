@@ -58,6 +58,22 @@ func setupTempDir(t *testing.T) *Path {
 	return NewPath(tempDir)
 }
 
+// setupRelativeTempDir creates a directory below the working directory and
+// returns it as a relative Path, so tests can pass relative paths to the
+// library. Its name starts with an underscore, so the go tool ignores a
+// directory left behind by an interrupted run. It is removed when the test ends.
+func setupRelativeTempDir(t *testing.T) *Path {
+	t.Helper()
+
+	dir, err := os.MkdirTemp(".", "_tmp-")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	root := NewPath(dir)
+	require.True(t, root.IsRelative())
+	return root
+}
+
 // writeTempFile creates a file with content inside a given root.
 // Returns the Path to the created file.
 func writeTempFile(t *testing.T, root *Path, relPath string, content string) *Path {

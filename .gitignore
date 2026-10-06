@@ -63,3 +63,6 @@ go.work.sum
 
 # Generated single-file bundles (build on demand via `make bundle`)
 /dist/
+
+# Temporary directories of tests that need relative paths
+/pathlib/_tmp-*/

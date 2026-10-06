@@ -24,8 +24,12 @@ A missing source returns [ErrNotExist], and a missing destination parent returns
 incompatible file type returns [ErrTypeMismatch], and a source of a file type
 that cannot be copied returns [ErrCopyType]. A failure of the operating system
 returns [ErrStat], a kind below [ErrAccess], [ErrCreate], [ErrCopy], or
-[ErrReadSymlink]. Copying a symlink with a relative target also returns the
-errors of [Path.AbsoluteFrom] and [Path.RelativeTo].
+[ErrReadSymlink].
+
+A symlink with a relative target is copied with a target rebased to the
+destination. Rebasing resolves relative paths against the working directory and
+returns [ErrLookup] if it cannot be determined. On Windows, a source and
+destination on different volumes return [ErrAnchorMismatch].
 */
 func Copy(src *Path, destination *Path) error {
 	srcExists, err := lexists(src)
@@ -126,18 +130,40 @@ func copySymlink(source *Path, destination *Path) error {
 
 	// The original target might be relative to source. If so, make it relative to destination.
 	if originalSymlinkTarget.IsRelative() {
-		originalSymlinkTarget, err = originalSymlinkTarget.AbsoluteFrom(source.Parent())
-		if err != nil {
-			return err
-		}
-
-		originalSymlinkTarget, err = originalSymlinkTarget.RelativeTo(destination.Parent())
+		originalSymlinkTarget, err = rebaseSymlinkTarget(originalSymlinkTarget, source, destination)
 		if err != nil {
 			return err
 		}
 	}
 
 	return CreateSymlink(originalSymlinkTarget, destination)
+}
+
+/*
+rebaseSymlinkTarget returns the relative target of the source symlink as seen
+from the destination symlink, so both point to the same path.
+
+A relative source or destination is relative to the working directory, as the
+operating system resolves it. Both parents are made absolute first, so they
+share a base.
+*/
+func rebaseSymlinkTarget(target *Path, source *Path, destination *Path) (*Path, error) {
+	sourceParent, err := source.Parent().MakeAbsolute()
+	if err != nil {
+		return nil, err
+	}
+
+	destinationParent, err := destination.Parent().MakeAbsolute()
+	if err != nil {
+		return nil, err
+	}
+
+	absoluteTarget, err := target.AbsoluteFrom(sourceParent)
+	if err != nil {
+		return nil, err
+	}
+
+	return absoluteTarget.RelativeTo(destinationParent)
 }
 
 /*

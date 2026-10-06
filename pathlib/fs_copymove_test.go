@@ -258,6 +258,81 @@ func TestCopy(t *testing.T) {
 	})
 }
 
+func TestCopy_RelativeSymlinkTarget(t *testing.T) {
+	t.Parallel()
+
+	type Input struct {
+		SrcRel      string // the copied path, relative to the root
+		DstRel      string // the destination, relative to the root
+		LinkRel     string // the copied symlink, relative to the root
+		AbsoluteSrc bool   // pass the source as an absolute path
+		AbsoluteDst bool   // pass the destination as an absolute path
+	}
+
+	cases := []TestCase[Input, string]{
+		{
+			Name:   "Relative source and destination",
+			Input:  Input{SrcRel: "src/link", DstRel: "dst/link", LinkRel: "dst/link"},
+			Expect: "../target.txt",
+		},
+		{
+			Name:   "Relative source and absolute destination",
+			Input:  Input{SrcRel: "src/link", DstRel: "dst/link", LinkRel: "dst/link", AbsoluteDst: true},
+			Expect: "../target.txt",
+		},
+		{
+			Name:   "Absolute source and relative destination",
+			Input:  Input{SrcRel: "src/link", DstRel: "dst/link", LinkRel: "dst/link", AbsoluteSrc: true},
+			Expect: "../target.txt",
+		},
+		{
+			Name:   "Destination at another depth",
+			Input:  Input{SrcRel: "src/link", DstRel: "dst/deep/link", LinkRel: "dst/deep/link"},
+			Expect: "../../target.txt",
+		},
+		{
+			Name:   "Symlink inside a copied directory",
+			Input:  Input{SrcRel: "src", DstRel: "dst/copy", LinkRel: "dst/copy/link"},
+			Expect: "../../target.txt",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			t.Parallel()
+
+			root := setupRelativeTempDir(t)
+			writeTempFile(t, root, "target.txt", "content")
+			createTempSymlinkRel(t, root, "../target.txt", "src/link")
+			createTempDir(t, root, "dst/deep")
+
+			absoluteRoot, err := root.MakeAbsolute()
+			require.NoError(t, err)
+
+			srcRoot := root
+			if c.Input.AbsoluteSrc {
+				srcRoot = absoluteRoot
+			}
+			dstRoot := root
+			if c.Input.AbsoluteDst {
+				dstRoot = absoluteRoot
+			}
+
+			err = Copy(srcRoot.JoinStrings(c.Input.SrcRel), dstRoot.JoinStrings(c.Input.DstRel))
+			require.NoError(t, err)
+
+			link := root.JoinStrings(c.Input.LinkRel)
+			target, err := link.ReadSymlinkTarget()
+			require.NoError(t, err)
+			require.Equal(t, c.Expect, target.ToPosix())
+
+			content, err := ReadFileToString(link)
+			require.NoError(t, err)
+			require.Equal(t, "content", content, "the copied symlink resolves to the original target")
+		})
+	}
+}
+
 func TestMove(t *testing.T) {
 	type Input struct {
 		SrcRel string
