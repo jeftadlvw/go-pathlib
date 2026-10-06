@@ -111,6 +111,76 @@ All three are nil-safe. Never compare paths with `==`, which compares pointers.
 
 Pattern matching (`MatchesPattern`) and globbing (`Glob`, `List`, `ListFiles`, `ListDirs`, `HasGlobMatch`) are case-sensitive by default as well. Pass `CaseInsensitive`, or set `GlobOptions.CaseSensitivity` to it, to ignore casing. The zero value of `CompareOption` is `CaseSensitive`, so a zero `GlobOptions{}` is strict too.
 
+### Handling errors
+Every error the library returns pairs a **kind** with a **cause**:
+- The kind says what went wrong. Kinds are values of `*PathlibError`, such as `ErrNotExist`, and form a tree rooted at `ErrPathlib`. Match a kind, or a whole group of kinds, with `errors.Is`. Read the kind of a failure with `errors.As(err, &kind)`.
+- The cause holds the data of the failure. It is a `*PathError` with the paths the failure concerns and the underlying `os` error, or a `*PermissionError` for the `ErrPermission` group. Read it with `errors.As`. `ErrLookup` keeps the `os` error as its cause.
+
+```go
+_, err := pathlib.ReadFile(p)
+
+var cause *pathlib.PathError
+if errors.As(err, &cause) {
+	report(cause.Paths())
+}
+
+switch {
+case errors.Is(err, pathlib.ErrNotExist):
+	return create(p)
+case errors.Is(err, pathlib.ErrPathlib):
+	return fmt.Errorf("read config: %w", err)
+}
+```
+
+Every kind has a **code**, such as `PATHLIB_EXIST_FILE`, that stays stable when its message changes. Key logs, metrics, and alerts on `kind.Code()`. Errors print their code in brackets and describe themselves to `log/slog` and `encoding/json`:
+
+```
+could not open path [PATHLIB_ACCESS_OPEN]: a/b: open a/b: permission denied
+```
+
+The kind tree lists the name of each kind. A code joins the names from the root with underscores, so the code of `ErrParentNotExist` is `PATHLIB_NOT_EXIST_PARENT`:
+
+```
+PATHLIB                      ErrPathlib
+├─ EMPTY_PATTERN             ErrEmptyPattern
+├─ BAD_PATTERN               ErrBadPattern
+├─ ANCHOR_MISMATCH           ErrAnchorMismatch
+├─ NOT_ABSOLUTE              ErrNotAbsolute
+├─ REL_IMPOSSIBLE            ErrRelImpossible
+├─ LOOKUP                    ErrLookup            (cause: the os error)
+├─ NOT_EXIST                 ErrNotExist          (aliases fs.ErrNotExist)
+│  └─ PARENT                 ErrParentNotExist
+├─ EXIST                     ErrExist             (aliases fs.ErrExist)
+│  ├─ FILE                   ErrFileExist
+│  └─ DIR                    ErrDirExist
+├─ NOT_FILE                  ErrNotFile
+├─ NOT_DIR                   ErrNotDir
+├─ NOT_SYMLINK               ErrNotSymlink
+├─ NOT_EMPTY_DIR             ErrNotEmptyDir
+├─ COPY_TYPE                 ErrCopyType
+├─ TYPE_MISMATCH             ErrTypeMismatch
+├─ ACCESS                    ErrAccess
+│  ├─ OPEN                   ErrOpen
+│  └─ READ_DIR               ErrReadDir
+├─ STAT                      ErrStat
+├─ READ_SYMLINK              ErrReadSymlink
+├─ RESOLVE                   ErrResolve
+├─ CREATE                    ErrCreate
+├─ REMOVE                    ErrRemove
+├─ COPY                      ErrCopy
+├─ SET_PERMISSION            ErrSetPermission
+├─ WALK                      ErrWalk
+├─ INVALID_FILTER            ErrInvalidFilter
+├─ PERMISSION                ErrPermission        (cause: *PermissionError)
+│  ├─ RANGE                  ErrPermissionRange
+│  └─ UNSUPPORTED_MODE       ErrUnsupportedMode
+├─ READ                      ErrRead
+├─ WRITE                     ErrWrite
+└─ IS_DIR                    ErrIsDir
+```
+
+The `core` bundle only contains the kinds of the core group, from `ErrPathlib` to `ErrLookup`.
+
 ### Migrating from `os` and `filepath`
 Most code ported from `os` and `filepath` keeps compiling after switching to `*Path`. The points below are the ones that then quietly behave differently.
 
@@ -119,7 +189,7 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 - `nil` is a natural "no path". The `Equals*` functions accept it, every other method panics on a nil `*Path`. Check for `nil` if uncertain.
 
 **Checking errors**
-- Every error is a `*PathlibError` that wraps the `os` cause. `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
+- Every error wraps the `os` cause (see [Handling errors](#handling-errors)). `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
 - Use `errors.Is(err, pathlib.ErrNotExist)` (`errors.Is(err, fs.ErrNotExist)`) instead. Both match every not-exist error, whether raised by the operating system or by the library's own checks. The same holds for `pathlib.ErrExist` (and `fs.ErrExist`).
 - `pathlib.ErrPermission` is about invalid permission or open-mode values passed to the library. An access denied by the operating system matches `fs.ErrPermission`.
 
@@ -134,7 +204,7 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | --- | --- | --- |
 | `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
 | `os.WriteFile` | `WriteBytes`, `WriteString` | Creates the file with `DefaultFileMode`. Use `WriteBytesWithOptions` for another mode, or to refuse an existing file. A broken symlink returns `ErrNotFile` instead of creating its target. |
-| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, … | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrPermissionRange`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
+| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrPermissionRange`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
 

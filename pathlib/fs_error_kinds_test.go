@@ -18,7 +18,7 @@ func runErrCases(t *testing.T, cases []errCase, check func(t *testing.T, err err
 		t.Run(c.Name, func(t *testing.T) {
 			err := c.Run(t, setupTempDir(t))
 			require.Error(t, err)
-			require.ErrorAs(t, err, new(*PathlibError))
+			require.ErrorIs(t, err, ErrPathlib)
 			check(t, err)
 		})
 	}
@@ -164,7 +164,7 @@ func TestErrExist_MatchesBothSentinels(t *testing.T) {
 
 		// An exist error raised by the operating system needs a race against the
 		// library's own checks, so it is not reproducible here. The alias mechanism
-		// that matches it is covered by TestPathlibError_Chain.
+		// that matches it is covered by TestRaisedError.
 	}
 
 	runErrCases(t, cases, func(t *testing.T, err error) {
@@ -209,11 +209,14 @@ func TestRequireDir_ReportsKindAndPath(t *testing.T) {
 	missing := root.JoinStrings("missing")
 
 	err := requireDir(missing)
-	var pathlibErr *PathlibError
-	require.ErrorAs(t, err, &pathlibErr)
-	require.Equal(t, ErrNotExist, pathlibErr.Kind())
-	require.Equal(t, []Path{*missing}, pathlibErr.Paths())
-	require.NotNil(t, pathlibErr.Unwrap(), "the os cause is kept")
+	var kind *PathlibError
+	require.ErrorAs(t, err, &kind)
+	require.Equal(t, ErrNotExist, kind)
+
+	var cause *PathError
+	require.ErrorAs(t, err, &cause)
+	require.Equal(t, []Path{*missing}, cause.Paths())
+	require.NotNil(t, cause.Unwrap(), "the os cause is kept")
 
 	require.NoError(t, requireDir(root))
 	require.NoError(t, requireDir(createTempSymlinkAbs(t, root, ".", "link")))

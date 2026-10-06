@@ -1,5 +1,10 @@
 /*
 Package pathlib contains source code for go-pathlib.
+
+Every error the package returns pairs a kind with a cause. A kind is a
+*[PathlibError] below [ErrPathlib], such as [ErrNotExist], and is matched with
+[errors.Is]. A cause holds the data of the failure, such as its paths, and is
+read with [errors.As]. It is a *[PathError], unless the kind names another.
 */
 package pathlib
 
@@ -104,7 +109,7 @@ This function wraps os.Getwd.
 func NewCwd() (*Path, error) {
 	cwdPath, err := os.Getwd()
 	if err != nil {
-		return nil, wrapErr(ErrLookup, err)
+		return nil, raiseError(ErrLookup, err)
 	}
 
 	return NewPath(cwdPath), nil
@@ -118,7 +123,7 @@ This function wraps os.UserHomeDir.
 func NewHome() (*Path, error) {
 	homePath, err := os.UserHomeDir()
 	if err != nil {
-		return nil, wrapErr(ErrLookup, err)
+		return nil, raiseError(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil
@@ -132,7 +137,7 @@ This function wraps os.UserConfigDir.
 func NewConfig() (*Path, error) {
 	homePath, err := os.UserConfigDir()
 	if err != nil {
-		return nil, wrapErr(ErrLookup, err)
+		return nil, raiseError(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil
@@ -146,7 +151,7 @@ This function wraps os.UserCacheDir.
 func NewCache() (*Path, error) {
 	homePath, err := os.UserCacheDir()
 	if err != nil {
-		return nil, wrapErr(ErrLookup, err)
+		return nil, raiseError(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil

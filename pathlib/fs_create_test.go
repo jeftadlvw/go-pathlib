@@ -629,9 +629,9 @@ func TestCreate_BrokenSymlinks(t *testing.T) {
 		link := createTempSymlinkAbs(t, root, "missing", "link")
 
 		err := CreateSymlink(root, link)
-		var pathlibErr *PathlibError
-		require.ErrorAs(t, err, &pathlibErr)
-		require.Equal(t, ErrExist, pathlibErr.Kind(), "raised by the existence check, not by os.Symlink")
+		var kind *PathlibError
+		require.ErrorAs(t, err, &kind)
+		require.Equal(t, ErrExist, kind, "raised by the existence check, not by os.Symlink")
 	})
 }
 
