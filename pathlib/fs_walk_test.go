@@ -359,11 +359,14 @@ func TestPath_WalkR(t *testing.T) {
 				},
 			},
 			Expect: Expect{
+				// unreadable_dir is passed twice: before it is read, and with the
+				// directory error after reading it failed.
 				WalkedPaths: []string{
 					"another_dir",
 					"another_dir/another_file.txt",
 					"readable_dir",
 					"readable_dir/file.txt",
+					"unreadable_dir",
 					"unreadable_dir",
 				},
 			},
@@ -399,11 +402,12 @@ func TestPath_WalkR(t *testing.T) {
 				},
 			},
 			Expect: Expect{
-				// Only a_readable is recorded: b_unreadable raises a directory error
-				// that aborts the walk (so it is never recorded), and c_readable is
-				// never reached.
+				// b_unreadable is recorded once, before it is read. Reading it raises
+				// a directory error that aborts the walk (so the second call is not
+				// recorded), and c_readable is never reached.
 				WalkedPaths: []string{
 					"a_readable",
+					"b_unreadable",
 				},
 				Error: true,
 			},
@@ -614,4 +618,92 @@ func TestWalkR_CallbackErrors(t *testing.T) {
 		require.Same(t, captured, err)
 		require.NotErrorIs(t, err, ErrWalk)
 	})
+}
+
+func TestWalkR_PreOrder(t *testing.T) {
+	root := setupTempDir(t)
+	writeTempFile(t, root, "a/1.txt", "")
+	writeTempFile(t, root, "a/2.txt", "")
+	writeTempFile(t, root, "a/sub/x.txt", "")
+	writeTempFile(t, root, "b.txt", "")
+
+	walk := func(t *testing.T, skip string) []string {
+		var visited []string
+		err := root.WalkR(func(p *Path, localDirError error) error {
+			require.NoError(t, localDirError)
+			rel, err := p.RelativeTo(root)
+			require.NoError(t, err)
+			visited = append(visited, rel.ToPosix())
+			if rel.ToPosix() == skip {
+				return SkipDir
+			}
+			return nil
+		})
+		require.NoError(t, err)
+		return visited
+	}
+
+	t.Run("directory is visited before its entries", func(t *testing.T) {
+		require.Equal(t, []string{"a", "a/1.txt", "a/2.txt", "a/sub", "a/sub/x.txt", "b.txt"}, walk(t, ""))
+	})
+
+	t.Run("SkipDir on a directory skips its contents", func(t *testing.T) {
+		require.Equal(t, []string{"a", "b.txt"}, walk(t, "a"))
+	})
+
+	t.Run("SkipDir on a file skips the rest of its directory", func(t *testing.T) {
+		require.Equal(t, []string{"a", "a/1.txt", "b.txt"}, walk(t, "a/1.txt"))
+	})
+}
+
+func TestWalkR_SkipDirDoesNotReadDirectory(t *testing.T) {
+	root := setupTempDir(t)
+	locked := createTempDir(t, root, "locked")
+	writeTempFile(t, locked, "secret.txt", "")
+	writeTempFile(t, root, "visible.txt", "")
+	lockDir(t, locked)
+
+	var visited []string
+	err := root.WalkR(func(p *Path, localDirError error) error {
+		require.NoError(t, localDirError, "the skipped directory is never read")
+		visited = append(visited, p.Base())
+		if p.Equals(locked) {
+			return SkipDir
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"locked", "visible.txt"}, visited)
+}
+
+func TestWalkR_UnreadableDirectoryIsPassedTwice(t *testing.T) {
+	root := setupTempDir(t)
+	locked := createTempDir(t, root, "locked")
+	lockDir(t, locked)
+
+	var errs []error
+	err := root.WalkR(func(p *Path, localDirError error) error {
+		require.True(t, p.Equals(locked))
+		errs = append(errs, localDirError)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, errs, 2)
+	require.NoError(t, errs[0], "first call happens before reading")
+	require.ErrorIs(t, errs[1], ErrOpen, "second call carries the directory error")
+}
+
+func TestWalkR_UnreadableRootIsPassedOnce(t *testing.T) {
+	root := createTempDir(t, setupTempDir(t), "root")
+	lockDir(t, root)
+
+	calls := 0
+	err := root.WalkR(func(p *Path, localDirError error) error {
+		calls++
+		require.True(t, p.Equals(root))
+		require.ErrorIs(t, localDirError, ErrOpen)
+		return localDirError
+	})
+	require.ErrorIs(t, err, ErrOpen)
+	require.Equal(t, 1, calls, "the root is only passed with its directory error")
 }

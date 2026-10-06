@@ -3,7 +3,9 @@ package pathlib
 import (
 	"cmp"
 	"context"
+	"io/fs"
 	"slices"
+	"strings"
 )
 
 /*
@@ -38,6 +40,12 @@ The tree is walked with WalkR, so symlinks to directories inside the tree are ma
 as entries, but their contents are not visited. GlobOptions.Filter judges a symlink by
 its target, so a symlink to a directory counts as a directory and a broken symlink
 is neither a file nor a directory.
+
+Directories below the deepest level the pattern can match are not read. A pattern
+without "**" and without character classes matches only paths with as many parts
+as the pattern, so e.g. "*" reads only this directory and "src/*.go" reads only
+this directory and its direct subdirectories. Character classes are excluded because
+they can match "/".
 */
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
 	return p.GlobWithOptionsContext(context.Background(), pattern, options)
@@ -73,7 +81,11 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 	limit := max(0, options.Limit)
 	limitExists := limit != 0
 
-	applyPatternFunc := func(entry *Path) error {
+	// Directories at the deepest level the pattern can match are not entered.
+	// 0 means the pattern can match at any depth.
+	maxDepth := patternMaxDepth(pattern)
+
+	applyPatternFunc := func(entry *Path, dirEntry fs.DirEntry) error {
 		addToEntries := false
 
 		if options.FilterFunc == nil {
@@ -93,25 +105,21 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			addToEntries = options.FilterFunc(entry)
 		}
 
-		// Handle GlobOptions.skipPatternMatchCheck
-		matchesPattern := options.skipPatternMatchCheck
-		if !options.skipPatternMatchCheck {
-			// The entry path is joined with the original path and any subdirectories.
-			// For pattern matching, we don't want the original path included, because
-			// the pattern is matched starting from the original path.
-			entryForMatching, err := entry.RelativeTo(p)
-			if err != nil {
-				return err
-			}
-
-			// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
-			localMatchesPattern, matchingErr := entryForMatching.MatchesPatternE(pattern, options.CaseSensitivity)
-			if matchingErr != nil {
-				return matchingErr
-			}
-
-			matchesPattern = localMatchesPattern
+		// The entry path is joined with the original path and any subdirectories.
+		// For pattern matching, we don't want the original path included, because
+		// the pattern is matched starting from the original path.
+		entryForMatching, err := entry.RelativeTo(p)
+		if err != nil {
+			return err
 		}
+
+		// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
+		matchesPattern, err := entryForMatching.MatchesPatternE(pattern, options.CaseSensitivity)
+		if err != nil {
+			return err
+		}
+
+		depth := strings.Count(entryForMatching.path, canonicalPathSeparator) + 1
 
 		if addToEntries && matchesPattern {
 			entries = append(entries, entry)
@@ -124,10 +132,16 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			return SkipAll
 		}
 
+		// Nothing below this directory can match. dirEntry does not follow
+		// symlinks, so SkipDir is only returned where the walk would descend.
+		if maxDepth > 0 && depth >= maxDepth && dirEntry.IsDir() {
+			return SkipDir
+		}
+
 		return nil
 	}
 
-	err = p.WalkRContext(ctx, func(entry *Path, localDirError error) error {
+	err = p.walkRContext(ctx, func(entry *Path, dirEntry fs.DirEntry, localDirError error) error {
 		if localDirError != nil {
 			// Handle GlobOptions.SkipOnDirError option:
 			// skip the offending directory and ignore the error.
@@ -139,10 +153,23 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			return localDirError
 		}
 
-		return applyPatternFunc(entry)
+		return applyPatternFunc(entry, dirEntry)
 	})
 
 	return entries, err
+}
+
+/*
+patternMaxDepth returns the number of path parts the paths matched by pattern can
+have at most, or 0 if there is no limit. "*" and "?" never match "/", so only
+"**" and character classes, which can match "/", match across separators.
+*/
+func patternMaxDepth(pattern string) int {
+	if strings.Contains(pattern, "**") || strings.Contains(pattern, "[") {
+		return 0
+	}
+
+	return strings.Count(pattern, canonicalPathSeparator) + 1
 }
 
 /*

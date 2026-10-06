@@ -122,13 +122,6 @@ type GlobOptions struct {
 	// Limit sets a limit. Globbing will return at most this number of entries.
 	// If <= 0, no limit is used. Defaults to 0.
 	Limit int
-
-	// skipPatternMatchCheck is a cheeky flag to disable the pattern matching inside the globbing function.
-	// This behavior totally defeats the reason why this struct exists, but is useful when the same powerful globbing
-	// function is used for other things and wants to eliminate the extra pattern matching overhead.
-	//
-	// ONLY FOR INTERNAL USE!
-	skipPatternMatchCheck bool
 }
 
 /*

@@ -264,7 +264,8 @@ func TestPath_GlobWithOptions(t *testing.T) {
 					return root
 				},
 			},
-			Expect: Expect{FoundPaths: items},
+			// The unreadable directory itself exists and matches, only its contents are skipped.
+			Expect: Expect{FoundPaths: append(slices.Clone(items), "data/unreadable_logs")},
 			Error:  false,
 		},
 		{
@@ -702,4 +703,125 @@ func TestGlob_InvalidInputFailsBeforeWalking(t *testing.T) {
 
 	_, err = dir.GlobWithOptions("*", GlobOptions{Filter: 99})
 	require.ErrorIs(t, err, ErrInvalidFilter)
+}
+
+func TestPatternMaxDepth(t *testing.T) {
+	cases := map[string]int{
+		"*":         1,
+		"*.txt":     1,
+		"a/*.txt":   2,
+		"a/b/c":     3,
+		`a\/b`:      2, // an escaped separator still matches only "/"
+		"**":        0,
+		"a/**/b":    0,
+		"**.txt":    0,
+		"a[bc]":     0, // character classes can match "/"
+		"a/[^x]/b":  0,
+		"Plugins/*": 2,
+	}
+
+	for pattern, expect := range cases {
+		require.Equal(t, expect, patternMaxDepth(pattern), "pattern %q", pattern)
+	}
+}
+
+func TestGlob_DepthPruning(t *testing.T) {
+	setup := func(t *testing.T) *Path {
+		root := setupTempDir(t)
+		writeTempFile(t, root, "top.txt", "")
+		writeTempFile(t, root, "a/mid.txt", "")
+		writeTempFile(t, root, "a/b/deep.txt", "")
+		writeTempFile(t, root, "a/b/c/deeper.txt", "")
+		return root
+	}
+
+	// FilterFunc is called for every entry the walk visits, so it shows which
+	// directories were read.
+	visitedWith := func(t *testing.T, root *Path, pattern string) ([]string, []string) {
+		var visited []string
+		options := DefaultGlobOptions()
+		options.FilterFunc = func(p *Path) bool {
+			rel, err := p.RelativeTo(root)
+			require.NoError(t, err)
+			visited = append(visited, rel.ToPosix())
+			return true
+		}
+
+		matches, err := root.GlobWithOptions(pattern, options)
+		require.NoError(t, err)
+		slices.Sort(visited)
+		return relPathsSorted(t, matches, root), visited
+	}
+
+	t.Run("single level pattern reads only the root", func(t *testing.T) {
+		root := setup(t)
+		matches, visited := visitedWith(t, root, "*")
+		require.Equal(t, []string{"a", "top.txt"}, matches)
+		require.Equal(t, []string{"a", "top.txt"}, visited)
+	})
+
+	t.Run("two level pattern reads one level below the root", func(t *testing.T) {
+		root := setup(t)
+		matches, visited := visitedWith(t, root, "a/*.txt")
+		require.Equal(t, []string{"a/mid.txt"}, matches)
+		require.Equal(t, []string{"a", "a/b", "a/mid.txt", "top.txt"}, visited)
+	})
+
+	t.Run("double asterisk reads the whole tree", func(t *testing.T) {
+		root := setup(t)
+		matches, visited := visitedWith(t, root, "**/*.txt")
+		require.Equal(t, []string{"a/b/c/deeper.txt", "a/b/deep.txt", "a/mid.txt", "top.txt"}, matches)
+		require.Len(t, visited, 7)
+	})
+
+	t.Run("character class is not pruned", func(t *testing.T) {
+		// "[^x]" matches "/", so the pattern matches a path with two parts.
+		root := setup(t)
+		matches, _ := visitedWith(t, root, "a[^x]mid.txt")
+		require.Equal(t, []string{"a/mid.txt"}, matches)
+	})
+}
+
+func TestGlob_DepthPruningKeepsSymlinkSiblings(t *testing.T) {
+	// A symlink to a directory is no directory for the walk. Returning SkipDir
+	// for it would skip the rest of its directory instead of its contents.
+	root := setupTempDir(t)
+	createTempDir(t, root, "target")
+	dir := createTempDir(t, root, "dir")
+	createTempSymlinkAbs(t, root, "target", "dir/a_link")
+	writeTempFile(t, dir, "b.txt", "")
+
+	matches, err := dir.Glob("*")
+	require.NoError(t, err)
+	require.Equal(t, []string{"a_link", "b.txt"}, relPathsSorted(t, matches, dir))
+}
+
+func TestList_NonRecursiveIgnoresUnreadableSubdirectories(t *testing.T) {
+	root := setupTempDir(t)
+	writeTempFile(t, root, "top.txt", "")
+	locked := createTempDir(t, root, "locked")
+	deepLocked := createTempDir(t, root, "a/deep_locked")
+	lockDir(t, locked)
+	lockDir(t, deepLocked)
+
+	// Before, every non-recursive listing walked the whole tree and failed here.
+	entries, err := root.List(DefaultListOptions())
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "locked", "top.txt"}, relPathsSorted(t, entries, root))
+
+	dirs, err := root.ListDirs(false)
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "locked"}, relPathsSorted(t, dirs, root))
+
+	files, err := root.ListFiles(false)
+	require.NoError(t, err)
+	require.Equal(t, []string{"top.txt"}, relPathsSorted(t, files, root))
+
+	require.False(t, root.IsEmptyDir())
+
+	// A recursive listing still reports the unreadable directories.
+	options := DefaultListOptions()
+	options.Recursive = true
+	_, err = root.List(options)
+	require.ErrorIs(t, err, ErrAccess)
 }
