@@ -3,7 +3,7 @@
 <div id="toc">
   <ul style="list-style: none">
     <summary>
-      <h1>go-pathlib</h1>  
+      <h1>go-pathlib</h1>
     </summary>
   </ul>
 </div>
@@ -105,7 +105,37 @@ Whether you design the paths in your application to be case-sensitive or not is 
 Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default, while allowing flexibility explicitly**. We provide functions to check for path equality:
 - `Equals`: default, lexical, case-sensitive by default, but switchable with flag
 - `EqualsString`: convenience wrapper for `Equals`, where the argument is interpreted as a canonical Posix string. Reserve it for strings you control, such as `ToPosix()` output or serialized config, not OS-native strings like `String()`. For those, parse first: `p.Equals(NewPath(s))`.
-- `EqualsFs`: filesystem equality (only in `pathlib_fs.go`)
+- `EqualsFs`: filesystem equality (only in the `fs` group, not in the `core` bundle)
+
+All three are nil-safe. Never compare paths with `==`, which compares pointers.
+
+### Migrating from `os` and `filepath`
+Most code ported from `os` and `filepath` keeps compiling after switching to `*Path`. The points below are the ones that then quietly behave differently.
+
+**Comparing paths**
+- Compare with `Equals`, `EqualsString` or `EqualsFs`, never with `==`. Two `*Path` values for the same path are different pointers.
+- `nil` is a natural "no path". The `Equals*` functions accept it, every other method panics on a nil `*Path`. Check for `nil` if uncertain.
+
+**Checking errors**
+- Every error is a `*PathlibError` that wraps the `os` cause. `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
+- Use `errors.Is(err, pathlib.ErrNotExist)` (`errors.Is(err, fs.ErrNotExist)`) instead. Both match every not-exist error, whether raised by the operating system or by the library's own checks. The same holds for `pathlib.ErrExist` (and `fs.ErrExist`).
+- `pathlib.ErrPermission` is about invalid permission or open-mode values passed to the library. An access denied by the operating system matches `fs.ErrPermission`.
+
+**Converting paths**
+- Pass `String()` to OS APIs and subprocess working directories. It is platform-native.
+- Pass `ToPosix()` to storage and to tools that expect Posix paths, such as repository-relative paths for git.
+- Parse strings from the operating system with `NewPath`, Posix-formatted strings with `NewPathFromPosix` and Windows-formatted strings with `NewPathFromWindows`.
+
+**Functions that differ from their `os` namesakes**
+
+| `os` | `pathlib` | Difference |
+| --- | --- | --- |
+| `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
+| `os.WriteFile` | `WriteBytes`, `WriteString` | The file must exist. Create it with `CreateFile` first, or use `OpenFile`. |
+| `os.RemoveAll` | `RemoveAll` | The path must be a directory. Use `Remove` for files. |
+| `os.OpenFile` | `OpenFileWithOptions` | The permission must be within `0777`. Setuid, setgid and sticky bits are refused. |
+| `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**` and matches case-insensitively by default. |
+| `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
 
 ## Contributing
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
