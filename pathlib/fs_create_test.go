@@ -352,7 +352,6 @@ func TestPath_SymlinkTo(t *testing.T) {
 }
 
 func TestPath_ReadSymlinkTarget(t *testing.T) {
-
 	type Input struct {
 		SymlinkRel string
 		TargetRel  string                  // Only used for setup, defines what the symlink *points to*

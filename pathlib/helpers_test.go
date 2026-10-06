@@ -36,13 +36,12 @@ func onWindows[T any](posixVal, windowsVal T) T {
 
 func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, expectError bool)) {
 	for _, test := range cases {
-
 		caseName := test.Name
 		if strings.TrimSpace(caseName) == "" {
 			caseName = fmt.Sprintf("case--\"%v\"", test.Input)
 		}
 
-		t.Run(fmt.Sprint(caseName), func(t *testing.T) {
+		t.Run(caseName, func(t *testing.T) {
 			testFunc(t, test.Input, test.Expect, test.Error)
 		})
 	}

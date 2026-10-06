@@ -118,10 +118,10 @@ func posixPaths(paths []Path) []string {
 
 // pathErr raises a failure of kind that concerns paths.
 func pathErr(kind *PathlibError, paths ...Path) error {
-	return raiseError(kind, &PathError{paths: paths})
+	return raiseError(kind, &PathError{paths: slices.Clone(paths)})
 }
 
 // wrapErr raises a failure of kind that concerns paths and is caused by cause.
 func wrapErr(kind *PathlibError, cause error, paths ...Path) error {
-	return raiseError(kind, &PathError{paths: paths, err: cause})
+	return raiseError(kind, &PathError{paths: slices.Clone(paths), err: cause})
 }

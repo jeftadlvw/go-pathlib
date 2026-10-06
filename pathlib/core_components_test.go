@@ -89,7 +89,7 @@ func TestPath_Split(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect []string) {
-		require.Equal(t, len(expect), 2)
+		require.Len(t, expect, 2)
 
 		inputPartParent, inputPartBase := input.Split()
 

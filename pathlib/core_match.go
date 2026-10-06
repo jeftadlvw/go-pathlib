@@ -243,7 +243,7 @@ func findPatternInPath(name, pattern string) int {
 		if allMatch {
 			// Calculate byte position
 			pos := 0
-			for i := 0; i < startIdx; i++ {
+			for i := range startIdx {
 				if i > 0 {
 					pos++
 				}
@@ -311,7 +311,7 @@ func generateRandomString(minLength, maxLength int) string {
 	result := make([]byte, length)
 
 	// Fill the byte slice with random characters from the charset
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result[i] = charset[rand.IntN(len(charset))]
 	}
 

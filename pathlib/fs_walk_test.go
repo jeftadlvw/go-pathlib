@@ -87,7 +87,7 @@ func TestPath_Walk(t *testing.T) {
 					return dir
 				},
 				WalkFunc: func(p *Path) error {
-					return fmt.Errorf("simulated error")
+					return errors.New("simulated error")
 				},
 			},
 			Expect: Expect{WalkedPaths: []string{}, Error: true},
@@ -280,7 +280,7 @@ func TestPath_WalkR(t *testing.T) {
 				},
 				WalkRFunc: func(p *Path, localDirError error) error {
 					if p.Base() == "file2.log" {
-						return fmt.Errorf("simulated error")
+						return errors.New("simulated error")
 					}
 					return nil
 				},
@@ -461,7 +461,7 @@ func TestPath_WalkR(t *testing.T) {
 			slices.Sort(walkedEntries)
 			require.Equal(t, expect.WalkedPaths, walkedEntries)
 		} else {
-			require.Equal(t, len(expect.WalkedPaths), len(walkedEntries))
+			require.Len(t, walkedEntries, len(expect.WalkedPaths))
 		}
 	})
 }
@@ -477,7 +477,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		return dir
 	}
 
-	t.Run("WalkContext with cancelled context returns context.Canceled", func(t *testing.T) {
+	t.Run("WalkContext with canceled context returns context.Canceled", func(t *testing.T) {
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -492,7 +492,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		require.Zero(t, visited, "no entries should be visited after cancellation")
 	})
 
-	t.Run("WalkRContext with cancelled context returns context.Canceled", func(t *testing.T) {
+	t.Run("WalkRContext with canceled context returns context.Canceled", func(t *testing.T) {
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -504,7 +504,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled)
 	})
 
-	t.Run("WalkRContext cancelled mid-walk stops early", func(t *testing.T) {
+	t.Run("WalkRContext canceled mid-walk stops early", func(t *testing.T) {
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 
@@ -519,7 +519,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		require.Equal(t, 1, visited, "walk should stop right after cancellation")
 	})
 
-	t.Run("GlobContext with cancelled context returns context.Canceled", func(t *testing.T) {
+	t.Run("GlobContext with canceled context returns context.Canceled", func(t *testing.T) {
 		dir := buildTree(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()

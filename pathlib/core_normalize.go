@@ -13,7 +13,7 @@ const notRunningOnWindows = !runningOnWindows
 const canonicalPathSeparator = "/"
 const windowsPathSeparator = "\\"
 
-// Regexes use forward slash instead of backwards slash, because we assume forward slash input
+// Regexes use forward slash instead of backwards slash, because we assume forward slash input.
 var windowsVolumeNameRegex = regexp.MustCompile("^[A-Za-z]:(/|$)")
 var windowsNetworkPathRegex = regexp.MustCompile("^//[a-zA-Z0-9]+/[a-zA-Z0-9]+")
 
@@ -172,7 +172,7 @@ func normalizeWindowsPath(p string) *Path {
 	}
 }
 
-// isLocalDirectory returns whether the current path is "."
+// isLocalDirectory returns whether the current path is ".".
 func (p *Path) isLocalDirectory() bool {
 	return p.path == "."
 }
@@ -238,7 +238,7 @@ func relPath(basePath, targPath string) (string, error) {
 		}
 		buf := make([]byte, size)
 		n := copy(buf, "..")
-		for i := 0; i < seps; i++ {
+		for range seps {
 			buf[n] = '/'
 			copy(buf[n+1:], "..")
 			n += 3

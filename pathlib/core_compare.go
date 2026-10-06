@@ -30,7 +30,8 @@ Use forward slashes as path separators.
 
 By default, matching is case-sensitive. Pass CaseInsensitive to ignore casing.
 
-Empty patterns cause ErrEmptyPattern, malformed patterns cause ErrBadPattern.
+An empty pattern returns [ErrEmptyPattern], and a malformed pattern returns
+[ErrBadPattern].
 */
 func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error) {
 	if pattern == "" {
@@ -104,8 +105,9 @@ would be necessary to compute it.
   - a/b/c RelativeTo a/x/y → ../../b/c
   - /a/b/c RelativeTo / → a/b/c
 
-If one path has a Windows anchor, the other also needs one. Else an error is returned.
-If the Windows anchor for both paths do not match, an error is returned.
+If one path has a Windows anchor, the other also needs one, and both anchors must
+match. Otherwise [ErrAnchorMismatch] is returned. A path that cannot be made
+relative returns [ErrRelImpossible]. Both errors report the paths [this, other].
 */
 func (p *Path) RelativeTo(o *Path) (*Path, error) {
 	if p.isWindowsAnchoredPath() || o.isWindowsAnchoredPath() {
@@ -143,8 +145,9 @@ would be necessary to compute it.
   - a/x/y RelativeFrom a/b/c → ../../x/y
   - /a/b/c RelativeFrom / → ../../..
 
-If one path has a Windows anchor, the other also needs one. Else an error is returned.
-If the Windows anchor for both paths do not match, an error is returned.
+If one path has a Windows anchor, the other also needs one, and both anchors must
+match. Otherwise [ErrAnchorMismatch] is returned. A path that cannot be made
+relative returns [ErrRelImpossible]. Both errors report the paths [this, other].
 */
 func (p *Path) RelativeFrom(o *Path) (*Path, error) {
 	if p.isWindowsAnchoredPath() || o.isWindowsAnchoredPath() {
@@ -167,6 +170,8 @@ func (p *Path) RelativeFrom(o *Path) (*Path, error) {
 MakeAbsolute returns an absolute representation of this Path.
 If the Path is relative, it will be joined with the current working directory.
 If the Path is already absolute, a copy of the Path is returned.
+
+If the current working directory cannot be determined, [ErrLookup] is returned.
 */
 func (p *Path) MakeAbsolute() (*Path, error) {
 	// If already absolute, return a copy
@@ -188,12 +193,10 @@ AbsoluteFrom returns an absolute representation of this Path towards another.
 If the Path is relative, it will be joined with the provided Path,
 else a copy of this Path is returned.
 
-The other path must be absolute.
-
-Requires the other Path to be absolute.
+If this Path is relative and the other Path is not absolute, [ErrNotAbsolute] is
+returned.
 */
 func (p *Path) AbsoluteFrom(o *Path) (*Path, error) {
-
 	// If this path is already absolute, return a copy
 	if p.IsAbsolute() {
 		return p.Copy(), nil

@@ -66,7 +66,7 @@ func TestPath_RelativeTo(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
-		require.Equal(t, len(input), 2)
+		require.Len(t, input, 2)
 
 		a := input[0]
 		b := input[1]
@@ -111,7 +111,7 @@ func TestPath_RelativeFrom(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
-		require.Equal(t, len(input), 2)
+		require.Len(t, input, 2)
 
 		a := input[0]
 		b := input[1]
@@ -163,7 +163,7 @@ func TestPath_AbsoluteFrom(t *testing.T) {
 	}
 
 	runForResultsE(t, cases, func(t *testing.T, input []*Path, expect *Path, expectError bool) {
-		require.Equal(t, len(input), 2)
+		require.Len(t, input, 2)
 
 		base := input[0]
 		other := input[1]
@@ -347,7 +347,7 @@ func TestPath_EqualsIsNotPointerIdentity(t *testing.T) {
 	// but they denote the same path.
 	a := NewPathFromPosix("foo/bar")
 	b := NewPathFromPosix("foo/bar")
-	require.False(t, a == b)
+	require.NotSame(t, a, b)
 	require.True(t, a.Equals(b))
 }
 

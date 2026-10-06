@@ -216,7 +216,7 @@ func TestRequireDir_ReportsKindAndPath(t *testing.T) {
 	var cause *PathError
 	require.ErrorAs(t, err, &cause)
 	require.Equal(t, []Path{*missing}, cause.Paths())
-	require.NotNil(t, cause.Unwrap(), "the os cause is kept")
+	require.Error(t, cause.Unwrap(), "the os cause is kept")
 
 	require.NoError(t, requireDir(root))
 	require.NoError(t, requireDir(createTempSymlinkAbs(t, root, ".", "link")))

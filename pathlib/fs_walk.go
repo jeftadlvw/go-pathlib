@@ -69,7 +69,11 @@ type WalkRFunc func(p *Path, localDirError error) error
 /*
 Walk walks this directory and calls walkFunc for every entry (files, directories, etc.).
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
-A missing path returns ErrNotExist, an existing non-directory returns ErrNotDir.
+
+A missing path returns [ErrNotExist], and an existing non-directory returns
+[ErrNotDir]. A path that cannot be checked returns [ErrStat], and a directory that
+cannot be opened or read returns a kind below [ErrAccess]. An error of walkFunc is
+returned as the cause of [ErrWalk].
 
 Entries are visited in lexical order by name, making the traversal deterministic.
 
@@ -131,7 +135,11 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 /*
 WalkR walks this directory recursively and calls walkFunc for every entry.
 This path must be a directory. If this Path is a symlink to a directory, it is followed.
-A missing path returns ErrNotExist, an existing non-directory returns ErrNotDir.
+
+A missing path returns [ErrNotExist], and an existing non-directory returns
+[ErrNotDir]. A path that cannot be checked returns [ErrStat]. An error of walkFunc
+is returned as the cause of [ErrWalk], and an unchanged localDirError, a kind below
+[ErrAccess], is returned as is.
 
 Symlinks inside the tree are not followed. A symlink to a directory is passed to
 walkFunc as a single entry, and its contents are not visited. This matches
@@ -287,7 +295,7 @@ func handleDirErr(dir *Path, dirEntry fs.DirEntry, dirErr error, walkFunc walkEn
 	if handled == nil || errors.Is(handled, SkipDir) {
 		return nil
 	}
-	if handled == dirErr {
+	if errors.Is(handled, dirErr) {
 		return dirErr
 	}
 	return callbackErr(handled, dir)

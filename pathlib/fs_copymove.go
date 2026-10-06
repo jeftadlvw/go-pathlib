@@ -17,6 +17,15 @@ a broken symlink.
 Copying a directory requires the target directory to be empty.
 
 The source path must exist. Destination parent directories must exist.
+
+A missing source returns [ErrNotExist], and a missing destination parent returns
+[ErrParentNotExist]. An existing destination returns a kind below [ErrExist], or
+[ErrNotEmptyDir] for a directory that is not empty. A destination of an
+incompatible file type returns [ErrTypeMismatch], and a source of a file type
+that cannot be copied returns [ErrCopyType]. A failure of the operating system
+returns [ErrStat], a kind below [ErrAccess], [ErrCreate], [ErrCopy], or
+[ErrReadSymlink]. Copying a symlink with a relative target also returns the
+errors of [Path.AbsoluteFrom] and [Path.RelativeTo].
 */
 func Copy(src *Path, destination *Path) error {
 	srcExists, err := lexists(src)
@@ -152,7 +161,6 @@ func copyDir(src *Path, dst *Path) error {
 		if dst.IsFile() {
 			// Ensure the target directory is not a file
 			return pathErr(ErrTypeMismatch, *src, *dst)
-
 		} else if dst.IsDir() {
 			// Ensure destination directory is empty
 			file, openErr := os.Open(dst.String())
@@ -173,7 +181,6 @@ func copyDir(src *Path, dst *Path) error {
 		} else {
 			return pathErr(ErrExist, *dst)
 		}
-
 	} else {
 		// Create the destination directory if it doesn't exist
 		err := os.Mkdir(dst.String(), srcInfo.Mode())
@@ -212,6 +219,9 @@ is an empty directory. A broken symlink at the destination exists too.
 A symlink is moved as a symlink, and this includes a broken symlink.
 
 Destination parent directories must exist.
+
+An existing destination returns [ErrExist]. Moving across filesystems copies and
+removes the source, so the errors of [Copy] and [RemoveAll] apply.
 */
 func Move(src *Path, dst *Path) error {
 	srcExists, err := lexists(src)
@@ -224,7 +234,7 @@ func Move(src *Path, dst *Path) error {
 
 	// Destination path may not exist, except if source is a directory
 	// and destination is an empty directory too.
-	if !(src.IsDir() && dst.IsEmptyDir()) {
+	if !src.IsDir() || !dst.IsEmptyDir() {
 		dstExists, err := lexists(dst)
 		if err != nil {
 			return err
@@ -251,7 +261,7 @@ func Move(src *Path, dst *Path) error {
 
 /*
 Rename renames the file at the source path to the destination path.
-This is a convenience wrapper for Move.
+This is a convenience wrapper for Move, and the errors of [Move] apply.
 */
 func Rename(src *Path, name string) error {
 	return Move(src, src.Parent().JoinStrings(name))
@@ -263,7 +273,8 @@ or removes an empty directory.
 
 Nothing happens if the given path does not exist. A symlink is removed itself,
 never its target, and this includes a broken symlink. If the path cannot be
-checked, e.g. for missing permissions, ErrStat is returned.
+checked, e.g. for missing permissions, [ErrStat] is returned. A failed removal
+returns [ErrRemove].
 */
 func Remove(path *Path) error {
 	exists, err := lexists(path)
@@ -289,7 +300,8 @@ entries, like os.RemoveAll.
 
 Nothing happens if the given path does not exist. A symlink is removed itself, never
 its target, and this includes a symlink to a directory and a broken symlink. If the
-path cannot be checked, e.g. for missing permissions, ErrStat is returned.
+path cannot be checked, e.g. for missing permissions, [ErrStat] is returned. A
+failed removal returns [ErrRemove].
 */
 func RemoveAll(path *Path) error {
 	exists, err := lexists(path)

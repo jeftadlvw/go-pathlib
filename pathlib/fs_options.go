@@ -62,7 +62,7 @@ func checkPermission(mode fs.FileMode, path *Path) error {
 }
 
 /*
-FileOptions contains options for file and directory creation and deletion operations
+FileOptions contains options for file and directory creation and deletion operations.
 */
 type FileOptions struct {
 	// ExistOk specifies whether it's acceptable if the file/directory already exists
@@ -84,7 +84,7 @@ func DefaultFileOptions() FileOptions {
 }
 
 /*
-DirOptions contains options for file and directory creation and deletion operations
+DirOptions contains options for file and directory creation and deletion operations.
 */
 type DirOptions struct {
 	// ExistOk specifies whether it's acceptable if the file/directory already exists
@@ -166,6 +166,7 @@ ListOptions is a type derivative for GlobOptions.
 */
 type ListOptions struct {
 	GlobOptions
+
 	Recursive bool
 }
 

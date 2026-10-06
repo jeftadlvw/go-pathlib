@@ -24,7 +24,7 @@ func TestPath_Joins(t *testing.T) {
 	}
 
 	runForResults(t, cases, func(t *testing.T, input []string, expect *Path) {
-		require.True(t, len(input) > 0)
+		require.NotEmpty(t, input)
 
 		basePath := NewPath(input[0])
 		joinedStrPath := basePath.JoinStrings(input[1:]...)

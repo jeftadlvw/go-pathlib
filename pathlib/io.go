@@ -36,6 +36,8 @@ If the file does not exist, it is created with 0644 permissions. If the file alr
 exists, it is truncated.
 
 It's the caller's responsibility to close the returned os.File.
+
+The errors of [OpenFileWithOptions] apply.
 */
 func OpenFile(path *Path) (*os.File, error) {
 	return OpenFileWithOptions(path, defaultOpenOptions())
@@ -52,9 +54,13 @@ The order for OpenOptions.Mode is enforced as follows: "r" (read), "w" (write), 
 in exactly this order. "a" can only be used if "w" is used.
 
 It's the caller's responsibility to close the returned os.File.
+
+An unsupported mode returns [ErrUnsupportedMode]. A file that cannot be opened
+returns [ErrOpen], which also matches [ErrNotExist] for a missing file. A
+directory returns [ErrIsDir]. A failed creation returns [ErrCreate], and a failed
+check of the opened path returns [ErrStat].
 */
 func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
-
 	err := checkPermission(opts.Permission, path)
 	if err != nil {
 		return nil, err
@@ -134,6 +140,9 @@ func OpenFileWithOptions(path *Path, opts OpenOptions) (*os.File, error) {
 
 /*
 ReadFile reads the passed file and returns read bytes.
+
+A file that cannot be read returns [ErrRead], which also matches [ErrNotExist]
+for a missing file.
 */
 func ReadFile(path *Path) ([]byte, error) {
 	bytes, err := os.ReadFile(path.String())
@@ -146,6 +155,8 @@ func ReadFile(path *Path) ([]byte, error) {
 
 /*
 ReadFileToString reads the passed file and returns its content as a string.
+
+The errors of [ReadFile] apply.
 */
 func ReadFileToString(path *Path) (string, error) {
 	bytes, err := ReadFile(path)
@@ -190,6 +201,10 @@ existing file returns ErrFileExist and is left untouched, as in CreateFileWithOp
 A symlink to a file is written through. An existing path that is not a file returns
 ErrNotFile. This includes a broken symlink, whose target is never created.
 
+A path that cannot be checked returns [ErrStat]. A file that cannot be opened
+returns [ErrOpen], which also matches [ErrNotExist] for a missing parent
+directory. A failed write returns [ErrWrite].
+
 Returns the number of bytes written.
 */
 func WriteBytesWithOptions(path *Path, data []byte, options FileOptions) (int, error) {
@@ -212,6 +227,10 @@ A missing file is created with DefaultFileMode. Parent directories must exist.
 
 A symlink to a file is written through. An existing path that is not a file returns
 ErrNotFile. This includes a broken symlink, whose target is never created.
+
+A path that cannot be checked returns [ErrStat]. A file that cannot be opened
+returns [ErrOpen], which also matches [ErrNotExist] for a missing parent
+directory. A failed write returns [ErrWrite].
 */
 func AppendBytes(path *Path, data []byte) (int, error) {
 	return writeBytes(path, data, os.O_APPEND, FileOptions{ExistOk: true})

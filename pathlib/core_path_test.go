@@ -15,12 +15,12 @@ func TestPathInterfaceImplementations(t *testing.T) {
 	path := NewPath("foo")
 
 	t.Run("TextMarshaler", func(t *testing.T) {
-		_, ok := interface{}(path).(encoding.TextMarshaler)
+		_, ok := any(path).(encoding.TextMarshaler)
 		require.True(t, ok)
 	})
 
 	t.Run("TextUnMarshaler", func(t *testing.T) {
-		_, ok := interface{}(path).(encoding.TextUnmarshaler)
+		_, ok := any(path).(encoding.TextUnmarshaler)
 		require.True(t, ok)
 	})
 }
@@ -410,7 +410,7 @@ func TestPathFromParts(t *testing.T) {
 }
 
 func TestPath_Copy(t *testing.T) {
-	cases := []TestCase[*Path, interface{}]{
+	cases := []TestCase[*Path, any]{
 		{Input: NewPath("foo/bar")},
 		{Input: NewPath("../foo/bar")},
 		{Input: NewPath("..")},
@@ -421,13 +421,13 @@ func TestPath_Copy(t *testing.T) {
 		cases[i].Name = fmt.Sprintf("[%s]", testCase.Input)
 	}
 
-	runForResults(t, cases, func(t *testing.T, input *Path, expect interface{}) {
+	runForResults(t, cases, func(t *testing.T, input *Path, expect any) {
 		pointerCopy := input
 		copiedPath := input.Copy()
 
 		// compare pointers
-		require.True(t, input == pointerCopy)
-		require.False(t, input == copiedPath)
+		require.Same(t, input, pointerCopy)
+		require.NotSame(t, input, copiedPath)
 
 		// ensure copied path has same contents as original
 		require.Equal(t, input, copiedPath)

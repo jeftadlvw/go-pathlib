@@ -425,7 +425,7 @@ func TestPath_Lstat(t *testing.T) {
 	info, err := link.Lstat()
 	require.NoError(t, err)
 	require.NotNil(t, info)
-	require.True(t, info.Mode()&os.ModeSymlink != 0, "Lstat should report symlink mode")
+	require.NotEqual(t, 0, info.Mode()&os.ModeSymlink, "Lstat should report symlink mode")
 }
 
 func TestDeviceMethods(t *testing.T) {

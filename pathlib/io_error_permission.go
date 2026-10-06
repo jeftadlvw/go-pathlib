@@ -94,10 +94,10 @@ func (e *PermissionError) MarshalJSON() ([]byte, error) {
 
 // permRangeErr raises ErrPermissionRange for an out-of-bounds permission value.
 func permRangeErr(perm os.FileMode, paths ...Path) error {
-	return raiseError(ErrPermissionRange, &PermissionError{paths: paths, perm: perm})
+	return raiseError(ErrPermissionRange, &PermissionError{paths: slices.Clone(paths), perm: perm})
 }
 
 // permModeErr raises ErrUnsupportedMode for an unsupported open-mode string.
 func permModeErr(mode string, paths ...Path) error {
-	return raiseError(ErrUnsupportedMode, &PermissionError{paths: paths, mode: mode, isMode: true})
+	return raiseError(ErrUnsupportedMode, &PermissionError{paths: slices.Clone(paths), mode: mode, isMode: true})
 }

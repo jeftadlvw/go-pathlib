@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"math/rand/v2"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -96,7 +97,6 @@ func TestOpenFile(t *testing.T) {
 }
 
 func TestOpenFileWithOptions(t *testing.T) {
-
 	// if false, OpenFile with non-existing path may throw error
 	createIfNotExistCases := []bool{
 		false, // first value is ignored
@@ -144,7 +144,6 @@ func TestOpenFileWithOptions(t *testing.T) {
 	for createIfNotExistIdx, createIfNotExist := range createIfNotExistCases {
 		for permissionIdx, expectedPermission := range permissionCases {
 			for modeIdx, expectedMode := range modeCases {
-
 				// build option struct
 				testOptions := OpenOptions{}
 
@@ -321,7 +320,7 @@ func TestOpenFileWithOptions(t *testing.T) {
 								require.NoError(t, err)
 
 								// write initial content twice
-								for i := 0; i < 2; i++ {
+								for range 2 {
 									localFile, err := OpenFileWithOptions(filePath, testOptions)
 									require.NoError(t, err)
 									require.NotNil(t, localFile)
@@ -331,7 +330,6 @@ func TestOpenFileWithOptions(t *testing.T) {
 
 									err = localFile.Close()
 									require.NoError(t, err, "could not close file")
-
 								}
 
 								readFileContents, err := os.ReadFile(filePath.String())
@@ -369,7 +367,6 @@ func TestOpenFileWithOptions(t *testing.T) {
 }
 
 func TestReadWriteAppendOperations(t *testing.T) {
-
 	// predefined strings
 	testStrings := []string{
 		"Hello, world!",
@@ -385,7 +382,7 @@ func TestReadWriteAppendOperations(t *testing.T) {
 	}
 
 	// add random strings
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		testStrings = append(testStrings, generateRandomString(5, 80))
 	}
 
@@ -396,7 +393,7 @@ func TestReadWriteAppendOperations(t *testing.T) {
 	}
 
 	var testCombinationCases []TestCombinationCase
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		testCombinationCases = append(testCombinationCases, TestCombinationCase{
 			First:  testStrings[rand.IntN(len(testStrings))],
 			Second: testStrings[rand.IntN(len(testStrings))],
@@ -404,9 +401,9 @@ func TestReadWriteAppendOperations(t *testing.T) {
 	}
 
 	for idx, combination := range testCombinationCases {
-		t.Run(fmt.Sprint(idx), func(t *testing.T) {
+		t.Run(strconv.Itoa(idx), func(t *testing.T) {
 			// Create a temporary path for testing
-			tempFile, err := os.CreateTemp("", "pathlib_io_test")
+			tempFile, err := os.CreateTemp(t.TempDir(), "pathlib_io_test")
 			require.NoError(t, err)
 
 			tempFilePathStr := tempFile.Name()
@@ -468,7 +465,6 @@ func TestReadWriteAppendOperations(t *testing.T) {
 				require.Equal(t, append(byteData, appendBytes...), readBytes)
 			})
 		})
-
 	}
 }
 
