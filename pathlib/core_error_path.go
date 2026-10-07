@@ -10,19 +10,16 @@ import (
 	"strings"
 )
 
-/*
-PathError is the cause of every failure below [ErrPathlib], except for those of
-[ErrEmptyPattern], [ErrBadPattern], [ErrLookup], and the kinds below
-[ErrInvalidPermission]. It holds the paths the failure concerns and
-the error that caused it, such as an error of the os package.
-
-Read it with [errors.As]:
-
-	var pathErr *PathError
-	if errors.As(err, &pathErr) { use(pathErr.Paths()) }
-
-A PathError is immutable.
-*/
+// PathError is the cause of every failure below [ErrPathlib], unless the
+// documentation of its kind names another cause. It holds the paths the failure
+// concerns and the error that caused it, such as an error of the os package.
+//
+// Read it with [errors.As]:
+//
+//	var pathErr *PathError
+//	if errors.As(err, &pathErr) { use(pathErr.Paths()) }
+//
+// A PathError is immutable.
 type PathError struct {
 	// paths are the paths the failure concerns, in an order documented per
 	// operation (e.g. RelativeTo reports [this, other]). May be empty.
@@ -117,12 +114,12 @@ func posixPaths(paths []Path) []string {
 	return posix
 }
 
-// pathErr raises a failure of kind that concerns paths.
+// pathErr returns a failure of kind that concerns paths.
 func pathErr(kind *PathlibError, paths ...Path) error {
-	return raiseError(kind, &PathError{paths: slices.Clone(paths)})
+	return wrapError(kind, &PathError{paths: slices.Clone(paths)})
 }
 
-// wrapErr raises a failure of kind that concerns paths and is caused by cause.
+// wrapErr returns a failure of kind that concerns paths and is caused by cause.
 func wrapErr(kind *PathlibError, cause error, paths ...Path) error {
-	return raiseError(kind, &PathError{paths: slices.Clone(paths), err: cause})
+	return wrapError(kind, &PathError{paths: slices.Clone(paths), err: cause})
 }

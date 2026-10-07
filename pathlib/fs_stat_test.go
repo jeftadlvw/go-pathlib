@@ -121,7 +121,7 @@ func TestPath_Resolve(t *testing.T) {
 		resolvedPath, err := p.Resolve()
 
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			require.Nil(t, resolvedPath)
 			return
 		}
@@ -132,9 +132,10 @@ func TestPath_Resolve(t *testing.T) {
 		// Ensure the resolved path is absolute
 		require.True(t, resolvedPath.IsAbsolute())
 
-		// Resolve the root too so both paths are in canonical form. This handles
-		// platform-specific path rewriting that Resolve performs, e.g. /var -> /private/var
-		// on macOS, or 8.3 short names (RUNNER~1 -> runneradmin) on Windows.
+		// Resolve the root too so both paths are in canonical form. This
+		// handles platform-specific path rewriting that Resolve performs, e.g.
+		// /var -> /private/var on macOS, or 8.3 short names (RUNNER~1 ->
+		// runneradmin) on Windows.
 		resolvedRoot, err := root.Resolve()
 		require.NoError(t, err)
 
@@ -498,7 +499,7 @@ func TestPath_Stat(t *testing.T) {
 		p := input.Setup(t, root)
 		info, err := p.Stat()
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			return
 		}
 		require.NoError(t, err)
@@ -543,18 +544,18 @@ func TestDeviceMethods(t *testing.T) {
 		require.False(t, dirPath.IsCharDevice(), "directory is not a char device")
 		require.False(t, nonExistent.IsCharDevice(), "non-existent path is not a char device")
 
-		if notRunningOnWindows {
+		if !runningOnWindows {
 			devNull := NewPath("/dev/null")
 			require.True(t, devNull.IsCharDevice(), "/dev/null should be a char device")
 		}
 	})
 
-	t.Run("IsFiFoPipe", func(t *testing.T) {
+	t.Run("IsFIFO", func(t *testing.T) {
 		t.Parallel()
 
-		require.False(t, filePath.IsFiFoPipe(), "regular file is not a FIFO pipe")
-		require.False(t, dirPath.IsFiFoPipe(), "directory is not a FIFO pipe")
-		require.False(t, nonExistent.IsFiFoPipe(), "non-existent path is not a FIFO pipe")
+		require.False(t, filePath.IsFIFO(), "regular file is not a FIFO pipe")
+		require.False(t, dirPath.IsFIFO(), "directory is not a FIFO pipe")
+		require.False(t, nonExistent.IsFIFO(), "non-existent path is not a FIFO pipe")
 	})
 
 	t.Run("IsSocket", func(t *testing.T) {
@@ -566,7 +567,7 @@ func TestDeviceMethods(t *testing.T) {
 	})
 }
 
-func TestFsErrorsAreWrapped(t *testing.T) {
+func TestFSErrorsAreWrapped(t *testing.T) {
 	t.Parallel()
 
 	root := setupTempDir(t)
@@ -651,8 +652,154 @@ func TestPath_LExists(t *testing.T) {
 		root := setupTempDir(t)
 		p := input(t, root)
 		require.Equal(t, expect, p.LExists())
+	})
+}
 
-		exists, err := lexists(p)
+func TestPath_ReadSymlinkTarget(t *testing.T) {
+	t.Parallel()
+
+	type Input struct {
+		SymlinkRel string
+		TargetRel  string                  // Only used for setup, defines what the symlink *points to*
+		Setup      func(*testing.T, *Path) // Setup for the symlink and target
+	}
+
+	type Expect struct {
+		TargetRead string // Expected raw string read from symlink
+	}
+
+	cases := []TestCase[Input, Expect]{
+		{
+			Name: "Path is symlink to file",
+			Input: Input{
+				SymlinkRel: "link_to_file",
+				TargetRel:  "actual_file.txt",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
+					writeTempFile(t, root, "actual_file.txt", "")
+					createTempSymlinkAbs(t, root, "actual_file.txt", "link_to_file")
+				},
+			},
+			Expect: Expect{
+				TargetRead: "actual_file.txt", // Target written as relative
+			},
+			Error: false,
+		},
+		{
+			Name: "Path is symlink to directory",
+			Input: Input{
+				SymlinkRel: "link_to_dir",
+				TargetRel:  "actual_dir",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
+					createTempDir(t, root, "actual_dir")
+					createTempSymlinkAbs(t, root, "actual_dir", "link_to_dir")
+				},
+			},
+			Expect: Expect{
+				TargetRead: "actual_dir",
+			},
+			Error: false,
+		},
+		{
+			Name: "Path is broken symlink",
+			Input: Input{
+				SymlinkRel: "broken_link",
+				TargetRel:  "non_existent_target",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
+					createTempSymlinkAbs(t, root, "non_existent_target", "broken_link")
+				},
+			},
+			Expect: Expect{
+				TargetRead: "non_existent_target",
+			}, // Readlink still returns target path
+			Error: false,
+		},
+		{
+			Name: "Path is not a symlink (regular file)",
+			Input: Input{
+				SymlinkRel: "regular_file.txt",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
+					writeTempFile(t, root, "regular_file.txt", "")
+				},
+			},
+			Expect: Expect{},
+			Error:  true,
+		},
+		{
+			Name: "Path is not a symlink (directory)",
+			Input: Input{
+				SymlinkRel: "regular_dir",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+
+					createTempDir(t, root, "regular_dir")
+				},
+			},
+			Expect: Expect{},
+			Error:  true,
+		},
+		{
+			Name: "Path does not exist",
+			Input: Input{
+				SymlinkRel: "non_existent_path",
+				Setup:      func(_ *testing.T, _ *Path) {},
+			},
+			Expect: Expect{},
+			Error:  true,
+		},
+	}
+
+	runForResultsE(t, cases, func(t *testing.T, input Input, _ Expect, expectError bool) {
+		t.Helper()
+
+		root := setupTempDir(t)
+		input.Setup(t, root)
+
+		symlinkPath := root.JoinStrings(input.SymlinkRel)
+		readTargetPath, err := symlinkPath.ReadSymlinkTarget()
+
+		if expectError {
+			require.ErrorIs(t, err, ErrPathlib)
+			require.Nil(t, readTargetPath)
+		} else {
+			require.NoError(t, err)
+			require.NotNil(t, readTargetPath)
+
+			require.NotEmpty(t, input.TargetRel, "Test is setup wrongly. No target path defined.")
+			targetPath := root.JoinStrings(input.TargetRel)
+
+			// The returned target is a Path created from the raw string from
+			// os.Readlink. `createTempSymlinkAbs` uses a relative path
+			// (relative to link's parent).
+			require.Equal(t, targetPath.ToPosix(), readTargetPath.ToPosix())
+		}
+	})
+}
+
+func TestLexists(t *testing.T) {
+	t.Parallel()
+
+	root := setupTempDir(t)
+	file := writeTempFile(t, root, "file.txt", "")
+
+	cases := []TestCase[*Path, bool]{
+		{Name: "Existing file", Input: file, Expect: true},
+		{Name: "Broken symlink", Input: createTempSymlinkAbs(t, root, "missing", "link"), Expect: true},
+		{Name: "Missing path", Input: root.JoinStrings("missing"), Expect: false},
+		{Name: "Path below a file", Input: file.JoinStrings("child"), Expect: false},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
+		t.Helper()
+
+		exists, err := lexists(input)
 		require.NoError(t, err)
 		require.Equal(t, expect, exists)
 	})
@@ -661,8 +808,7 @@ func TestPath_LExists(t *testing.T) {
 func TestLexists_UncheckablePathIsAnError(t *testing.T) {
 	t.Parallel()
 
-	root := setupTempDir(t)
-	dir := createTempDir(t, root, "locked")
+	dir := createTempDir(t, setupTempDir(t), "locked")
 	file := writeTempFile(t, dir, "file.txt", "")
 	lockDir(t, dir)
 
@@ -673,4 +819,24 @@ func TestLexists_UncheckablePathIsAnError(t *testing.T) {
 	require.NotErrorIs(t, err, ErrNotExist)
 
 	require.False(t, file.LExists(), "LExists cannot report the error and returns false")
+}
+
+func TestRequireDir(t *testing.T) {
+	t.Parallel()
+
+	root := setupTempDir(t)
+	missing := root.JoinStrings("missing")
+
+	err := requireDir(missing)
+	var kind *PathlibError
+	require.ErrorAs(t, err, &kind)
+	require.Equal(t, ErrNotExist, kind)
+
+	var cause *PathError
+	require.ErrorAs(t, err, &cause)
+	require.Equal(t, []Path{*missing}, cause.Paths())
+	require.ErrorIs(t, cause.Unwrap(), fs.ErrNotExist, "the os cause is kept")
+
+	require.NoError(t, requireDir(root))
+	require.NoError(t, requireDir(createTempSymlinkAbs(t, root, ".", "link")))
 }

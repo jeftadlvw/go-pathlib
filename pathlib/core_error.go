@@ -19,27 +19,25 @@ const causeKey = "cause"
 // codePattern is the format of one name in a code, such as NOT_EXIST.
 var codePattern = regexp.MustCompile(`^[A-Z]+(_[A-Z]+)*$`)
 
-/*
-PathlibError classifies a failure. Its values are kinds, such as [ErrNotExist],
-and kinds form a tree rooted at [ErrPathlib].
-
-Every error the library returns has a kind. [errors.Is] matches a kind and every
-one of its ancestors, so errors.Is(err, ErrPathlib) catches every error of the
-library. [errors.As] with a *PathlibError target returns the kind of a failure.
-The data of a failure, such as its paths, lives in its cause. See [PathError],
-[PatternError], and [PermissionError].
-
-A failure has the most specific kind the library knows. A missing path is
-[ErrNotExist], whether a check of the library or the operating system found it.
-The kind of an operation, such as [ErrRead], describes the failures no other
-kind describes. The error of the operating system stays in the cause, so
-errors.Is also matches standard library sentinels such as [fs.ErrNotExist].
-
-Each kind has a code, such as "PATHLIB.EXIST.FILE", that stays stable when its
-message changes. Logs, metrics, and alerts key on it.
-
-Kinds are package-level values and are immutable.
-*/
+// PathlibError classifies a failure. Its values are kinds, such as
+// [ErrNotAbsolute], and kinds form a tree rooted at [ErrPathlib].
+//
+// Every error the library returns has a kind. [errors.Is] matches a kind and
+// every one of its ancestors, so errors.Is(err, ErrPathlib) catches every error
+// of the library. [errors.As] with a *PathlibError target returns the kind of a
+// failure. The data of a failure, such as its paths, lives in its cause, such
+// as a [PathError].
+//
+// A failure has the most specific kind the library knows. A kind that names a
+// condition, such as a missing path, wins over the kind of the failed
+// operation. The error of the operating system stays in the cause, so errors.Is
+// also matches standard library sentinels such as [fs.ErrNotExist].
+//
+// Each kind has a code, such as "PATHLIB.EXIST.FILE", that stays stable when
+// its message changes. Logs, metrics, and alerts key on it.
+//
+// Kinds are package-level values and are immutable.
+//
 //nolint:revive // The name is part of the published API.
 type PathlibError struct {
 	// parent is the group the kind belongs to, or nil for the root.
@@ -52,9 +50,9 @@ type PathlibError struct {
 	message string
 }
 
-// raisedError is the only error type the package returns. It pairs a kind with
+// wrappedError is the only error type the package returns. It pairs a kind with
 // the cause of one failure.
-type raisedError struct {
+type wrappedError struct {
 	// kind classifies the failure. It is never nil.
 	kind *PathlibError
 
@@ -64,7 +62,10 @@ type raisedError struct {
 
 // causeJSON is the JSON form of a cause.
 type causeJSON struct {
-	Message string          `json:"message"`
+	// Message is the text of the cause.
+	Message string `json:"message"`
+
+	// Details is the JSON form of the cause, if its type has one.
 	Details json.RawMessage `json:"details,omitempty"`
 }
 
@@ -85,10 +86,25 @@ func defineError(parent *PathlibError, code, message string) *PathlibError {
 	return &PathlibError{parent: parent, code: definedCode, message: message}
 }
 
-// raiseError returns a failure of kind caused by cause. It is the only way the
+// wrapError returns a failure of kind caused by cause. It is the only way the
 // package creates errors.
-func raiseError(kind *PathlibError, cause error) error {
-	return &raisedError{kind: kind, cause: cause}
+func wrapError(kind *PathlibError, cause error) error {
+	return &wrappedError{kind: kind, cause: cause}
+}
+
+// newCauseJSON describes cause by its text, and by its own JSON when its type
+// has one.
+func newCauseJSON(cause error) causeJSON {
+	encoded := causeJSON{Message: cause.Error()}
+	marshaler, ok := cause.(json.Marshaler)
+	if ok {
+		details, err := json.Marshal(marshaler)
+		if err == nil {
+			encoded.Details = details
+		}
+	}
+
+	return encoded
 }
 
 // Code returns the stable identifier of the kind, such as "PATHLIB.EXIST.FILE".
@@ -101,7 +117,7 @@ func (k *PathlibError) Message() string {
 	return k.message
 }
 
-// Error returns the message followed by the code in round brackets.
+// Error returns the message followed by the code in parentheses.
 func (k *PathlibError) Error() string {
 	return k.message + " (" + k.code + ")"
 }
@@ -117,7 +133,7 @@ func (k *PathlibError) Unwrap() error {
 }
 
 // Error returns the text of the kind followed by the text of the cause.
-func (e *raisedError) Error() string {
+func (e *wrappedError) Error() string {
 	if e.cause == nil {
 		return e.kind.Error()
 	}
@@ -126,22 +142,22 @@ func (e *raisedError) Error() string {
 }
 
 // Unwrap returns the cause, so the chain is a straight line.
-func (e *raisedError) Unwrap() error {
+func (e *wrappedError) Unwrap() error {
 	return e.cause
 }
 
 // Is matches the kind and its ancestors.
-func (e *raisedError) Is(target error) bool {
+func (e *wrappedError) Is(target error) bool {
 	return errors.Is(e.kind, target)
 }
 
 // As reaches the kind and its ancestors.
-func (e *raisedError) As(target any) bool {
+func (e *wrappedError) As(target any) bool {
 	return errors.As(e.kind, target)
 }
 
 // LogValue describes the kind, the code, and the cause.
-func (e *raisedError) LogValue() slog.Value {
+func (e *wrappedError) LogValue() slog.Value {
 	attrs := []slog.Attr{
 		slog.String("kind", e.kind.message),
 		slog.String("code", e.kind.code),
@@ -154,7 +170,7 @@ func (e *raisedError) LogValue() slog.Value {
 }
 
 // MarshalJSON describes the kind, the code, and the cause.
-func (e *raisedError) MarshalJSON() ([]byte, error) {
+func (e *wrappedError) MarshalJSON() ([]byte, error) {
 	var cause *causeJSON
 	if e.cause != nil {
 		encoded := newCauseJSON(e.cause)
@@ -178,19 +194,4 @@ func causeLogValue(cause error) slog.Value {
 	}
 
 	return slog.GroupValue(attrs...)
-}
-
-// newCauseJSON describes cause by its text, and by its own JSON when its type
-// has one.
-func newCauseJSON(cause error) causeJSON {
-	encoded := causeJSON{Message: cause.Error()}
-	marshaler, ok := cause.(json.Marshaler)
-	if ok {
-		details, err := json.Marshal(marshaler)
-		if err == nil {
-			encoded.Details = details
-		}
-	}
-
-	return encoded
 }

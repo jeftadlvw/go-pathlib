@@ -13,11 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIoDefaults(t *testing.T) {
+func TestDefaultOpenOptions(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, 0644, defaultOpenPermission, "default open permission mismatch")
-	require.Equal(t, "rw", defaultOpenMode, "default open mode mismatch")
+	options := DefaultOpenOptions()
+	require.True(t, options.CreateIfNotExists, "default creation mismatch")
+	require.Equal(t, os.FileMode(0644), options.Permission, "default open permission mismatch")
+	require.Equal(t, "rw", options.Mode, "default open mode mismatch")
 }
 
 func TestOpenFile(t *testing.T) {
@@ -44,7 +46,7 @@ func TestOpenFile(t *testing.T) {
 		dirPath := createTempDir(t, setupTempDir(t), "dir")
 
 		file, err := OpenFile(dirPath)
-		require.Error(t, err)
+		require.ErrorIs(t, err, ErrPathlib)
 		require.Nil(t, file)
 	})
 
@@ -92,7 +94,7 @@ func requireDefaultOpenPermission(t *testing.T, file *os.File) {
 
 	stats, err := file.Stat()
 	require.NoError(t, err, "could not call stat()")
-	require.Equal(t, effectiveFileMode(defaultOpenPermission).Perm(), stats.Mode().Perm(), "file permission mismatch")
+	require.Equal(t, effectiveFileMode(DefaultOpenOptions().Permission).Perm(), stats.Mode().Perm(), "file permission mismatch")
 }
 
 // requireWritable asserts that file can be written to.
@@ -116,7 +118,7 @@ func TestOpenFileWithOptions(t *testing.T) {
 	// these are expected to work
 	permissionCases := []os.FileMode{
 		000, // first value is the default
-		defaultOpenPermission,
+		DefaultOpenOptions().Permission,
 		0600,
 		0400,
 		0440,
@@ -160,8 +162,8 @@ func TestOpenFileWithOptions(t *testing.T) {
 						Mode:              mode.Value,
 					},
 					modeOk:     mode.Ok,
-					mode:       cmp.Or(mode.Value, defaultOpenMode),
-					permission: cmp.Or(permission, defaultOpenPermission),
+					mode:       cmp.Or(mode.Value, DefaultOpenOptions().Mode),
+					permission: cmp.Or(permission, DefaultOpenOptions().Permission),
 				}
 
 				t.Run(fmt.Sprintf("icreate:%d-iperm:%d-imode:%d", createIfNotExistIdx, permissionIdx, modeIdx), func(t *testing.T) {
@@ -213,7 +215,7 @@ func runOpenFileCase(t *testing.T, c openFileCase) {
 		defer func() { _ = os.Remove(r.filePath.String()) }()
 
 		file, err := OpenFileWithOptions(r.filePath, r.options)
-		require.Error(t, err)
+		require.ErrorIs(t, err, ErrPathlib)
 		require.Nil(t, file)
 	})
 
@@ -230,7 +232,7 @@ func runOpenFileCase(t *testing.T, c openFileCase) {
 			return
 		}
 
-		require.Error(t, err, "file may not be created or invalid open mode")
+		require.ErrorIs(t, err, ErrPathlib, "file may not be created or invalid open mode")
 		require.Nil(t, r.file, "called function must return nil")
 	})
 
@@ -269,7 +271,7 @@ func (r *openFileRun) checkExisting(t *testing.T, err error) {
 	t.Helper()
 
 	if r.expectPermissionError() {
-		require.Error(t, err)
+		require.ErrorIs(t, err, ErrPathlib)
 		require.Nil(t, r.file)
 		return
 	}
@@ -301,8 +303,8 @@ func (r *openFileRun) expectPermissionError() bool {
 			(isMode(r.mode, "rw") && effectivePerm&0600 != 0600))
 }
 
-// requireOpened checks that the file was opened without the error err, and
-// that it is writable exactly if the open mode allows it. The permissions of the
+// requireOpened checks that the file was opened without the error err, and that
+// it is writable exactly if the open mode allows it. The permissions of the
 // file are not checked, because they depend on the umask.
 func (r *openFileRun) requireOpened(t *testing.T, err error) {
 	t.Helper()
@@ -488,7 +490,7 @@ func isMode(modeStr, requiredMode string) bool {
 	return strings.Contains(modeStr, requiredMode)
 }
 
-func TestIoErrorsAreWrapped(t *testing.T) {
+func TestIOErrorsAreWrapped(t *testing.T) {
 	t.Parallel()
 
 	root := setupTempDir(t)

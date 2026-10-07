@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"strings"
 
 	"github.com/jeftadlvw/go-pathlib/pathlib"
 )
@@ -40,4 +41,48 @@ func Example_errorHandling() {
 	// true
 	// PATHLIB.NOT_EXIST
 	// missing.txt
+}
+
+// The caller removes a temporary file with the DisposeFunc returned next to
+// it.
+func ExampleCreateTempFile() {
+	file, dispose, err := pathlib.CreateTempFile()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() { _ = dispose() }()
+
+	fmt.Println(file.IsFile())
+
+	// Output:
+	// true
+}
+
+// TempPathOptions place a temporary directory in a base directory and start
+// its name with a prefix.
+func ExampleCreateTempDirWithOptions() {
+	base, disposeBase, err := pathlib.CreateTempDir()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() { _ = disposeBase() }()
+
+	dir, dispose, err := pathlib.CreateTempDirWithOptions(pathlib.TempPathOptions{
+		BaseDir: base,
+		Prefix:  "cache-",
+	})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() { _ = dispose() }()
+
+	fmt.Println(dir.Parent().Equals(base))
+	fmt.Println(strings.HasPrefix(dir.Base(), "cache-"))
+
+	// Output:
+	// true
+	// true
 }

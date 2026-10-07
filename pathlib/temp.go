@@ -1,109 +1,51 @@
+// temp.go holds the creation of temporary files and directories.
+
 package pathlib
 
 import (
 	"os"
 )
 
-/*
-DisposeFunc removes a temporary path created by CreateTempFile or CreateTempDir.
-
-It is returned separately from the path, so code the path is passed to cannot
-remove it. Only the creator, who holds the DisposeFunc, can.
-
-A symlink that replaced the temporary path is removed itself, never its target.
-Calling a DisposeFunc again is a no-op.
-*/
+// DisposeFunc removes a temporary path created by [CreateTempFile] or
+// [CreateTempDir]. Calling it again is a no-op.
+//
+// It is returned next to the path, so the creator alone can remove the path,
+// and the code the path is passed to cannot. A symlink that replaced the
+// temporary path is removed itself, never its target.
 type DisposeFunc func() error
 
-// voidDispose is returned when no temporary path was created.
-func voidDispose() error {
-	return nil
-}
-
-/*
-TempPathOptions is a struct that contains options for more control over the creation
-of a temporary path.
-*/
+// TempPathOptions configures the creation of a temporary path. The zero value
+// creates the path in the temporary directory of the operating system,
+// without a prefix.
 type TempPathOptions struct {
-	/*
-		BaseDir is the base directory for the temporary path. It must be an existing directory.
-		A missing path returns ErrNotExist, an existing non-directory returns ErrNotDir.
-
-		If set to NewPath(""), the current working directory is used, because NewPath("") translates to NewPath(".").
-		Keep nil for default os temp directory.
-	*/
+	// BaseDir is the existing directory the path is created in. Nil selects
+	// TempBaseDir. NewPath("") is ".", so it selects the working directory.
 	BaseDir *Path
 
-	/*
-		Prefix is the prefix added to the temporary path element.
-	*/
+	// Prefix starts the name of the temporary path.
 	Prefix string
 }
 
-func (t *TempPathOptions) toUsableValues() (string, string, error) {
-	if t == nil {
-		return "", "", nil
-	}
-
-	tempBaseDir := ""
-
-	if t.BaseDir != nil {
-		err := requireDir(t.BaseDir)
-		if err != nil {
-			return "", "", err
-		}
-
-		tempBaseDir = t.BaseDir.String()
-	}
-
-	return tempBaseDir, t.Prefix, nil
-}
-
-/*
-CreateTempFile creates a new temporary file.
-
-It's the caller's responsibility to call the returned DisposeFunc. It is never
-nil, and a no-op if an error is returned.
-
-Example:
-
-	tempFile, dispose, err := CreateTempFile()
-	if err != nil {
-		// handle error
-	}
-	defer func() { _ = dispose() }()
-
-The errors of [CreateTempFileWithOptions] apply.
-*/
+// CreateTempFile creates an empty file in the temporary directory of the
+// operating system, as [CreateTempFileWithOptions] does with the zero
+// [TempPathOptions].
+//
+// The errors of CreateTempFileWithOptions apply.
 func CreateTempFile() (*Path, DisposeFunc, error) {
-	return CreateTempFileWithOptions(nil)
+	return CreateTempFileWithOptions(TempPathOptions{})
 }
 
-/*
-CreateTempFileWithOptions creates a temporary file with further options.
-
-It's the caller's responsibility to call the returned DisposeFunc. It is never
-nil, and a no-op if an error is returned.
-
-Example:
-
-	options := &TempPathOptions{
-		BaseDir: NewPath("TEMP"),
-		Prefix: "foo"
-	}
-
-	tempFile, dispose, err := CreateTempFileWithOptions(options)
-	if err != nil {
-		// handle error
-	}
-	defer func() { _ = dispose() }()
-
-A TempPathOptions.BaseDir that is missing returns [ErrNotExist], and one that is
-not a directory returns [ErrNotDir]. Denied access returns
-[ErrPermissionDenied], and any other failed creation returns [ErrCreate], both
-with the base directory as their path.
-*/
-func CreateTempFileWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
+// CreateTempFileWithOptions creates an empty file with a unique name in the
+// directory and with the prefix of options. It wraps [os.CreateTemp].
+//
+// The caller calls the returned [DisposeFunc] to remove the file. It is never
+// nil, and a no-op if an error is returned.
+//
+// A missing TempPathOptions.BaseDir returns [ErrNotExist], and one that is no
+// directory returns [ErrNotDir]. Denied access returns [ErrPermissionDenied],
+// and any other failed creation returns [ErrCreate], both with the base
+// directory as their path.
+func CreateTempFileWithOptions(options TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
 	if err != nil {
 		return nil, voidDispose, err
@@ -125,51 +67,26 @@ func CreateTempFileWithOptions(options *TempPathOptions) (*Path, DisposeFunc, er
 	return NewPath(pathName), dispose, nil
 }
 
-/*
-CreateTempDir creates a new temporary directory.
-
-It's the caller's responsibility to call the returned DisposeFunc. It is never
-nil, and a no-op if an error is returned.
-
-Example:
-
-	tempDir, dispose, err := CreateTempDir()
-	if err != nil {
-		// handle error
-	}
-	defer func() { _ = dispose() }()
-
-The errors of [CreateTempDirWithOptions] apply.
-*/
+// CreateTempDir creates an empty directory in the temporary directory of the
+// operating system, as [CreateTempDirWithOptions] does with the zero
+// [TempPathOptions].
+//
+// The errors of CreateTempDirWithOptions apply.
 func CreateTempDir() (*Path, DisposeFunc, error) {
-	return CreateTempDirWithOptions(nil)
+	return CreateTempDirWithOptions(TempPathOptions{})
 }
 
-/*
-CreateTempDirWithOptions creates a temporary directory with further options.
-
-It's the caller's responsibility to call the returned DisposeFunc. It is never
-nil, and a no-op if an error is returned.
-
-Example:
-
-	options := &TempPathOptions{
-		BaseDir: NewPath("TEMP"),
-		Prefix: "foo"
-	}
-
-	tempDir, dispose, err := CreateTempDirWithOptions(options)
-	if err != nil {
-		// handle error
-	}
-	defer func() { _ = dispose() }()
-
-A TempPathOptions.BaseDir that is missing returns [ErrNotExist], and one that is
-not a directory returns [ErrNotDir]. Denied access returns
-[ErrPermissionDenied], and any other failed creation returns [ErrCreate], both
-with the base directory as their path.
-*/
-func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, error) {
+// CreateTempDirWithOptions creates an empty directory with a unique name in
+// the directory and with the prefix of options. It wraps [os.MkdirTemp].
+//
+// The caller calls the returned [DisposeFunc] to remove the directory with its
+// whole tree. It is never nil, and a no-op if an error is returned.
+//
+// A missing TempPathOptions.BaseDir returns [ErrNotExist], and one that is no
+// directory returns [ErrNotDir]. Denied access returns [ErrPermissionDenied],
+// and any other failed creation returns [ErrCreate], both with the base
+// directory as their path.
+func CreateTempDirWithOptions(options TempPathOptions) (*Path, DisposeFunc, error) {
 	tempBaseDir, prefix, err := options.toUsableValues()
 	if err != nil {
 		return nil, voidDispose, err
@@ -188,16 +105,38 @@ func CreateTempDirWithOptions(options *TempPathOptions) (*Path, DisposeFunc, err
 	return NewPath(dirName), dispose, nil
 }
 
-/*
-TempBaseDir returns the directory of the operating system for temporary files,
-as reported by [os.TempDir].
-*/
+// TempBaseDir returns the temporary directory of the operating system. It
+// wraps [os.TempDir].
 func TempBaseDir() *Path {
 	return NewPath(os.TempDir())
 }
 
+// toUsableValues returns the base directory and the prefix of the options as
+// the os package takes them. The base directory is "" for the temporary
+// directory of the operating system. A BaseDir that is no existing directory
+// returns the error of [requireDir].
+func (t TempPathOptions) toUsableValues() (string, string, error) {
+	tempBaseDir := ""
+
+	if t.BaseDir != nil {
+		err := requireDir(t.BaseDir)
+		if err != nil {
+			return "", "", err
+		}
+
+		tempBaseDir = t.BaseDir.String()
+	}
+
+	return tempBaseDir, t.Prefix, nil
+}
+
+// voidDispose is the DisposeFunc returned when no temporary path was created.
+func voidDispose() error {
+	return nil
+}
+
 // tempDirOrDefault returns the directory a temporary path is created in, which
-// is the OS temp directory when baseDir is empty.
+// is the temporary directory of the operating system when baseDir is empty.
 func tempDirOrDefault(baseDir string) *Path {
 	if baseDir == "" {
 		return TempBaseDir()

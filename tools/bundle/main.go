@@ -1,10 +1,10 @@
 // Command bundle merges the multi-file pathlib source tree into single-file,
-// drop-in artifacts under dist/, one per release tier defined in bundle.manifest.
+// drop-in artifacts under dist/, one per artifact defined in bundle.json.
 //
 // It deliberately uses the pathlib library itself for every path and file
-// operation (globbing sources, reading the manifest/license, creating the dist
-// tree, writing artifacts) so the build doubles as a real-world exercise of the
-// library it ships.
+// operation, such as globbing sources, reading the manifest and the license,
+// creating the dist tree, and writing artifacts. So the build doubles as a
+// real-world exercise of the library it ships.
 package main
 
 import (
@@ -16,7 +16,7 @@ import (
 	"go/token"
 	"log"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/jeftadlvw/go-pathlib/pathlib"
@@ -31,29 +31,49 @@ var (
 	errBuildConstraints = errors.New("carries build constraints, cannot merge into a single file")
 )
 
-// Manifest is the bundle.manifest schema: groups (a prefix + dependency edges),
-// the release artifacts to emit, and how to render the license preamble.
+// Manifest is the schema of bundle.json. It names the groups with their
+// filename prefixes, the artifacts to emit, and how to render the license
+// preamble.
 type Manifest struct {
-	Package     string            `json:"package"`
-	SourceDir   string            `json:"sourceDir"`
-	DistDir     string            `json:"distDir"`
-	License     string            `json:"license"`
-	LicenseMode string            `json:"licenseMode"` // "full" | "spdx"
-	LicenseFile string            `json:"licenseFile"`
-	Groups      map[string]string `json:"groups"` // group name -> filename prefix
-	Artifacts   []Artifact        `json:"artifacts"`
+	// Package is the package name of every artifact.
+	Package string `json:"package"`
+
+	// SourceDir is the directory of the source files.
+	SourceDir string `json:"sourceDir"`
+
+	// DistDir is the directory the artifacts are written to.
+	DistDir string `json:"distDir"`
+
+	// License is the SPDX identifier of the license.
+	License string `json:"license"`
+
+	// LicenseMode is "full" for the whole license text, or "spdx" for its
+	// identifier alone.
+	LicenseMode string `json:"licenseMode"`
+
+	// LicenseFile is the file of the license text.
+	LicenseFile string `json:"licenseFile"`
+
+	// Groups maps each group name to the filename prefix of its files.
+	Groups map[string]string `json:"groups"`
+
+	// Artifacts are the bundles to emit.
+	Artifacts []Artifact `json:"artifacts"`
 }
 
-// Artifact is one emitted single-file bundle: the union of its Groups' files,
-// written to <dist>/<Name>/pathlib.go.
+// Artifact is one emitted single-file bundle. It holds the files of its groups
+// and is written to <dist>/<Name>/pathlib.go.
 type Artifact struct {
-	Name   string   `json:"name"`
+	// Name is the directory of the artifact below the dist directory.
+	Name string `json:"name"`
+
+	// Groups are the groups whose files the artifact holds.
 	Groups []string `json:"groups"`
 }
 
 // source is the part of one source file that goes into a bundle.
 type source struct {
-	// imports maps each import path (quoted) to its alias, or "" if it has none.
+	// imports maps each quoted import path to its alias, or "" for none.
 	imports map[string]string
 	// doc is the package doc of the file, or "" if it has none.
 	doc string
@@ -107,8 +127,8 @@ func main() {
 	}
 }
 
-// gatherFiles globs the non-test source files for every named group, de-duplicated
-// and sorted for reproducible output.
+// gatherFiles globs the non-test source files of every named group,
+// de-duplicated and sorted for reproducible output.
 func gatherFiles(srcDir *pathlib.Path, m *Manifest, groups []string) ([]*pathlib.Path, error) {
 	seen := map[string]bool{}
 	var files []*pathlib.Path
@@ -135,14 +155,14 @@ func gatherFiles(srcDir *pathlib.Path, m *Manifest, groups []string) ([]*pathlib
 		}
 	}
 
-	sort.Slice(files, func(i, j int) bool { return files[i].Base() < files[j].Base() })
+	slices.SortFunc(files, func(a, b *pathlib.Path) int { return strings.Compare(a.Base(), b.Base()) })
 	return files, nil
 }
 
-// merge concatenates the bodies of all files (verbatim, after their package
-// clause and imports), unions their imports, and prepends the license preamble
-// and package doc. The whole-file granularity guarantees every unioned import is
-// still used, so no import pruning is needed.
+// merge concatenates the bodies of all files, which follow their package
+// clause and imports verbatim. It unions their imports and prepends the license
+// preamble and the package doc. Whole files are merged, so every unioned import
+// is still used, and no import needs pruning.
 func merge(files []*pathlib.Path, m *Manifest) (string, error) {
 	fset := token.NewFileSet()
 	imports := map[string]string{} // import path (quoted) -> alias ("" if none)
@@ -243,7 +263,7 @@ func writeImports(b *strings.Builder, imports map[string]string) {
 	for p := range imports {
 		paths = append(paths, p)
 	}
-	sort.Strings(paths)
+	slices.Sort(paths)
 
 	b.WriteString("import (\n")
 	for _, p := range paths {
@@ -257,9 +277,9 @@ func writeImports(b *strings.Builder, imports map[string]string) {
 	b.WriteString(")\n")
 }
 
-// preamble builds the generated-code marker plus the license header: the full
-// LICENSE text in "full" mode (falling back to the SPDX identifier if the file
-// is missing), or just the SPDX identifier in "spdx" mode.
+// preamble builds the generated-code marker and the license header. The header
+// is the full license text in "full" mode, and the SPDX identifier in "spdx"
+// mode or for a missing license file.
 func preamble(m *Manifest) string {
 	var b strings.Builder
 	b.WriteString("//\n")
@@ -287,8 +307,8 @@ func preamble(m *Manifest) string {
 	return b.String()
 }
 
-// writeArtifact creates the artifact's directory and file (via pathlib) and
-// writes the bundled source.
+// writeArtifact creates the directory and the file of the artifact with
+// pathlib and writes the bundled source.
 func writeArtifact(outFile *pathlib.Path, content string) error {
 	_, err := pathlib.MkDirWithOptions(outFile.Parent(), pathlib.DirOptions{ExistOk: true, CreateAll: true})
 	if err != nil {

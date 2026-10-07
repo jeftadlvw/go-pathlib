@@ -3,7 +3,6 @@ package pathlib
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -87,7 +86,7 @@ func TestCreateFileWithOptions(t *testing.T) {
 		created, err := CreateFileWithOptions(targetPath, input.Options)
 
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			return
 		}
 
@@ -106,7 +105,8 @@ func TestCreateFileWithOptions(t *testing.T) {
 		require.Equal(t, effectiveFileMode(expectedMode).Perm(), info.Mode().Perm())
 
 		if expect.Content != "" || (input.RelPath == "truncate_me.txt") {
-			// Check content for truncation test, or if specific content is expected
+			// Check content for truncation test, or if specific content is
+			// expected
 			content, err := os.ReadFile(targetPath.String())
 			require.NoError(t, err)
 			require.Equal(t, expect.Content, string(content))
@@ -187,7 +187,7 @@ func TestMkDirWithOptions(t *testing.T) {
 		created, err := MkDirWithOptions(targetPath, input.Options)
 
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, expect.Created, created)
@@ -246,7 +246,7 @@ func TestPath_SymlinkTo(t *testing.T) {
 			Input: Input{
 				SrcRel:      "non_existent_target.txt",
 				LinkPathRel: "my_link.txt",
-				Setup:       func(_ *testing.T, _ *Path) { /* no setup for target */ },
+				Setup:       func(_ *testing.T, _ *Path) {},
 			},
 			Error: true,
 		},
@@ -332,7 +332,7 @@ func TestPath_SymlinkTo(t *testing.T) {
 		err := srcPath.SymlinkTo(linkPath)
 
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 		} else {
 			require.NoError(t, err)
 
@@ -348,8 +348,8 @@ func TestPath_SymlinkTo(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, readTarget, readTargetLibPath.String())
 
-			// The target passed to os.Symlink is relative from the link's parent.
-			// Reconstruct the expected relative target to compare.
+			// The target passed to os.Symlink is relative from the link's
+			// parent. Reconstruct the expected relative target to compare.
 			expectedReadTarget := filepath.Join(filepath.Base(filepath.Dir(srcPath.String())), filepath.Base(srcPath.String()))
 			// If target is directly in root, it should be just the base
 			if filepath.Dir(srcPath.String()) == root.String() {
@@ -371,134 +371,7 @@ func TestPath_SymlinkTo(t *testing.T) {
 
 			// Test equal absolute paths
 			require.Equal(t, srcPath.String(), readTargetPathAbsolute.String(), "Symlink target read should match absolute source path")
-			require.True(t, srcPath.EqualsFs(readTargetPathAbsolute), "Symlink target read should point to same file")
-		}
-	})
-}
-
-func TestPath_ReadSymlinkTarget(t *testing.T) {
-	t.Parallel()
-
-	type Input struct {
-		SymlinkRel string
-		TargetRel  string                  // Only used for setup, defines what the symlink *points to*
-		Setup      func(*testing.T, *Path) // Setup for the symlink and target
-	}
-
-	type Expect struct {
-		TargetRead string // Expected raw string read from symlink
-	}
-
-	cases := []TestCase[Input, Expect]{
-		{
-			Name: "Path is symlink to file",
-			Input: Input{
-				SymlinkRel: "link_to_file",
-				TargetRel:  "actual_file.txt",
-				Setup: func(t *testing.T, root *Path) {
-					t.Helper()
-
-					writeTempFile(t, root, "actual_file.txt", "")
-					createTempSymlinkAbs(t, root, "actual_file.txt", "link_to_file")
-				},
-			},
-			Expect: Expect{
-				TargetRead: "actual_file.txt", // Target written as relative
-			},
-			Error: false,
-		},
-		{
-			Name: "Path is symlink to directory",
-			Input: Input{
-				SymlinkRel: "link_to_dir",
-				TargetRel:  "actual_dir",
-				Setup: func(t *testing.T, root *Path) {
-					t.Helper()
-
-					createTempDir(t, root, "actual_dir")
-					createTempSymlinkAbs(t, root, "actual_dir", "link_to_dir")
-				},
-			},
-			Expect: Expect{
-				TargetRead: "actual_dir",
-			},
-			Error: false,
-		},
-		{
-			Name: "Path is broken symlink",
-			Input: Input{
-				SymlinkRel: "broken_link",
-				TargetRel:  "non_existent_target",
-				Setup: func(t *testing.T, root *Path) {
-					t.Helper()
-
-					createTempSymlinkAbs(t, root, "non_existent_target", "broken_link")
-				},
-			},
-			Expect: Expect{
-				TargetRead: "non_existent_target",
-			}, // Readlink still returns target path
-			Error: false,
-		},
-		{
-			Name: "Path is not a symlink (regular file)",
-			Input: Input{
-				SymlinkRel: "regular_file.txt",
-				Setup: func(t *testing.T, root *Path) {
-					t.Helper()
-
-					writeTempFile(t, root, "regular_file.txt", "")
-				},
-			},
-			Expect: Expect{},
-			Error:  true,
-		},
-		{
-			Name: "Path is not a symlink (directory)",
-			Input: Input{
-				SymlinkRel: "regular_dir",
-				Setup: func(t *testing.T, root *Path) {
-					t.Helper()
-
-					createTempDir(t, root, "regular_dir")
-				},
-			},
-			Expect: Expect{},
-			Error:  true,
-		},
-		{
-			Name: "Path does not exist",
-			Input: Input{
-				SymlinkRel: "non_existent_path",
-				Setup:      func(_ *testing.T, _ *Path) { /* no setup */ },
-			},
-			Expect: Expect{},
-			Error:  true,
-		},
-	}
-
-	runForResultsE(t, cases, func(t *testing.T, input Input, _ Expect, expectError bool) {
-		t.Helper()
-
-		root := setupTempDir(t)
-		input.Setup(t, root)
-
-		symlinkPath := root.JoinStrings(input.SymlinkRel)
-		readTargetPath, err := symlinkPath.ReadSymlinkTarget()
-
-		if expectError {
-			require.Error(t, err)
-			require.Nil(t, readTargetPath)
-		} else {
-			require.NoError(t, err)
-			require.NotNil(t, readTargetPath)
-
-			require.NotEmpty(t, input.TargetRel, "Test is setup wrongly. No target path defined.")
-			targetPath := root.JoinStrings(input.TargetRel)
-
-			// The returned target is a Path created from the raw string from os.Readlink.
-			// `createTempSymlinkAbs` uses a relative path (relative to link's parent).
-			require.Equal(t, targetPath.ToPosix(), readTargetPath.ToPosix())
+			require.True(t, srcPath.EqualsFS(readTargetPathAbsolute), "Symlink target read should point to same file")
 		}
 	})
 }
@@ -592,70 +465,11 @@ func TestCreateSymlink(t *testing.T) {
 		target, linkPath := input.Setup(t, root)
 		err := CreateSymlink(target, linkPath)
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			return
 		}
 		require.NoError(t, err)
 		require.True(t, linkPath.IsSymlink())
-	})
-}
-
-func TestSetPermission(t *testing.T) {
-	t.Parallel()
-
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping permission test on Windows")
-	}
-
-	root := setupTempDir(t)
-
-	t.Run("file", func(t *testing.T) {
-		t.Parallel()
-
-		filePath := writeTempFile(t, root, "file.txt", "content")
-
-		err := SetPermission(filePath, 0600)
-		require.NoError(t, err)
-
-		info, err := filePath.Stat()
-		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0600).Perm(), info.Mode().Perm())
-
-		// Change again
-		err = SetPermission(filePath, 0755)
-		require.NoError(t, err)
-
-		info, err = filePath.Stat()
-		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0755).Perm(), info.Mode().Perm())
-	})
-
-	t.Run("directory", func(t *testing.T) {
-		t.Parallel()
-
-		dirPath := createTempDir(t, root, "permdir")
-
-		err := SetPermission(dirPath, 0700)
-		require.NoError(t, err)
-
-		info, err := dirPath.Stat()
-		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0700).Perm(), info.Mode().Perm())
-
-		err = SetPermission(dirPath, 0755)
-		require.NoError(t, err)
-
-		info, err = dirPath.Stat()
-		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0755).Perm(), info.Mode().Perm())
-	})
-
-	t.Run("non-existent path", func(t *testing.T) {
-		t.Parallel()
-
-		nonExistent := root.JoinStrings("does_not_exist")
-		err := SetPermission(nonExistent, 0644)
-		require.Error(t, err)
 	})
 }
 

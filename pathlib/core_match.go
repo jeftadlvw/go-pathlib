@@ -1,20 +1,56 @@
+// core_match.go holds the matching of paths against patterns with support for
+// "**".
+
 package pathlib
 
 import (
-	"math/rand/v2"
 	"path"
 	"strings"
 )
 
-// matchPattern is the internal implementation that handles ** expansion.
+// MatchesPatternE reports whether the Posix form of this Path matches pattern.
+// It wraps [path.Match] and adds "**", which matches any number of names.
+// Patterns separate names with forward slashes. The match is case-sensitive,
+// unless opts holds [CaseInsensitive].
+//
+// An empty pattern returns [ErrEmptyPattern], and a malformed pattern returns
+// [ErrBadPattern].
+func (p *Path) MatchesPatternE(pattern string, opts ...CompareOption) (bool, error) {
+	if pattern == "" {
+		return false, patternErr(ErrEmptyPattern, pattern, nil, *p)
+	}
+
+	matchedPattern := pattern
+	pathString := p.ToPosix()
+
+	if ignoresCase(opts) {
+		matchedPattern = strings.ToLower(pattern)
+		pathString = strings.ToLower(pathString)
+	}
+
+	match, err := matchPattern(matchedPattern, pathString)
+	if err != nil {
+		return false, patternErr(ErrBadPattern, pattern, err, *p)
+	}
+
+	return match, nil
+}
+
+// MatchesPattern reports whether this Path matches pattern, as
+// [Path.MatchesPatternE] does. It returns false on an error.
+func (p *Path) MatchesPattern(pattern string, opts ...CompareOption) bool {
+	match, err := p.MatchesPatternE(pattern, opts...)
+	return match && err == nil
+}
+
+// matchPattern reports whether name matches pattern, which may contain "**".
+// A malformed pattern returns the error of [path.Match].
 func matchPattern(pattern, name string) (bool, error) {
-	// Validate pattern for bad syntax (check each segment)
 	err := validatePattern(pattern)
 	if err != nil {
 		return false, err
 	}
 
-	// If no **, use standard path.Match
 	if !strings.Contains(pattern, "**") {
 		return path.Match(pattern, name)
 	}
@@ -22,17 +58,17 @@ func matchPattern(pattern, name string) (bool, error) {
 	return matchWithDoubleAsterisk(pattern, name)
 }
 
-// validatePattern checks if the pattern has valid syntax.
+// validatePattern returns the error of [path.Match] for a malformed segment of
+// pattern. The segments are the parts between "**".
 func validatePattern(pattern string) error {
-	// Split by ** and validate each segment with path.Match
 	segments := strings.Split(pattern, "**")
 	for _, seg := range segments {
-		// Remove leading/trailing slashes for validation
 		seg = strings.Trim(seg, "/")
 		if seg == "" {
 			continue
 		}
-		// Use path.Match to validate syntax (match against empty string just to check pattern validity)
+
+		// path.Match checks the syntax of the whole pattern, whatever the name.
 		_, err := path.Match(seg, "")
 		if err != nil {
 			return err
@@ -41,37 +77,26 @@ func validatePattern(pattern string) error {
 	return nil
 }
 
-// matchWithDoubleAsterisk handles patterns containing **.
+// matchWithDoubleAsterisk reports whether name matches pattern, which contains
+// "**".
 func matchWithDoubleAsterisk(pattern, name string) (bool, error) {
-	// Split pattern by **
-	parts := strings.Split(pattern, "**")
-
-	// Handle edge cases
-	if len(parts) == 1 {
-		// No ** found (shouldn't reach here, but safety check)
-		return path.Match(pattern, name)
-	}
-
-	// For pattern like "**", it matches everything
 	if pattern == "**" {
 		return true, nil
 	}
 
-	// Process the pattern parts
-	return matchParts(parts, name)
+	return matchParts(strings.Split(pattern, "**"), name)
 }
 
-// matchParts matches the name against pattern parts split by **.
+// matchParts reports whether name matches the parts of a pattern split at
+// "**". The first part matches the start of name, the last part matches its
+// end, and the parts between match in order in between.
 func matchParts(parts []string, name string) (bool, error) {
-	// First part must match the beginning of name (if not empty)
 	firstPart := parts[0]
 	if firstPart != "" {
-		// First part doesn't start with **, so it must match from the beginning
 		firstPart = strings.TrimSuffix(firstPart, "/")
 		if !matchesPrefix(name, firstPart) {
 			return false, nil
 		}
-		// Calculate how much of name was consumed
 		prefixLen := findPrefixMatchLength(name, firstPart)
 		if prefixLen == -1 {
 			return false, nil
@@ -80,14 +105,12 @@ func matchParts(parts []string, name string) (bool, error) {
 		name = strings.TrimPrefix(name, "/")
 	}
 
-	// Last part must match the end of name (if not empty)
 	lastPart := parts[len(parts)-1]
 	if lastPart != "" {
 		lastPart = strings.TrimPrefix(lastPart, "/")
 		if !matchesSuffix(name, lastPart) {
 			return false, nil
 		}
-		// Calculate how much of name remains
 		suffixLen := findSuffixMatchLength(name, lastPart)
 		if suffixLen == -1 {
 			return false, nil
@@ -96,7 +119,6 @@ func matchParts(parts []string, name string) (bool, error) {
 		name = strings.TrimSuffix(name, "/")
 	}
 
-	// Middle parts must appear in order somewhere in name
 	for i := 1; i < len(parts)-1; i++ {
 		middlePart := strings.Trim(parts[i], "/")
 		if middlePart == "" {
@@ -107,7 +129,6 @@ func matchParts(parts []string, name string) (bool, error) {
 		if idx == -1 {
 			return false, nil
 		}
-		// Move past this match
 		matchLen := findMatchLengthAt(name, idx, middlePart)
 		name = name[idx+matchLen:]
 		name = strings.TrimPrefix(name, "/")
@@ -116,7 +137,7 @@ func matchParts(parts []string, name string) (bool, error) {
 	return true, nil
 }
 
-// matchesPrefix checks if name starts with a pattern prefix.
+// matchesPrefix reports whether name starts with names matching pattern.
 func matchesPrefix(name, pattern string) bool {
 	if pattern == "" {
 		return true
@@ -138,7 +159,8 @@ func matchesPrefix(name, pattern string) bool {
 	return true
 }
 
-// findPrefixMatchLength returns the length of name consumed by matching the pattern prefix.
+// findPrefixMatchLength returns the length of the start of name that matches
+// pattern, or -1 if it does not match.
 func findPrefixMatchLength(name, pattern string) int {
 	if pattern == "" {
 		return 0
@@ -165,7 +187,7 @@ func findPrefixMatchLength(name, pattern string) int {
 	return length
 }
 
-// matchesSuffix checks if name ends with a pattern suffix.
+// matchesSuffix reports whether name ends with names matching pattern.
 func matchesSuffix(name, pattern string) bool {
 	if pattern == "" {
 		return true
@@ -188,7 +210,8 @@ func matchesSuffix(name, pattern string) bool {
 	return true
 }
 
-// findSuffixMatchLength returns the length of name consumed by matching the pattern suffix.
+// findSuffixMatchLength returns the length of the end of name that matches
+// pattern, or -1 if it does not match.
 func findSuffixMatchLength(name, pattern string) int {
 	if pattern == "" {
 		return 0
@@ -216,8 +239,8 @@ func findSuffixMatchLength(name, pattern string) int {
 	return length
 }
 
-// findPatternInPath finds where a pattern segment matches within the path.
-// Returns the byte index or -1 if not found.
+// findPatternInPath returns the byte index in name of the first run of names
+// matching pattern, or -1 if there is none.
 func findPatternInPath(name, pattern string) int {
 	if pattern == "" {
 		return 0
@@ -230,7 +253,6 @@ func findPatternInPath(name, pattern string) int {
 		return -1
 	}
 
-	// Try to find pattern parts as a contiguous sequence in name parts
 	for startIdx := 0; startIdx <= len(nameParts)-len(patternParts); startIdx++ {
 		if !partsMatchAt(nameParts, patternParts, startIdx) {
 			continue
@@ -256,7 +278,8 @@ func partsMatchAt(nameParts, patternParts []string, startIdx int) bool {
 	return true
 }
 
-// findMatchLengthAt returns the length of the match starting at the given position.
+// findMatchLengthAt returns the length of the names of name that start at
+// startIdx and match pattern, which has matched there.
 func findMatchLengthAt(name string, startIdx int, pattern string) int {
 	remaining := name[startIdx:]
 	patternParts := strings.Split(pattern, "/")
@@ -270,49 +293,4 @@ func findMatchLengthAt(name string, startIdx int, pattern string) int {
 		length += len(nameParts[i])
 	}
 	return length
-}
-
-func stripLeadingDots(s string) string {
-	return strings.TrimLeft(s, ".")
-}
-
-/*
-hasDots is a simple helper function that returns whether the given
-string contains a '.' character.
-*/
-func hasDots(s string) bool {
-	return strings.Contains(s, ".")
-}
-
-/*
-dotCount is a simple helper function that returns the number of '.' occurrences in a string.
-*/
-func dotCount(s string) int {
-	return strings.Count(s, ".")
-}
-
-/*
-charset contains all numbers from 0 to 9 and all letters of the latin alphabet in lower and upper case.
-*/
-const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-/*
-generateRandomString generates a random string with a random length.
-
-This is a utility function used by tests and extensions.
-*/
-//nolint:gosec // The strings are not used for security.
-func generateRandomString(minLength, maxLength int) string {
-	// Generate a random length between minLength and maxLength
-	length := rand.IntN(maxLength-minLength+1) + minLength
-
-	// Create a byte slice to store the random string
-	result := make([]byte, length)
-
-	// Fill the byte slice with random characters from the charset
-	for i := range length {
-		result[i] = charset[rand.IntN(len(charset))]
-	}
-
-	return string(result)
 }

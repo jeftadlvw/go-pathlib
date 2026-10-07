@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMatchesPatternE(t *testing.T) {
+func TestPath_MatchesPatternE(t *testing.T) {
 	t.Parallel()
 
 	type matchInput struct {
@@ -56,7 +56,7 @@ func TestMatchesPatternE(t *testing.T) {
 			require.Equal(t, match, matchNoErr)
 
 			if tc.Expect.Error {
-				require.Error(t, err)
+				require.ErrorIs(t, err, ErrPathlib)
 			} else {
 				require.NoError(t, err)
 			}
@@ -66,7 +66,7 @@ func TestMatchesPatternE(t *testing.T) {
 	}
 }
 
-func TestMatchesPatternE_BadPattern(t *testing.T) {
+func TestPath_MatchesPatternE_BadPattern(t *testing.T) {
 	t.Parallel()
 
 	_, err := NewPath("a/b").MatchesPatternE("a/[")

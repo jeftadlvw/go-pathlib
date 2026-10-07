@@ -1,3 +1,6 @@
+// fs_glob.go holds globbing and listing, which find the entries below a
+// directory by pattern.
+
 package pathlib
 
 import (
@@ -8,60 +11,106 @@ import (
 	"strings"
 )
 
-/*
-Glob returns all entries matching the given pattern within this Path's Posix representation.
+// FilterFunc reports whether a glob includes the entry at path.
+type FilterFunc func(path *Path) bool
 
-If an error is returned, all entries until that error are returned.
+// GlobOptions configures a glob. The zero value matches case-sensitively,
+// includes files and directories, stops at a directory that cannot be read,
+// and has no limit.
+type GlobOptions struct {
+	// CaseSensitivity selects how the pattern treats casing. The zero value
+	// is CaseSensitive.
+	CaseSensitivity CompareOption
 
-This Path must be a directory.
+	// Filter selects the types of the included entries. The zero value is
+	// GlobOptionFilterAll.
+	Filter GlobOptionFilterType
 
-This function uses GlobWithOptions with DefaultGlobOptions. The same behaviors apply.
-*/
+	// FilterFunc decides which entries are included, in place of Filter. Nil
+	// leaves the decision to Filter.
+	FilterFunc FilterFunc
+
+	// SkipOnDirError skips a directory that cannot be opened or read. If it
+	// is false, the glob stops and returns the error.
+	SkipOnDirError bool
+
+	// Limit is the maximum number of returned entries. Zero or less means no
+	// limit.
+	Limit int
+}
+
+// ListOptions configures a listing. It embeds the options of the glob that
+// finds the entries.
+type ListOptions struct {
+	// GlobOptions configures the glob that finds the entries.
+	GlobOptions
+
+	// Recursive includes the entries of subdirectories.
+	Recursive bool
+}
+
+// DefaultGlobOptions returns the options [Path.Glob] uses, which equal the
+// zero value of [GlobOptions].
+func DefaultGlobOptions() GlobOptions {
+	return GlobOptions{
+		Limit:           0,
+		CaseSensitivity: CaseSensitive,
+		Filter:          GlobOptionFilterAll,
+		FilterFunc:      nil,
+		SkipOnDirError:  false,
+	}
+}
+
+// DefaultListOptions returns the options of a listing of the direct entries of
+// a directory with [DefaultGlobOptions].
+func DefaultListOptions() ListOptions {
+	return ListOptions{GlobOptions: DefaultGlobOptions()}
+}
+
+// Glob returns the entries below this Path that match pattern, as
+// [Path.GlobWithOptions] does with [DefaultGlobOptions].
 func (p *Path) Glob(pattern string) ([]*Path, error) {
 	return p.GlobContext(context.Background(), pattern)
 }
 
-/*
-GlobContext is Glob with support for cancellation through ctx. The entries
-collected before cancellation are returned alongside ctx.Err().
-*/
+// GlobContext returns the entries below this Path that match pattern, as
+// [Path.GlobWithOptionsContext] does with DefaultGlobOptions.
 func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error) {
 	return p.GlobWithOptionsContext(ctx, pattern, DefaultGlobOptions())
 }
 
-/*
-GlobWithOptions returns all entries matching the given pattern within this Path's Posix representation.
-If an error is returned, all entries until that error are returned.
-
-This Path must be a directory. A missing path returns [ErrNotExist], and an
-existing non-directory returns [ErrNotDir]. An empty pattern returns
-[ErrEmptyPattern], a malformed pattern returns [ErrBadPattern], and an unknown
-GlobOptions.Filter returns [ErrInvalidFilter]. Denied access returns
-[ErrPermissionDenied], also for a directory inside the tree. Any other failure
-to check the path returns [ErrStat], and any other failure to open or read a
-directory returns a kind below [ErrAccess]. GlobOptions.SkipOnDirError skips a
-directory that cannot be opened or read.
-
-The tree is walked with WalkR, so symlinks to directories inside the tree are matched
-as entries, but their contents are not visited. GlobOptions.Filter judges a symlink by
-its target, so a symlink to a directory counts as a directory and a broken symlink
-is neither a file nor a directory.
-
-Directories below the deepest level the pattern can match are not read. A pattern
-without "**" and without character classes matches only paths with as many parts
-as the pattern, so e.g. "*" reads only this directory and "src/*.go" reads only
-this directory and its direct subdirectories. Character classes are excluded because
-they can match "/".
-*/
+// GlobWithOptions returns the entries below this Path whose path relative to
+// this Path matches pattern, with the syntax of [Path.MatchesPatternE]. This
+// Path must be a directory. An error during the walk returns the entries
+// matched until then.
+//
+// The tree is walked as [Path.WalkR] walks it, so a symlink to a directory
+// inside the tree is an entry, and its contents are not visited.
+// GlobOptions.Filter judges a symlink by its target. A symlink to a directory
+// counts as a directory, and a broken symlink as neither a file nor a
+// directory.
+//
+// Directories below the deepest level pattern can match are not read. "*" and
+// "?" never match "/", so a pattern without "**" and character classes only
+// matches paths with as many names as the pattern. "*" reads this directory
+// alone, and "src/*.go" reads this directory and its direct subdirectories.
+//
+// A missing path returns [ErrNotExist], and an existing non-directory returns
+// [ErrNotDir]. An empty pattern returns [ErrEmptyPattern], a malformed pattern
+// returns [ErrBadPattern], and an unknown GlobOptions.Filter returns
+// [ErrInvalidFilter]. Denied access returns [ErrPermissionDenied], also for a
+// directory inside the tree. Any other failure to check the path returns
+// [ErrStat], and any other failure to open or read a directory returns
+// [ErrOpen] or [ErrReadDir]. GlobOptions.SkipOnDirError skips a directory that
+// cannot be opened or read.
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
 	return p.GlobWithOptionsContext(context.Background(), pattern, options)
 }
 
-/*
-GlobWithOptionsContext is GlobWithOptions with support for cancellation through
-ctx. The entries collected before cancellation are returned alongside ctx.Err(),
-wrapped as ErrWalk.
-*/
+// GlobWithOptionsContext returns the entries below this Path that match
+// pattern, as [Path.GlobWithOptions] does. A done ctx stops the glob, which
+// returns the entries matched until then and ctx.Err() as the cause of
+// [ErrWalk].
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
 	err := validateGlob(p, pattern, options)
 	if err != nil {
@@ -70,7 +119,6 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 
 	var entries []*Path
 
-	// Initialize GlobOptions.Limit option handling
 	limit := max(0, options.Limit)
 	limitExists := limit != 0
 
@@ -80,13 +128,10 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 
 	err = p.walkRContext(ctx, func(entry *Path, dirEntry fs.DirEntry, localDirError error) error {
 		if localDirError != nil {
-			// Handle GlobOptions.SkipOnDirError option:
-			// skip the offending directory and ignore the error.
 			if options.SkipOnDirError {
 				return SkipDir
 			}
 
-			// By default, abort the entire walk and bubble the error up.
 			return localDirError
 		}
 
@@ -95,9 +140,6 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 			entries = append(entries, entry)
 		}
 
-		// Handle GlobOptions.Limit option.
-		// If a limit exists and the number of entries is greater than or equal to the limit,
-		// stop any further tree walking.
 		if limitExists && len(entries) >= limit {
 			return SkipAll
 		}
@@ -108,26 +150,9 @@ func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, optio
 	return entries, err
 }
 
-/*
-patternMaxDepth returns the number of path parts the paths matched by pattern can
-have at most, or 0 if there is no limit. "*" and "?" never match "/", so only
-"**" and character classes, which can match "/", match across separators.
-*/
-func patternMaxDepth(pattern string) int {
-	if strings.Contains(pattern, "**") || strings.Contains(pattern, "[") {
-		return 0
-	}
-
-	return strings.Count(pattern, canonicalPathSeparator) + 1
-}
-
-/*
-HasGlobMatchE returns whether the passed pattern exists within this Path's directory.
-
-This function uses GlobWithOptions with GlobOptions{Limit: 1}, so the pattern
-syntax (including "**") is the same and matching is case-sensitive. The errors
-of [Path.GlobWithOptions] apply.
-*/
+// HasGlobMatchE reports whether an entry below this Path matches pattern. It
+// globs with GlobOptions{Limit: 1}, so the match is case-sensitive, and the
+// errors of [Path.GlobWithOptions] apply.
 func (p *Path) HasGlobMatchE(pattern string) (bool, error) {
 	matches, err := p.GlobWithOptions(pattern, GlobOptions{Limit: 1})
 	if err != nil {
@@ -137,10 +162,8 @@ func (p *Path) HasGlobMatchE(pattern string) (bool, error) {
 	return len(matches) != 0, nil
 }
 
-/*
-HasGlobMatch returns whether the passed pattern exists within this Path's directory.
-It wraps HasGlobMatchE and returns the boolean success value or false in case of an error.
-*/
+// HasGlobMatch reports whether an entry below this Path matches pattern, as
+// [Path.HasGlobMatchE] does. It returns false on an error.
 func (p *Path) HasGlobMatch(pattern string) bool {
 	contains, err := p.HasGlobMatchE(pattern)
 	if err != nil {
@@ -150,21 +173,12 @@ func (p *Path) HasGlobMatch(pattern string) bool {
 	return contains
 }
 
-/*
-List returns a slice of Path, sorted by Posix representations.
-Serves as a simple convenience function for retrieving a sorted enumeration of filtered entries.
-
-If an error occurs, no entries are returned.
-
-Use Walk or WalkR for more fine-grained control.
-
-This function uses GlobWithOptions, and the errors of [Path.GlobWithOptions]
-apply.
-*/
+// List returns the entries of this directory, sorted by their Posix form. It
+// globs with options and the pattern "*", or "**" if ListOptions.Recursive is
+// set. [Path.Walk] and [Path.WalkR] give finer control.
+//
+// An error returns no entries. The errors of [Path.GlobWithOptions] apply.
 func (p *Path) List(options ListOptions) ([]*Path, error) {
-	// Use the extensive and configurable globbing algorithm of GlobWithOptions.
-	// This also enables the user to use the same options and features as globbing (like filtering, limits, etc.)
-	// The pattern controls recursion depth: "**" matches all levels, "*" matches only the top level.
 	pattern := "*"
 	if options.Recursive {
 		pattern = "**"
@@ -178,12 +192,9 @@ func (p *Path) List(options ListOptions) ([]*Path, error) {
 	return sortSliceOfPaths(entries), nil
 }
 
-/*
-ListFiles returns all files in the Path's directory, sorted by Posix representations.
-Serves as a simple convenience function for retrieving a sorted enumeration of files.
-
-This function uses List. The same requirements and behaviors apply.
-*/
+// ListFiles returns the files of this directory, sorted by their Posix form,
+// as [Path.List] does. If recursive is set, the files of subdirectories are
+// included.
 func (p *Path) ListFiles(recursive bool) ([]*Path, error) {
 	options := DefaultListOptions()
 	options.Filter = GlobOptionFilterFiles
@@ -192,12 +203,9 @@ func (p *Path) ListFiles(recursive bool) ([]*Path, error) {
 	return p.List(options)
 }
 
-/*
-ListDirs returns all directories in the Path's directory, sorted by Posix representations.
-Serves as a simple convenience function for retrieving a sorted enumeration of directories.
-
-This function uses List. The same requirements and behaviors apply.
-*/
+// ListDirs returns the directories of this directory, sorted by their Posix
+// form, as [Path.List] does. If recursive is set, the directories of
+// subdirectories are included.
 func (p *Path) ListDirs(recursive bool) ([]*Path, error) {
 	options := DefaultListOptions()
 	options.Filter = GlobOptionFilterDirectories
@@ -206,25 +214,30 @@ func (p *Path) ListDirs(recursive bool) ([]*Path, error) {
 	return p.List(options)
 }
 
-/*
-sortSliceOfPaths sorts a slice of Path structs by their Posix representation.
+// patternMaxDepth returns the number of names the paths matched by pattern can
+// have at most, or 0 if there is no limit. "*" and "?" never match "/", so
+// only "**" and character classes, which can match "/", match across
+// separators.
+func patternMaxDepth(pattern string) int {
+	if strings.Contains(pattern, "**") || strings.Contains(pattern, "[") {
+		return 0
+	}
 
-Sorting the slice is actually done in-place by slices.SortFunc. However,
-the given slice is also returned for improved downstream code readability.
-*/
-func sortSliceOfPaths(slice []*Path) []*Path {
-	slices.SortFunc(slice, func(a, b *Path) int {
+	return strings.Count(pattern, canonicalPathSeparator) + 1
+}
+
+// sortSliceOfPaths sorts paths in place by their Posix form and returns them.
+func sortSliceOfPaths(paths []*Path) []*Path {
+	slices.SortFunc(paths, func(a, b *Path) int {
 		return cmp.Compare(a.ToPosix(), b.ToPosix())
 	})
 
-	return slice
+	return paths
 }
 
-/*
-validateGlob checks the arguments of a glob below p. It returns the errors of
-[requireDir], [ErrEmptyPattern] for an empty pattern, [ErrBadPattern] for an
-invalid pattern, and [ErrInvalidFilter] for an unknown filter.
-*/
+// validateGlob checks the arguments of a glob below p. It returns the errors
+// of [requireDir], [ErrEmptyPattern] for an empty pattern, [ErrBadPattern] for
+// a malformed pattern, and [ErrInvalidFilter] for an unknown filter.
 func validateGlob(p *Path, pattern string, options GlobOptions) error {
 	err := requireDir(p)
 	if err != nil {
@@ -247,11 +260,9 @@ func validateGlob(p *Path, pattern string, options GlobOptions) error {
 	return nil
 }
 
-/*
-matchGlobEntry reports whether entry, found while globbing root, passes the
-filter of options and matches pattern. It returns [SkipDir] alongside the result
-when nothing below entry can match, because entry lies at maxDepth.
-*/
+// matchGlobEntry reports whether entry, found while globbing root, passes the
+// filter of options and matches pattern. It returns [SkipDir] next to the
+// result when nothing below entry can match, because entry lies at maxDepth.
 func matchGlobEntry(
 	root, entry *Path, dirEntry fs.DirEntry, pattern string, options GlobOptions, maxDepth int,
 ) (bool, error) {
@@ -260,15 +271,12 @@ func matchGlobEntry(
 		return false, err
 	}
 
-	// The entry path is joined with the original path and any subdirectories.
-	// For pattern matching, we don't want the original path included, because
-	// the pattern is matched starting from the original path.
+	// The pattern matches the path of the entry relative to the root.
 	entryForMatching, err := entry.RelativeTo(root)
 	if err != nil {
 		return false, err
 	}
 
-	// Test if the current entry matches the given pattern. Also handles GlobOptions.CaseSensitivity option
 	matchesPattern, err := entryForMatching.MatchesPatternE(pattern, options.CaseSensitivity)
 	if err != nil {
 		return false, err
@@ -286,11 +294,9 @@ func matchGlobEntry(
 	return matched, nil
 }
 
-/*
-globIncludes reports whether entry passes the filter of options, which is
-[GlobOptions.FilterFunc] if set, or [GlobOptions.Filter] otherwise. An unknown
-filter returns [ErrInvalidFilter].
-*/
+// globIncludes reports whether entry passes the filter of options, which is
+// GlobOptions.FilterFunc if set, or GlobOptions.Filter otherwise. An unknown
+// filter returns [ErrInvalidFilter].
 func globIncludes(entry *Path, options GlobOptions) (bool, error) {
 	if options.FilterFunc != nil {
 		return options.FilterFunc(entry), nil

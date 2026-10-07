@@ -2,6 +2,7 @@ package pathlib
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"testing"
@@ -46,23 +47,15 @@ func TestCreateTempDirWithOptions(t *testing.T) {
 	testWithOptions(t, CreateTempDirWithOptions, defaultTempDirTests)
 }
 
-func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*Path, DisposeFunc, error), defaultTests func(*testing.T, *Path, DisposeFunc)) {
+func testWithOptions(t *testing.T, creationFunc func(TempPathOptions) (*Path, DisposeFunc, error), defaultTests func(*testing.T, *Path, DisposeFunc)) {
 	t.Helper()
 
 	localTempBaseDir := NewPath(t.TempDir())
 
-	t.Run("nil", func(t *testing.T) {
+	t.Run("zero options", func(t *testing.T) {
 		t.Parallel()
 
-		tempFile, dispose, err := creationFunc(nil)
-		require.NoError(t, err)
-		defaultTests(t, tempFile, dispose)
-	})
-
-	t.Run("empty", func(t *testing.T) {
-		t.Parallel()
-
-		tempFile, dispose, err := creationFunc(&TempPathOptions{})
+		tempFile, dispose, err := creationFunc(TempPathOptions{})
 		require.NoError(t, err)
 		defaultTests(t, tempFile, dispose)
 
@@ -88,7 +81,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*Path, D
 		t.Run(fmt.Sprintf("baseDirIdx-%d_only", baseDirIdx), func(t *testing.T) {
 			t.Parallel()
 
-			options := &TempPathOptions{
+			options := TempPathOptions{
 				BaseDir: baseDir,
 			}
 
@@ -103,7 +96,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*Path, D
 			t.Run(fmt.Sprintf("baseDirIdx-%d_prefixIdx-%d", baseDirIdx, prefixIdx), func(t *testing.T) {
 				t.Parallel()
 
-				options := &TempPathOptions{
+				options := TempPathOptions{
 					BaseDir: baseDir,
 					Prefix:  prefix,
 				}
@@ -121,7 +114,7 @@ func testWithOptions(t *testing.T, creationFunc func(*TempPathOptions) (*Path, D
 		t.Run(fmt.Sprintf("prefixIdx-%d_only", prefixIdx), func(t *testing.T) {
 			t.Parallel()
 
-			options := &TempPathOptions{
+			options := TempPathOptions{
 				Prefix: prefix,
 			}
 
@@ -145,7 +138,7 @@ func defaultTempFileTests(t *testing.T, p *Path, dispose DisposeFunc) {
 	require.NoError(t, err)
 
 	postDisposeStat, err := os.Stat(p.String())
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.Nil(t, postDisposeStat)
 }
 
@@ -160,11 +153,11 @@ func defaultTempDirTests(t *testing.T, p *Path, dispose DisposeFunc) {
 	require.NoError(t, err)
 
 	postDisposeStat, err := os.Stat(p.String())
-	require.Error(t, err)
+	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.Nil(t, postDisposeStat)
 }
 
-func defaultTempPathOptionsTests(t *testing.T, p *Path, opts *TempPathOptions) {
+func defaultTempPathOptionsTests(t *testing.T, p *Path, opts TempPathOptions) {
 	t.Helper()
 
 	expectedBaseDir := TempBaseDir()
@@ -194,14 +187,14 @@ func TestDisposeFunc_IsNoOpOnError(t *testing.T) {
 
 	missing := NewPath(t.TempDir()).JoinStrings("missing")
 
-	for name, create := range map[string]func(*TempPathOptions) (*Path, DisposeFunc, error){
+	for name, create := range map[string]func(TempPathOptions) (*Path, DisposeFunc, error){
 		"CreateTempFileWithOptions": CreateTempFileWithOptions,
 		"CreateTempDirWithOptions":  CreateTempDirWithOptions,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			p, dispose, err := create(&TempPathOptions{BaseDir: missing})
+			p, dispose, err := create(TempPathOptions{BaseDir: missing})
 			require.ErrorIs(t, err, ErrNotExist)
 			require.Nil(t, p)
 			require.NotNil(t, dispose)
@@ -213,7 +206,8 @@ func TestDisposeFunc_IsNoOpOnError(t *testing.T) {
 func TestDisposeFunc_RemovesSymlinkNotTarget(t *testing.T) {
 	t.Parallel()
 
-	// A temporary path replaced by a symlink: disposing must not reach the target.
+	// A temporary path replaced by a symlink: disposing must not reach the
+	// target.
 	root := setupTempDir(t)
 	targetFile := writeTempFile(t, root, "keep.txt", "content")
 	targetDir := createTempDir(t, root, "keep_dir")

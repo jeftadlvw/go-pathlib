@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// errCase runs one operation inside a fresh temporary root and returns its error.
+// errCase runs one operation inside a fresh temporary root and returns its
+// error.
 type errCase struct {
 	Name string
 	Run  func(t *testing.T, root *Path) error
@@ -21,7 +22,6 @@ func runErrCases(t *testing.T, cases []errCase, check func(t *testing.T, err err
 			t.Parallel()
 
 			err := c.Run(t, setupTempDir(t))
-			require.Error(t, err)
 			require.ErrorIs(t, err, ErrPathlib)
 			check(t, err)
 		})
@@ -36,12 +36,6 @@ func TestErrNotExist_LibraryChecks(t *testing.T) {
 		{"Copy with missing source", func(_ *testing.T, root *Path) error {
 			return Copy(root.JoinStrings("missing"), root.JoinStrings("dst"))
 		}},
-		{"Copy with missing destination parent", func(t *testing.T, root *Path) error {
-			t.Helper()
-
-			src := writeTempFile(t, root, "src.txt", "")
-			return Copy(src, root.JoinStrings("missing", "dst.txt"))
-		}},
 		{"Move with missing source", func(_ *testing.T, root *Path) error {
 			return Move(root.JoinStrings("missing"), root.JoinStrings("dst"))
 		}},
@@ -51,9 +45,6 @@ func TestErrNotExist_LibraryChecks(t *testing.T) {
 		}},
 		{"SymlinkTo with missing target", func(_ *testing.T, root *Path) error {
 			return root.JoinStrings("missing").SymlinkTo(root.JoinStrings("link"))
-		}},
-		{"CreateSymlink with missing parent", func(_ *testing.T, root *Path) error {
-			return CreateSymlink(root, root.JoinStrings("missing", "link"))
 		}},
 
 		// Missing directories.
@@ -86,11 +77,11 @@ func TestErrNotExist_LibraryChecks(t *testing.T) {
 			return err
 		}},
 		{"CreateTempFileWithOptions with missing BaseDir", func(_ *testing.T, root *Path) error {
-			_, _, err := CreateTempFileWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
+			_, _, err := CreateTempFileWithOptions(TempPathOptions{BaseDir: root.JoinStrings("missing")})
 			return err
 		}},
 		{"CreateTempDirWithOptions with missing BaseDir", func(_ *testing.T, root *Path) error {
-			_, _, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: root.JoinStrings("missing")})
+			_, _, err := CreateTempDirWithOptions(TempPathOptions{BaseDir: root.JoinStrings("missing")})
 			return err
 		}},
 	}
@@ -126,17 +117,59 @@ func TestErrNotExist_OperatingSystem(t *testing.T) {
 		{"SetPermission", func(_ *testing.T, root *Path) error {
 			return SetPermission(root.JoinStrings("missing"), 0644)
 		}},
-		{"MkDirWithOptions with missing parent", func(_ *testing.T, root *Path) error {
-			_, err := MkDirWithOptions(root.JoinStrings("a", "b"), DirOptions{})
+	}
+
+	runErrCases(t, cases, func(t *testing.T, err error) {
+		t.Helper()
+
+		require.ErrorIs(t, err, ErrNotExist)
+		require.NotErrorIs(t, err, ErrParentNotExist)
+		require.ErrorIs(t, err, fs.ErrNotExist)
+		require.NotErrorIs(t, err, ErrExist)
+		require.NotErrorIs(t, err, fs.ErrExist)
+	})
+}
+
+func TestErrParentNotExist(t *testing.T) {
+	t.Parallel()
+
+	// The library's own checks and the operating system both find the missing
+	// parent directory of a created path.
+	cases := []errCase{
+		{"Copy", func(t *testing.T, root *Path) error {
+			t.Helper()
+
+			src := writeTempFile(t, root, "src.txt", "")
+			return Copy(src, root.JoinStrings("missing", "dst.txt"))
+		}},
+		{"CreateSymlink", func(_ *testing.T, root *Path) error {
+			return CreateSymlink(root, root.JoinStrings("missing", "link"))
+		}},
+		{"CreateFile", func(_ *testing.T, root *Path) error {
+			return CreateFile(root.JoinStrings("missing", "file.txt"))
+		}},
+		{"MkDir", func(_ *testing.T, root *Path) error {
+			return MkDir(root.JoinStrings("missing", "dir"))
+		}},
+		{"OpenFile", func(_ *testing.T, root *Path) error {
+			_, err := OpenFile(root.JoinStrings("missing", "file.txt"))
 			return err
 		}},
-
-		// Missing parent directories of written files.
-		{"WriteBytes with missing parent", func(_ *testing.T, root *Path) error {
+		{"OpenFileWithOptions read-only", func(_ *testing.T, root *Path) error {
+			_, err := OpenFileWithOptions(
+				root.JoinStrings("missing", "file.txt"), OpenOptions{CreateIfNotExists: true, Mode: "r"},
+			)
+			return err
+		}},
+		{"WriteBytes", func(_ *testing.T, root *Path) error {
 			_, err := WriteBytes(root.JoinStrings("missing", "file.txt"), nil)
 			return err
 		}},
-		{"AppendBytes with missing parent", func(_ *testing.T, root *Path) error {
+		{"WriteBytesWithOptions without ExistOk", func(_ *testing.T, root *Path) error {
+			_, err := WriteBytesWithOptions(root.JoinStrings("missing", "file.txt"), nil, FileOptions{})
+			return err
+		}},
+		{"AppendBytes", func(_ *testing.T, root *Path) error {
 			_, err := AppendBytes(root.JoinStrings("missing", "file.txt"), nil)
 			return err
 		}},
@@ -145,10 +178,9 @@ func TestErrNotExist_OperatingSystem(t *testing.T) {
 	runErrCases(t, cases, func(t *testing.T, err error) {
 		t.Helper()
 
-		require.ErrorIs(t, err, ErrNotExist)
+		require.ErrorIs(t, err, ErrParentNotExist)
 		require.ErrorIs(t, err, fs.ErrNotExist)
 		require.NotErrorIs(t, err, ErrExist)
-		require.NotErrorIs(t, err, fs.ErrExist)
 	})
 }
 
@@ -209,8 +241,8 @@ func TestErrExist_LibraryChecks(t *testing.T) {
 			return Move(src, createTempSymlinkAbs(t, root, "missing", "link"))
 		}},
 
-		// An exist error raised by the operating system needs a race against the
-		// library's own checks, so it is not reproducible here.
+		// An exist error raised by the operating system needs a race against
+		// the library's own checks, so it is not reproducible here.
 	}
 
 	runErrCases(t, cases, func(t *testing.T, err error) {
@@ -223,7 +255,7 @@ func TestErrExist_LibraryChecks(t *testing.T) {
 	})
 }
 
-func TestRequireDir_ExistingNonDirectory(t *testing.T) {
+func TestErrNotDir_NonDirectoryRoot(t *testing.T) {
 	t.Parallel()
 
 	cases := []errCase{
@@ -252,7 +284,7 @@ func TestRequireDir_ExistingNonDirectory(t *testing.T) {
 		{"CreateTempDirWithOptions", func(t *testing.T, root *Path) error {
 			t.Helper()
 
-			_, _, err := CreateTempDirWithOptions(&TempPathOptions{BaseDir: writeTempFile(t, root, "file.txt", "")})
+			_, _, err := CreateTempDirWithOptions(TempPathOptions{BaseDir: writeTempFile(t, root, "file.txt", "")})
 			return err
 		}},
 	}
@@ -266,31 +298,11 @@ func TestRequireDir_ExistingNonDirectory(t *testing.T) {
 	})
 }
 
-func TestRequireDir_ReportsKindAndPath(t *testing.T) {
-	t.Parallel()
-
-	root := setupTempDir(t)
-	missing := root.JoinStrings("missing")
-
-	err := requireDir(missing)
-	var kind *PathlibError
-	require.ErrorAs(t, err, &kind)
-	require.Equal(t, ErrNotExist, kind)
-
-	var cause *PathError
-	require.ErrorAs(t, err, &cause)
-	require.Equal(t, []Path{*missing}, cause.Paths())
-	require.Error(t, cause.Unwrap(), "the os cause is kept")
-
-	require.NoError(t, requireDir(root))
-	require.NoError(t, requireDir(createTempSymlinkAbs(t, root, ".", "link")))
-}
-
 func TestReadFile_DirectoryIsNotErrNotExist(t *testing.T) {
 	t.Parallel()
 
 	_, err := ReadFile(setupTempDir(t))
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrPathlib)
 	require.NotErrorIs(t, err, ErrNotExist)
 	require.NotErrorIs(t, err, fs.ErrNotExist)
 }

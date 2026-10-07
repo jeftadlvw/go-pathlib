@@ -1,17 +1,15 @@
+// core_transform.go holds the derivation of paths from a path, by joining names
+// and by replacing them.
+
 package pathlib
 
 import (
 	"path"
 )
 
-/*
-Join returns a new Path with all passed Path structs joined together.
-Paths are not checked whether they are absolute or relative.
-
-Use JoinStrings to join strings with this Path.
-
-This function uses path.Join.
-*/
+// Join returns this Path joined with paths. It wraps [path.Join] and joins
+// absolute paths like relative ones. This Path keeps its Windows anchor, and
+// the anchors of paths are dropped.
 func (p *Path) Join(paths ...*Path) *Path {
 	pathsStr := make([]string, len(paths))
 	for i, localPath := range paths {
@@ -21,23 +19,15 @@ func (p *Path) Join(paths ...*Path) *Path {
 	return p.copyWithNewPath(path.Join(append([]string{p.path}, pathsStr...)...))
 }
 
-/*
-JoinStrings returns a new Path with all passed strings joined together.
-
-Each segment is interpreted as a Posix string (the library's canonical string
-form). To join a Windows-formatted or OS-native string, parse it first and use Join, e.g.
-p.Join(NewPathFromWindows(s)) or p.Join(NewPath(s)).
-*/
+// JoinStrings returns this Path joined with paths, each interpreted as a Posix
+// path. A Windows or native string is parsed first and passed to [Path.Join],
+// as in p.Join(NewPathFromWindows(s)).
 func (p *Path) JoinStrings(paths ...string) *Path {
 	return p.copyWithNewPath(path.Join(append([]string{p.path}, paths...)...))
 }
 
-/*
-WithName returns this Path but with another base.
-
-name is interpreted as a Posix string, like JoinStrings: a backslash is an ordinary
-filename character, not a separator.
-*/
+// WithName returns this Path with its base name replaced by name. The name is
+// interpreted as a Posix path, as [Path.JoinStrings] interprets it.
 func (p *Path) WithName(name string) *Path {
 	return p.Parent().JoinStrings(name)
 }

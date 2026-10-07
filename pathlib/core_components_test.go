@@ -28,7 +28,7 @@ func TestPath_Parent(t *testing.T) {
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
 		t.Helper()
 
-		require.Equal(t, expect, input.Parent().path)
+		require.Equal(t, expect, input.Parent().ToPosix())
 	})
 }
 
@@ -109,7 +109,7 @@ func TestPath_Split(t *testing.T) {
 
 		inputPartParent, inputPartBase := input.Split()
 
-		require.Equal(t, expect[0], inputPartParent.path, "Parent")
+		require.Equal(t, expect[0], inputPartParent.ToPosix(), "Parent")
 		require.Equal(t, expect[1], inputPartBase, "Base")
 	})
 }
@@ -293,7 +293,7 @@ func TestPath_Anchor(t *testing.T) {
 	}
 
 	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.path)
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.ToPosix())
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
@@ -323,7 +323,7 @@ func TestPath_WindowsVolume(t *testing.T) {
 	}
 
 	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.path)
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.ToPosix())
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
@@ -333,7 +333,7 @@ func TestPath_WindowsVolume(t *testing.T) {
 	})
 }
 
-func TestPath_WindowsUncRoot(t *testing.T) {
+func TestPath_WindowsUNCRoot(t *testing.T) {
 	t.Parallel()
 
 	cases := []TestCase[*Path, string]{
@@ -352,13 +352,13 @@ func TestPath_WindowsUncRoot(t *testing.T) {
 	}
 
 	for i, testCase := range cases {
-		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.path)
+		cases[i].Name = fmt.Sprintf("%d-[%s]", i, testCase.Input.ToPosix())
 	}
 
 	runForResults(t, cases, func(t *testing.T, input *Path, expect string) {
 		t.Helper()
 
-		require.Equal(t, expect, input.WindowsUncRoot())
+		require.Equal(t, expect, input.WindowsUNCRoot())
 	})
 }
 
@@ -392,7 +392,7 @@ func TestPath_HasBackslash(t *testing.T) {
 		{Name: "Windows UNC path", Input: NewPathFromWindows(`\\host\share\a`), Expect: false},
 		{Name: "JoinStrings keeps backslash as name character", Input: NewPathFromPosix("a").JoinStrings(`b\c`), Expect: true},
 		{Name: "WithName keeps backslash as name character", Input: NewPathFromPosix("a/b").WithName(`c\d`), Expect: true},
-		{Name: "OS path", Input: NewPath(`a\b`), Expect: notRunningOnWindows},
+		{Name: "OS path", Input: NewPath(`a\b`), Expect: !runningOnWindows},
 		{Name: "Unmarshalled path", Input: func() *Path {
 			p := &Path{}
 			require.NoError(t, p.UnmarshalText([]byte(`C:\Program Files\Epic Games`)))

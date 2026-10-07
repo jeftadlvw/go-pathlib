@@ -1,3 +1,6 @@
+// fs_walk.go holds the walks over the entries of a directory, flat and
+// recursive.
+
 package pathlib
 
 import (
@@ -9,83 +12,70 @@ import (
 	"strings"
 )
 
-/*
-SkipDir and SkipAll are control signals returned from a WalkFunc or WalkRFunc.
-
-They are aliases of io/fs.SkipDir and io/fs.SkipAll, so they interoperate with
-the standard library's walk sentinels.
-*/
+// SkipDir and SkipAll are control signals a [WalkFunc] or a [WalkRFunc]
+// returns. They are the signals of the standard library, so they work with its
+// walk functions too.
+//
 //nolint:errname,gochecknoglobals // The sentinels alias the io/fs ones by name and value.
 var (
-	// SkipDir skips the remaining entries of the current directory. If it's returned
-	// for a directory entry, it skips that directory's contents. If it's returned for a file, it
-	// skips the remaining entries of the containing directory.
-	//
-	// Aliases io/fs.SkipDir.
+	// SkipDir skips the contents of the directory it is returned for. For any
+	// other entry, it skips the remaining entries of the directory that holds
+	// the entry. It is [fs.SkipDir].
 	SkipDir = fs.SkipDir
 
-	// SkipAll stops the entire walk. Any other non-nil error aborts the walk and is returned
-	// to the caller.
-	//
-	// Aliases io/fs.SkipAll.
+	// SkipAll ends the walk successfully. It is [fs.SkipAll].
 	SkipAll = fs.SkipAll
 )
 
-/*
-WalkFunc is called by Walk for every entry, receiving a Path joined with the
-walked directory.
-
-Return SkipDir or SkipAll to stop walking. Return any other non-nil error to abort
-and have Walk return it. The error will be wrapped as ErrWalk.
-*/
+// WalkFunc is called by [Path.Walk] for every entry, with the path of the
+// entry joined to the walked directory.
+//
+// [SkipDir] and [SkipAll] both end the walk successfully. Any other error stops
+// the walk, which returns it as the cause of [ErrWalk].
 type WalkFunc func(p *Path) error
 
-/*
-WalkRFunc is called by WalkR for every entry.
-
-Return SkipDir to skip the rest of the current directory or a directory's content.
-Return SkipAll to stop the entire walk, or return any other non-nil error to abort
-and have WalkR return it. The error will be wrapped as ErrWalk, except for an
-unchanged localDirError, which is returned as is.
-
-A directory is passed to walkFunc before its contents are read, with a nil
-localDirError, so returning SkipDir skips the directory without reading it.
-
-If a directory then cannot be opened or read, walkFunc is called a second time
-for it, with a non-nil localDirError. This matches filepath.WalkDir. The walked
-root itself is only passed to walkFunc in this case. Users may inspect the error
-and act upon it by e.g. ignoring it (return nil), bubbling it (return error) or
-returning a different error instead (e.g. SkipDir).
-
-localDirError is [ErrPermissionDenied] for a directory whose access is denied,
-and [ErrNotExist] for a directory removed during the walk. Any other failure is
-[ErrOpen] or [ErrReadDir], which share the [ErrAccess] group.
-*/
+// WalkRFunc is called by [Path.WalkR] for every entry, with the path of the
+// entry joined to the walked directory.
+//
+// A directory is passed before its contents are read, with a nil
+// localDirError, so [SkipDir] skips the directory without reading it. If the
+// directory then cannot be opened or read, it is passed a second time with a
+// non-nil localDirError, as [filepath.WalkDir] does. The walked root is only
+// passed in this case.
+//
+// SkipDir skips the contents of a directory, and for any other entry the
+// remaining entries of the directory that holds it. [SkipAll] ends the walk
+// successfully. For a localDirError, nil and SkipDir skip the directory, and
+// the unchanged localDirError makes WalkR return it as is. Any other error
+// stops the walk, which returns it as the cause of [ErrWalk].
+//
+// localDirError is [ErrPermissionDenied] for a directory whose access is
+// denied, and [ErrNotExist] for a directory removed during the walk. Any other
+// failure is [ErrOpen] or [ErrReadDir].
 type WalkRFunc func(p *Path, localDirError error) error
 
-/*
-Walk walks this directory and calls walkFunc for every entry (files, directories, etc.).
-This path must be a directory. If this Path is a symlink to a directory, it is followed.
+// walkEntryFunc is a WalkRFunc that also receives the directory entry of p, as
+// read from its parent directory. The entry is nil for the walked root. Its
+// IsDir does not follow symlinks, so it tells whether the walk descends into
+// p, without another stat.
+type walkEntryFunc func(p *Path, entry fs.DirEntry, localDirError error) error
 
-A missing path returns [ErrNotExist], and an existing non-directory returns
-[ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
-failure to check the path returns [ErrStat], and any other failure to open or
-read the directory returns a kind below [ErrAccess]. An error of walkFunc is
-returned as the cause of [ErrWalk].
-
-Entries are visited in lexical order by name, making the traversal deterministic.
-
-walkFunc receives a path joined with this Path.
-*/
+// Walk calls walkFunc for every entry of this directory, in lexical order by
+// name. It does not descend into subdirectories. This Path must be a
+// directory, and a symlink to a directory is followed.
+//
+// A missing path returns [ErrNotExist], an existing non-directory returns
+// [ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
+// failure to check the path returns [ErrStat], and any other failure to open
+// or read the directory returns [ErrOpen] or [ErrReadDir]. An error of walkFunc
+// is returned as the cause of [ErrWalk].
 func (p *Path) Walk(walkFunc WalkFunc) error {
 	return p.WalkContext(context.Background(), walkFunc)
 }
 
-/*
-WalkContext is Walk with support for cancellation through ctx. The walk stops as
-soon as ctx is done and returns ctx.Err() wrapped as ErrWalk, with cancellation
-checked before each entry.
-*/
+// WalkContext calls walkFunc for every entry of this directory, as [Path.Walk]
+// does. It checks ctx before each entry, and a done ctx stops the walk, which
+// returns ctx.Err() as the cause of [ErrWalk].
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	err := requireDir(p)
 	if err != nil {
@@ -107,7 +97,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 
 		walkErr := walkFunc(entryPath)
 		if walkErr != nil {
-			// Walk is not recursive, so SkipDir and SkipAll both simply stop it.
+			// Walk does not descend, so SkipDir and SkipAll both end it.
 			if errors.Is(walkErr, SkipAll) || errors.Is(walkErr, SkipDir) {
 				break
 			}
@@ -118,51 +108,34 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	return nil
 }
 
-/*
-WalkR walks this directory recursively and calls walkFunc for every entry.
-This path must be a directory. If this Path is a symlink to a directory, it is followed.
-
-A missing path returns [ErrNotExist], and an existing non-directory returns
-[ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
-failure to check the path returns [ErrStat]. An error of walkFunc is returned
-as the cause of [ErrWalk], and an unchanged localDirError is returned as is.
-
-Symlinks inside the tree are not followed. A symlink to a directory is passed to
-walkFunc as a single entry, and its contents are not visited. This matches
-filepath.WalkDir and avoids endless walks through symlink cycles.
-
-Within each directory, entries are visited in lexical order by name, making the
-traversal deterministic.
-
-walkFunc receives paths that are already joined with this Path. See WalkRFunc for
-when it is called and how its return value controls the walk.
-*/
+// WalkR calls walkFunc for every entry below this directory, recursively and
+// in pre-order. Within a directory, entries are visited in lexical order by
+// name. This Path must be a directory, and a symlink to a directory is
+// followed. [WalkRFunc] describes how walkFunc controls the walk.
+//
+// Symlinks inside the tree are not followed. A symlink to a directory is a
+// single entry, and its contents are not visited, as in [filepath.WalkDir].
+// So symlink cycles cannot make the walk endless.
+//
+// A missing path returns [ErrNotExist], an existing non-directory returns
+// [ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
+// failure to check the path returns [ErrStat]. An error of walkFunc is
+// returned as the cause of [ErrWalk], and an unchanged localDirError is
+// returned as is.
 func (p *Path) WalkR(walkFunc WalkRFunc) error {
 	return p.WalkRContext(context.Background(), walkFunc)
 }
 
-/*
-WalkRContext is WalkR with support for cancellation through ctx. The walk stops
-as soon as ctx is done and returns ctx.Err() wrapped as ErrWalk, with cancellation
-checked before each directory and each entry.
-*/
+// WalkRContext calls walkFunc for every entry below this directory, as
+// [Path.WalkR] does. It checks ctx before each directory and each entry, and a
+// done ctx stops the walk, which returns ctx.Err() as the cause of [ErrWalk].
 func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
 	return p.walkRContext(ctx, func(entryPath *Path, _ fs.DirEntry, localDirError error) error {
 		return walkFunc(entryPath, localDirError)
 	})
 }
 
-/*
-walkEntryFunc is the internal callback of walkR. It is a WalkRFunc that also
-receives the directory entry of p, as read from its parent directory. The entry
-is nil for the walked root. Its IsDir does not follow symlinks, so it tells
-whether walkR descends into p, without another stat.
-*/
-type walkEntryFunc func(p *Path, entry fs.DirEntry, localDirError error) error
-
-/*
-walkRContext is WalkRContext with a walkEntryFunc.
-*/
+// walkRContext walks as [Path.WalkRContext] does, with a walkEntryFunc.
 func (p *Path) walkRContext(ctx context.Context, walkFunc walkEntryFunc) error {
 	err := requireDir(p)
 	if err != nil {
@@ -171,7 +144,7 @@ func (p *Path) walkRContext(ctx context.Context, walkFunc walkEntryFunc) error {
 
 	err = walkR(ctx, p, nil, walkFunc)
 
-	// SkipAll is a successful early termination, not a failure.
+	// SkipAll ends the walk successfully.
 	if errors.Is(err, SkipAll) {
 		return nil
 	}
@@ -179,41 +152,27 @@ func (p *Path) walkRContext(ctx context.Context, walkFunc walkEntryFunc) error {
 	return err
 }
 
-// sortDirEntries orders directory entries lexically by name. This gives Walk and
-// WalkR a deterministic, platform-independent traversal order that matches the
-// standard library's filepath.WalkDir (and os.ReadDir), instead of the raw,
-// filesystem-dependent order returned by os.File.ReadDir.
-//
-// Walk and WalkR deliberately open the directory and call file.ReadDir(-1)
-// themselves, then sort with this helper, rather than calling os.ReadDir (which
-// would open, read and sort in one step). The reason is error reporting, as the
-// open step and the read step are wrapped with distinct sentinels (ErrOpen and
-// ErrReadDir, both members of the ErrAccess group) that are handed to the walk
-// callback as localDirError. os.ReadDir collapses both into a single, unwrappable
-// error, so callers could no longer tell an open failure from a read failure.
-// Keeping the two steps separate is the only reason this helper exists instead of
-// a plain os.ReadDir call.
+// sortDirEntries orders directory entries lexically by name, which is the order
+// of os.ReadDir and filepath.WalkDir. The order of os.File.ReadDir depends on
+// the filesystem.
 func sortDirEntries(entries []os.DirEntry) {
 	slices.SortFunc(entries, func(a, b os.DirEntry) int {
 		return strings.Compare(a.Name(), b.Name())
 	})
 }
 
-/*
-readDirSorted reads the entries of dir and sorts them with sortDirEntries. A
-failure to open dir returns [ErrOpen], and a failure to read it returns
-[ErrReadDir].
-*/
+// readDirSorted reads the entries of dir in lexical order, as os.ReadDir does.
+//
+// It opens and reads dir in two steps, so each failure keeps its own kind. A
+// failed open returns the error of osErr for [ErrOpen], and a failed read the
+// error of osErr for [ErrReadDir]. os.ReadDir returns one error for both steps.
 func readDirSorted(dir *Path) ([]os.DirEntry, error) {
-	// Open and read are kept as separate steps so failures can be reported with
-	// distinct sentinels. See sortDirEntries for why this is preferred over
-	// os.ReadDir.
 	file, err := os.Open(dir.String())
 	if err != nil {
 		return nil, osErr(ErrOpen, err, *dir)
 	}
 
-	// Read all entries up front so they can be sorted into a deterministic order.
+	// All entries are read up front, so they can be sorted.
 	entries, err := file.ReadDir(-1)
 	// The directory is only read, so closing it cannot lose data.
 	_ = file.Close()
@@ -225,28 +184,26 @@ func readDirSorted(dir *Path) ([]os.DirEntry, error) {
 	return entries, nil
 }
 
-/*
-walkR calls walkFunc for all entries below dir, recursively and in pre-order. A
-subdirectory is passed to walkFunc before it is read, so SkipDir avoids reading it.
-dirEntry is the entry of dir in its parent directory, or nil for the walked root.
-
-SkipDir is consumed at the level that raises it, so it never escapes the current
-function call frame. SkipAll is propagated up, so the whole walk unwinds.
-*/
+// walkR calls walkFunc for all entries below dir, recursively and in
+// pre-order. A subdirectory is passed to walkFunc before it is read, so
+// SkipDir avoids reading it. dirEntry is the entry of dir in its parent
+// directory, or nil for the walked root.
+//
+// SkipDir is consumed at the level that returns it, so it never leaves the
+// current call. SkipAll is passed up, so the whole walk unwinds.
 func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEntryFunc) error {
 	err := ctx.Err()
 	if err != nil {
 		return wrapErr(ErrWalk, err, *dir)
 	}
 
-	// The root is checked by walkRContext, and subdirectories come from directory
-	// entries. A subdirectory that vanished or changed since it was read fails to
-	// open or read below and is handed to walkFunc like any other directory error.
+	// The root is checked by walkRContext, and subdirectories come from
+	// directory entries. A subdirectory that vanished or changed since it was
+	// read fails to open or read below and is handed to walkFunc like any other
+	// directory error.
 
 	entries, err := readDirSorted(dir)
 	if err != nil {
-		// Give walkFunc a chance to inspect and ignore the directory error. A nil
-		// or SkipDir result skips this directory. Anything else aborts.
 		return handleDirErr(dir, dirEntry, err, walkFunc)
 	}
 
@@ -272,7 +229,8 @@ func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEn
 			return nil
 		}
 
-		// Recurse into subdirectories. Symlinks are no directories here.
+		// The entry does not follow symlinks, so a symlink is no directory
+		// here.
 		if entry.IsDir() {
 			subErr := walkR(ctx, entryPath, entry, walkFunc)
 			if subErr != nil {
@@ -284,11 +242,9 @@ func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEn
 	return nil
 }
 
-/*
-handleDirErr hands a failure to open or read dir to walkFunc. A nil or SkipDir
-result skips the directory. The unchanged dirErr is returned as is, and any
-other error is wrapped as ErrWalk.
-*/
+// handleDirErr hands a failure to open or read dir to walkFunc. A nil or
+// SkipDir result skips the directory. The unchanged dirErr is returned as is,
+// and any other error is returned as the cause of ErrWalk.
 func handleDirErr(dir *Path, dirEntry fs.DirEntry, dirErr error, walkFunc walkEntryFunc) error {
 	handled := walkFunc(dir, dirEntry, dirErr)
 	if handled == nil || errors.Is(handled, SkipDir) {
@@ -300,8 +256,8 @@ func handleDirErr(dir *Path, dirEntry fs.DirEntry, dirErr error, walkFunc walkEn
 	return callbackErr(handled, dir)
 }
 
-// callbackErr wraps an error returned by a WalkRFunc for p as ErrWalk. SkipAll
-// passes through unchanged, so WalkRContext can end the walk successfully.
+// callbackErr returns err, an error of a walkEntryFunc for p, as the cause of
+// ErrWalk. SkipAll passes unchanged, so the walk can end successfully.
 func callbackErr(err error, p *Path) error {
 	if errors.Is(err, SkipAll) {
 		return err

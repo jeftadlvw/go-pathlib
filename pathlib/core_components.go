@@ -1,3 +1,6 @@
+// core_components.go holds the components of a path, such as its parent, its
+// names, its extensions, and its anchor.
+
 package pathlib
 
 import (
@@ -6,18 +9,14 @@ import (
 	"strings"
 )
 
-/*
-Parent returns a copy of this Path in the parent directory.
-
-This function uses path.Dir.
-*/
+// Parent returns the parent directory of this Path. It wraps [path.Dir]. The
+// parent of "/" is "/", and the parent of "." and of a single name is ".".
 func (p *Path) Parent() *Path {
 	return p.copyWithNewPath(path.Dir(p.path))
 }
 
-/*
-Parts returns all single parts of the Path.
-*/
+// Parts returns the names of this Path. A volume anchor, such as "C:", is the
+// first part, and a UNC anchor is left out. The root "/" has no parts.
 func (p *Path) Parts() []string {
 	localPath := p.path
 
@@ -38,19 +37,15 @@ func (p *Path) Parts() []string {
 	return split
 }
 
-/*
-Split splits this Path into its parent and base.
-*/
+// Split returns the parent directory and the base name of this Path. It wraps
+// [path.Split].
 func (p *Path) Split() (*Path, string) {
 	dir, file := path.Split(p.path)
 	return p.copyWithNewPath(normalizePath(dir)), file
 }
 
-/*
-Base returns the last element of this Path.
-
-This function uses path.Base.
-*/
+// Base returns the last name of this Path. It wraps [path.Base]. A
+// drive-relative volume path without names, such as "C:", returns its anchor.
 func (p *Path) Base() string {
 	if p.isWindowsAnchoredPath() && p.isLocalDirectory() {
 		return p.windowsAnchor
@@ -59,14 +54,11 @@ func (p *Path) Base() string {
 	return path.Base(p.path)
 }
 
-/*
-HasDotName reports whether this Path's base name follows the Unix dotfile
-convention (begins with a dot but is not "." or "..").
-
-This is a purely lexical, conventional check that does not touch the filesystem
-and does not require the path to exist. It does not reflect Windows hidden-file
-attributes or macOS hidden flags.
-*/
+// HasDotName reports whether the base name of this Path starts with a dot and
+// is neither "." nor "..". Unix hides files with such names.
+//
+// The check is lexical and needs no existing path. The hidden attribute of
+// Windows and the hidden flag of macOS play no role.
 func (p *Path) HasDotName() bool {
 	base := p.Base()
 	if base == "" || base == "." || base == ".." {
@@ -75,23 +67,20 @@ func (p *Path) HasDotName() bool {
 	return strings.HasPrefix(base, ".")
 }
 
-/*
-HasBackslash reports whether a part of this Path contains a backslash.
-
-Posix allows backslashes in names, but Windows treats them as separators. Such a
-path changes its structure when it is persisted on Posix and used on Windows.
-Paths from NewPathFromWindows never contain one, because their backslashes are
-converted to separators.
-
-This is a purely lexical check that does not touch the filesystem.
-*/
+// HasBackslash reports whether a name of this Path contains a backslash. The
+// check is lexical.
+//
+// Posix allows backslashes in names, and Windows reads them as separators. So
+// such a path changes its structure when it is stored on Posix and used on
+// Windows. A Path from [NewPathFromWindows] has none, because its backslashes
+// are separators.
 func (p *Path) HasBackslash() bool {
 	return strings.Contains(p.path, windowsPathSeparator)
 }
 
-/*
-Stem returns the base of this Path without all extensions.
-*/
+// Stem returns the base name of this Path without its extensions. Leading
+// dots belong to the stem, so the stem of ".bashrc" is ".bashrc". The root "/"
+// has the stem "".
 func (p *Path) Stem() string {
 	completeBase := p.Base()
 
@@ -109,31 +98,25 @@ func (p *Path) Stem() string {
 	return completeBase[:(len(completeBase)-len(baseStrippedLeading))+dotIndex]
 }
 
-/*
-HasExtensions returns whether this Path has file extensions.
-*/
+// HasExtensions reports whether this Path has an extension. See
+// [Path.Extension].
 func (p *Path) HasExtensions() bool {
-	return hasDots(stripLeadingDots(p.Base()))
+	return strings.Contains(stripLeadingDots(p.Base()), ".")
 }
 
-/*
-ExtensionCount returns the number of extensions this Path has.
-*/
+// ExtensionCount returns the number of extensions of this Path. See
+// [Path.Extension].
 func (p *Path) ExtensionCount() int {
-	return dotCount(stripLeadingDots(p.Base()))
+	return strings.Count(stripLeadingDots(p.Base()), ".")
 }
 
-/*
-Extension returns the complete extension of this Path.
-Any prefixed dots are included.
-
-Everything starting from the first non-leading dot in this Path's Stem()
-is considered to be an extension.
-*/
+// Extension returns the extensions of this Path with their dots, such as
+// ".tar.gz". The extensions are the part of the base name after the stem, see
+// [Path.Stem].
 func (p *Path) Extension() string {
 	stem := p.Stem()
 
-	// If no stem exists, then there also are no extensions
+	// A base name without a stem, such as "/", has no extensions.
 	if len(stem) == 0 {
 		return ""
 	}
@@ -141,25 +124,18 @@ func (p *Path) Extension() string {
 	return p.Base()[len(stem):]
 }
 
-/*
-ExtensionParts returns all this Path's extensions.
-
-See Extension for what is considered an extension.
-*/
+// ExtensionParts returns the extensions of this Path without their dots, such
+// as "tar" and "gz". See [Path.Extension].
 func (p *Path) ExtensionParts() []string {
 	base := stripLeadingDots(p.Base())
 	return strings.Split(base, ".")[1:]
 }
 
-/*
-Anchor returns the first part of the path in platform-native form.
-
-On absolute paths this is the filesystem root ("/").
-For Windows paths the volume name or UNC root is returned
-(e.g. "C:" or "//host/share" on Posix, "C:" or "\\host\share" on Windows).
-
-Relative paths don't have a defined anchor, "" is returned.
-*/
+// Anchor returns the anchor of this Path in the native form of the platform.
+//
+// An absolute Posix path has the anchor "/". A Windows path has its volume,
+// such as "C:", or its UNC root, such as `\\host\share` on Windows and
+// "//host/share" elsewhere. A relative path has the anchor "".
 func (p *Path) Anchor() string {
 	if p.isWindowsAnchoredPath() {
 		if runningOnWindows {
@@ -175,12 +151,8 @@ func (p *Path) Anchor() string {
 	return "/"
 }
 
-/*
-WindowsVolume returns the drive letter anchor of a Windows volume path
-(e.g. "C:") in platform-native form.
-
-Returns "" if this is not a volume-anchored path.
-*/
+// WindowsVolume returns the volume of this Path, such as "C:", or "" for a
+// path without one.
 func (p *Path) WindowsVolume() string {
 	if !p.isWindowsVolumeAnchoredPath() {
 		return ""
@@ -189,13 +161,10 @@ func (p *Path) WindowsVolume() string {
 	return p.windowsAnchor
 }
 
-/*
-WindowsUncRoot returns the UNC root of a Windows network path
-(e.g. "//host/share" on Posix, "\\host\share" on Windows) in platform-native form.
-
-Returns "" if this is not a UNC-anchored path.
-*/
-func (p *Path) WindowsUncRoot() string {
+// WindowsUNCRoot returns the UNC root of this Path in the native form of the
+// platform, such as `\\host\share` on Windows and "//host/share" elsewhere, or
+// "" for a path without one.
+func (p *Path) WindowsUNCRoot() string {
 	if !p.isWindowsUNCAnchoredPath() {
 		return ""
 	}
@@ -205,4 +174,9 @@ func (p *Path) WindowsUncRoot() string {
 	}
 
 	return p.windowsAnchor
+}
+
+// stripLeadingDots returns s without its leading dots.
+func stripLeadingDots(s string) string {
+	return strings.TrimLeft(s, ".")
 }

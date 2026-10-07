@@ -1,5 +1,5 @@
-// io_error_permission.go holds PermissionError, the cause of every failure
-// below ErrInvalidPermission.
+// fs_error_permission.go holds PermissionError, the cause of the failures of
+// ErrInvalidPermission and ErrInvalidMode.
 
 package pathlib
 
@@ -11,17 +11,16 @@ import (
 	"slices"
 )
 
-/*
-PermissionError is the cause of every failure below [ErrInvalidPermission]. It holds the
-rejected permission or open-mode value and the paths the failure concerns.
-
-Read it with [errors.As]:
-
-	var permErr *PermissionError
-	if errors.As(err, &permErr) { use(permErr.Perm(), permErr.Mode()) }
-
-A PermissionError is immutable.
-*/
+// PermissionError is the cause of the failures of [ErrInvalidPermission] and
+// [ErrInvalidMode]. It holds the rejected permission or open-mode value and the
+// paths the failure concerns.
+//
+// Read it with [errors.As]:
+//
+//	var permErr *PermissionError
+//	if errors.As(err, &permErr) { use(permErr.Perm(), permErr.Mode()) }
+//
+// A PermissionError is immutable.
 type PermissionError struct {
 	// paths are the paths the failure concerns. May be empty.
 	paths []Path
@@ -92,12 +91,13 @@ func (e *PermissionError) MarshalJSON() ([]byte, error) {
 	}{Paths: posixPaths(e.paths), Perm: uint32(e.perm)})
 }
 
-// permRangeErr raises ErrPermissionRange for an out-of-bounds permission value.
+// permRangeErr returns ErrInvalidPermission for a permission with bits
+// outside PermissionBits.
 func permRangeErr(perm os.FileMode, paths ...Path) error {
-	return raiseError(ErrPermissionRange, &PermissionError{paths: slices.Clone(paths), perm: perm})
+	return wrapError(ErrInvalidPermission, &PermissionError{paths: slices.Clone(paths), perm: perm})
 }
 
-// permModeErr raises ErrUnsupportedMode for an unsupported open-mode string.
+// permModeErr returns ErrInvalidMode for an unsupported open-mode string.
 func permModeErr(mode string, paths ...Path) error {
-	return raiseError(ErrUnsupportedMode, &PermissionError{paths: slices.Clone(paths), mode: mode, isMode: true})
+	return wrapError(ErrInvalidMode, &PermissionError{paths: slices.Clone(paths), mode: mode, isMode: true})
 }

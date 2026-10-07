@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestLibraryDoesNotPrint guards that the library never writes to stdout or stderr
-// and does not import "testing" outside of tests. A test cannot observe output
-// that is suppressed while testing, so the source is checked instead.
+// TestLibraryDoesNotPrint guards that the library never writes to stdout or
+// stderr and does not import "testing" outside of tests. A test cannot observe
+// output that is suppressed while testing, so the source is checked instead.
 func TestLibraryDoesNotPrint(t *testing.T) {
 	t.Parallel()
 

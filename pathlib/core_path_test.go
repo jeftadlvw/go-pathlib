@@ -272,7 +272,7 @@ func TestNewCache(t *testing.T) {
 	require.Equal(t, localCachePath, pathlibCachePath)
 }
 
-func TestPathFromParts(t *testing.T) {
+func TestNewPathFromParts(t *testing.T) {
 	t.Parallel()
 
 	cases := []TestCase[[]string, *Path]{
@@ -290,7 +290,7 @@ func TestPathFromParts(t *testing.T) {
 	runForResults(t, cases, func(t *testing.T, input []string, expect *Path) {
 		t.Helper()
 
-		require.Equal(t, *expect, *PathFromParts(input...))
+		require.Equal(t, *expect, *NewPathFromParts(input...))
 	})
 }
 
@@ -322,9 +322,6 @@ func TestPath_Copy(t *testing.T) {
 		require.Equal(t, input, copiedPath)
 	})
 }
-
-// platformNativeUNC returns the expected platform-native representation of a UNC anchor.
-// On Posix it returns forward slashes, on Windows backslashes.
 
 // displayMask selects the representation and runtime a display test targets.
 type displayMask struct {
@@ -373,7 +370,7 @@ func runDisplayStringTests(t *testing.T, expect string, inputPath *Path, mask di
 			t.Skip("Test not targeted to Windows runtime")
 		}
 
-		if notRunningOnWindows {
+		if !runningOnWindows {
 			t.Skip("Running Windows test in Non-Windows runtime")
 		}
 
@@ -395,7 +392,8 @@ func runDisplayStringTests(t *testing.T, expect string, inputPath *Path, mask di
 // displaySkips holds the reasons to skip encoding tests of a display case.
 type displaySkips struct {
 	// backslashReadAsPosixOnWindows is set for a Posix path with a backslash on
-	// Windows. On Posix, "\\" is allowed and not escaped, so its state is undefined.
+	// Windows. On Posix, "\\" is allowed and not escaped, so its state is
+	// undefined.
 	backslashReadAsPosixOnWindows bool
 	// anchorNotPosix is set for a Windows anchor that Posix cannot represent.
 	anchorNotPosix bool
@@ -410,7 +408,7 @@ type displaySkips struct {
 func newDisplaySkips(input string, inputPath *Path, mask displayMask) displaySkips {
 	return displaySkips{
 		backslashReadAsPosixOnWindows: mask.OnWindows && mask.AsPosix && strings.Contains(input, "\\"),
-		anchorNotPosix:                mask.OnPosix && mask.AsWindows && inputPath.isWindowsAnchoredPath(),
+		anchorNotPosix:                mask.OnPosix && mask.AsWindows && (inputPath.WindowsVolume() != "" || inputPath.WindowsUNCRoot() != ""),
 		backslashAsPosix:              strings.Contains(input, "\\") && mask.AsPosix,
 		hasEscapeSequences:            strings.ContainsAny(input, "\n\r\t\\"),
 	}

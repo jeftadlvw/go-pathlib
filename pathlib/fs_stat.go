@@ -1,3 +1,6 @@
+// fs_stat.go holds the inspection of the filesystem entry at a path: whether
+// it exists, its type, its file info, and the target of a symbolic link.
+
 package pathlib
 
 import (
@@ -8,64 +11,50 @@ import (
 	"syscall"
 )
 
-/*
-IsFile returns whether this Path is an existing file.
-
-If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
-*/
+// IsFile reports whether this Path exists and is no directory, such as a
+// regular file or a device. A symlink is judged by its target, and
+// [Path.IsSymlink] reports the symlink itself.
 func (p *Path) IsFile() bool {
-	return pathCheck(p) == pathCheckFile
+	info, err := p.Stat()
+	return err == nil && !info.IsDir()
 }
 
-/*
-IsDir returns whether this Path is an existing directory.
-
-If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
-*/
+// IsDir reports whether this Path is an existing directory. A symlink is
+// judged by its target, and [Path.IsSymlink] reports the symlink itself.
 func (p *Path) IsDir() bool {
-	return pathCheck(p) == pathCheckDir
+	info, err := p.Stat()
+	return err == nil && info.IsDir()
 }
 
-/*
-IsEmptyDir returns whether this Path is an empty existing directory.
-
-If this Path is a symlink, the target is used. Use IsSymlink to check if this Path is a symlink.
-*/
+// IsEmptyDir reports whether this Path is an existing directory without
+// entries. A symlink is judged by its target.
 func (p *Path) IsEmptyDir() bool {
 	return p.IsDir() && !p.HasGlobMatch("*")
 }
 
-/*
-Exists returns whether this Path exists.
-
-If this Path is a symlink, the target is used, so a broken symlink does not exist.
-Use LExists to check the path itself. Exists also returns false if the path
-cannot be checked, e.g. for missing permissions.
-*/
+// Exists reports whether this Path exists. A symlink is judged by its target,
+// so a broken symlink does not exist, and [Path.LExists] checks the symlink
+// itself. A path that cannot be checked, such as for missing permissions, does
+// not exist either.
 func (p *Path) Exists() bool {
-	return pathCheck(p) != pathCheckNoExistOrUnreadable
+	_, err := p.Stat()
+	return err == nil
 }
 
-/*
-LExists returns whether this Path exists, without following symlinks.
-A symlink exists even if its target does not.
-
-LExists also returns false if the path cannot be checked, e.g. for missing permissions.
-*/
+// LExists reports whether this Path exists, without following symlinks. A
+// symlink exists, whether its target exists or not. A path that cannot be
+// checked, such as for missing permissions, does not exist.
 func (p *Path) LExists() bool {
 	exists, err := lexists(p)
 	return exists && err == nil
 }
 
-/*
-Resolve resolves all symbolic links and ensures an absolute path representation.
-
-This function uses filepath.EvalSymlinks and MakeAbsolute.
-
-A missing path returns [ErrNotExist], and denied access returns
-[ErrPermissionDenied]. Any other failed resolution returns [ErrResolve]. The
-errors of [Path.MakeAbsolute] apply.
-*/
+// Resolve returns the absolute path of this Path with every symbolic link
+// resolved. It wraps [filepath.EvalSymlinks] and [Path.MakeAbsolute].
+//
+// A missing path returns [ErrNotExist], and denied access returns
+// [ErrPermissionDenied]. Any other failed resolution returns [ErrResolve]. The
+// errors of Path.MakeAbsolute apply.
 func (p *Path) Resolve() (*Path, error) {
 	if !p.Exists() {
 		return nil, wrapErr(ErrNotExist, fs.ErrNotExist, *p)
@@ -79,14 +68,11 @@ func (p *Path) Resolve() (*Path, error) {
 	return NewPath(ep).MakeAbsolute()
 }
 
-/*
-Stat returns file info for this Path.
-
-This function uses os.Stat.
-
-A missing path returns [ErrNotExist], and denied access returns
-[ErrPermissionDenied]. Any other failure returns [ErrStat].
-*/
+// Stat returns the file info of this Path. It wraps [os.Stat] and follows
+// symbolic links.
+//
+// A missing path returns [ErrNotExist], and denied access returns
+// [ErrPermissionDenied]. Any other failure returns [ErrStat].
 func (p *Path) Stat() (os.FileInfo, error) {
 	info, err := os.Stat(p.String())
 	if err != nil {
@@ -96,14 +82,11 @@ func (p *Path) Stat() (os.FileInfo, error) {
 	return info, nil
 }
 
-/*
-Lstat returns file info for this Path, not following symbolic links.
-
-This function uses os.Lstat.
-
-A missing path returns [ErrNotExist], and denied access returns
-[ErrPermissionDenied]. Any other failure returns [ErrStat].
-*/
+// Lstat returns the file info of this Path without following symbolic links.
+// It wraps [os.Lstat].
+//
+// A missing path returns [ErrNotExist], and denied access returns
+// [ErrPermissionDenied]. Any other failure returns [ErrStat].
 func (p *Path) Lstat() (os.FileInfo, error) {
 	info, err := os.Lstat(p.String())
 	if err != nil {
@@ -113,65 +96,55 @@ func (p *Path) Lstat() (os.FileInfo, error) {
 	return info, nil
 }
 
-/*
-IsSymlink returns whether this Path is a symbolic link.
-*/
+// IsSymlink reports whether this Path is a symbolic link.
 func (p *Path) IsSymlink() bool {
-	// Symlinks must be checked with Lstat, since Stat follows them
 	return checkFileMode(p, os.ModeSymlink)
 }
 
-/*
-IsBlockDevice returns whether this Path is a block device.
-*/
+// IsBlockDevice reports whether this Path is a block device.
 func (p *Path) IsBlockDevice() bool {
 	return checkFileMode(p, os.ModeDevice) && !checkFileMode(p, os.ModeCharDevice)
 }
 
-/*
-IsCharDevice returns whether this Path is a character device.
-*/
+// IsCharDevice reports whether this Path is a character device.
 func (p *Path) IsCharDevice() bool {
 	return checkFileMode(p, os.ModeDevice) && checkFileMode(p, os.ModeCharDevice)
 }
 
-/*
-IsFiFoPipe returns whether this Path is a FIFO/pipe.
-*/
-func (p *Path) IsFiFoPipe() bool {
+// IsFIFO reports whether this Path is a named pipe (FIFO).
+func (p *Path) IsFIFO() bool {
 	return checkFileMode(p, os.ModeNamedPipe)
 }
 
-/*
-IsSocket returns whether this Path is a socket.
-*/
+// IsSocket reports whether this Path is a Unix domain socket.
 func (p *Path) IsSocket() bool {
 	return checkFileMode(p, os.ModeSocket)
 }
 
-/*
-pathCheck is a lower level Path existence checker.
-It returns 0 if the path does not exist, 1 if it's a file and 2 if it's a directory.
-*/
-func pathCheck(p *Path) int {
-	fileInfo, err := p.Stat()
-	if fileInfo == nil || err != nil {
-		return pathCheckNoExistOrUnreadable
+// ReadSymlinkTarget returns the target of the symbolic link at this Path. It
+// wraps [os.Readlink].
+//
+// A path that is no symlink returns [ErrNotSymlink]. Denied access returns
+// [ErrPermissionDenied], and any other failure to read the target returns
+// [ErrReadSymlink].
+func (p *Path) ReadSymlinkTarget() (*Path, error) {
+	if !p.IsSymlink() {
+		return nil, pathErr(ErrNotSymlink, *p)
 	}
 
-	if fileInfo.IsDir() {
-		return pathCheckDir
+	target, err := os.Readlink(p.String())
+	if err != nil {
+		return nil, osErr(ErrReadSymlink, err, *p)
 	}
 
-	return pathCheckFile
+	return NewPath(target), nil
 }
 
-/*
-requireDir returns nil if this Path is an existing directory. Symlinks are followed.
-
-An existing non-directory returns ErrNotDir. A failed stat returns the error of
-osErr for ErrStat, such as ErrNotExist for a missing path.
-*/
+// requireDir returns nil if p is an existing directory, following symbolic
+// links.
+//
+// An existing non-directory returns [ErrNotDir]. A failed stat returns the
+// error of osErr for [ErrStat], such as [ErrNotExist] for a missing path.
 func requireDir(p *Path) error {
 	info, err := os.Stat(p.String())
 	if err != nil {
@@ -185,14 +158,12 @@ func requireDir(p *Path) error {
 	return nil
 }
 
-/*
-lexists reports whether this Path exists, without following symlinks.
-
-Unlike LExists, it tells a missing path apart from one that cannot be checked:
-a missing path, including one below a non-directory, returns false and no error.
-Any other failure returns the error of osErr for ErrStat, such as
-ErrPermissionDenied for missing permissions.
-*/
+// lexists reports whether p exists, without following symbolic links. It
+// tells a missing path apart from one that cannot be checked.
+//
+// A missing path, including one below a non-directory, returns false and no
+// error. Any other failure returns the error of osErr for [ErrStat], such as
+// [ErrPermissionDenied] for missing permissions.
 func lexists(p *Path) (bool, error) {
 	_, err := os.Lstat(p.String())
 	if err == nil {
@@ -207,11 +178,8 @@ func lexists(p *Path) (bool, error) {
 	return false, osErr(ErrStat, err, *p)
 }
 
-/*
-checkFileMode is a helper function to check file mode bits on a passed path.
-
-It uses Lstat to get the mode.
-*/
+// checkFileMode reports whether the mode of p, without following symbolic
+// links, has a bit of modeMask. A path that cannot be checked has none.
 func checkFileMode(p *Path, modeMask os.FileMode) bool {
 	info, err := p.Lstat()
 	if err != nil {
@@ -219,14 +187,3 @@ func checkFileMode(p *Path, modeMask os.FileMode) bool {
 	}
 	return info.Mode()&modeMask != 0
 }
-
-const (
-	// pathCheckNoExistOrUnreadable indicates that the checked Path does not exist.
-	pathCheckNoExistOrUnreadable = iota
-
-	// pathCheckFile indicates that the checked Path is a file.
-	pathCheckFile
-
-	// pathCheckDir indicates that the checked Path is a directory.
-	pathCheckDir
-)

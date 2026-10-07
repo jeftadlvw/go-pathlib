@@ -1,3 +1,5 @@
+// fs_create.go holds the creation of files, directories, and symbolic links.
+
 package pathlib
 
 import (
@@ -6,106 +8,91 @@ import (
 	"os"
 )
 
-/*
-SymlinkTo creates a symbolic link at the source path pointing to the target path.
+// FileOptions configures the creation of a file. The zero value creates a new
+// file with [DefaultFileMode] and refuses an existing one.
+type FileOptions struct {
+	// ExistOk accepts an existing file. CreateFileWithOptions leaves it
+	// untouched, and WriteBytesWithOptions truncates it.
+	ExistOk bool
 
-This path must exist, else [ErrNotExist] is returned.
-
-This function uses CreateSymlink, and the errors of [CreateSymlink] apply.
-*/
-func (p *Path) SymlinkTo(linkPath *Path) error {
-	if !p.Exists() {
-		return wrapErr(ErrNotExist, fs.ErrNotExist, *p)
-	}
-
-	return CreateSymlink(p, linkPath)
+	// Mode is the permission of a created file. It may only contain
+	// PermissionBits. Zero selects DefaultFileMode, because the operating
+	// system refuses a file without permissions.
+	Mode fs.FileMode
 }
 
-/*
-ReadSymlinkTarget reads the target path for this Path.
+// DirOptions configures the creation of a directory. The zero value creates a
+// new directory with [DefaultDirMode] in an existing parent directory and
+// refuses an existing one.
+type DirOptions struct {
+	// ExistOk accepts an existing directory.
+	ExistOk bool
 
-This Path must be a symlink, else [ErrNotSymlink] is returned. Denied access
-returns [ErrPermissionDenied], and any other failure to read the target returns
-[ErrReadSymlink].
-*/
-func (p *Path) ReadSymlinkTarget() (*Path, error) {
-	if !p.IsSymlink() {
-		return nil, pathErr(ErrNotSymlink, *p)
-	}
+	// Mode is the permission of a created directory. It may only contain
+	// PermissionBits. Zero selects DefaultDirMode, because the operating
+	// system refuses a directory without permissions.
+	Mode fs.FileMode
 
-	target, err := os.Readlink(p.String())
-	if err != nil {
-		return nil, osErr(ErrReadSymlink, err, *p)
-	}
-
-	return NewPath(target), nil
+	// CreateAll creates missing parent directories as well.
+	CreateAll bool
 }
 
-/*
-SetPermission sets the permission mode for the specified path.
-
-The mode may only contain [PermissionBits]. Any other bit returns
-[ErrPermissionRange]. A missing path returns [ErrNotExist], and denied access
-returns [ErrPermissionDenied]. Any other failure returns [ErrSetPermission].
-
-Unlike on creation, the setuid and setgid bits are set reliably.
-*/
-func SetPermission(path *Path, mode fs.FileMode) error {
-	err := checkPermission(mode, path)
-	if err != nil {
-		return err
+// DefaultFileOptions returns the options [CreateFile] uses. They create a new
+// file with [DefaultFileMode].
+func DefaultFileOptions() FileOptions {
+	return FileOptions{
+		ExistOk: false,
+		Mode:    DefaultFileMode(),
 	}
-
-	err = os.Chmod(path.String(), mode)
-	if err != nil {
-		return osErr(ErrSetPermission, err, *path)
-	}
-
-	return nil
 }
 
-/*
-CreateFile creates the file at the defined path with DefaultFileMode.
-If the file already exists, ErrFileExist is returned and the file is left untouched.
+// DefaultDirOptions returns the options [MkDir] uses. They create a new
+// directory with [DefaultDirMode] in an existing parent directory.
+func DefaultDirOptions() DirOptions {
+	return DirOptions{
+		ExistOk:   false,
+		Mode:      DefaultDirMode(),
+		CreateAll: false,
+	}
+}
 
-Parent directories must exist.
-
-Unlike os.Create, CreateFile never truncates. Use CreateFileWithOptions with
-FileOptions.ExistOk to accept an existing file, or OpenFile to create or truncate it.
-
-The errors of [CreateFileWithOptions] apply.
-*/
+// CreateFile creates an empty file at path with [DefaultFileMode]. The parent
+// directory must exist.
+//
+// CreateFile never truncates. An existing file returns [ErrFileExist] and is
+// left untouched. [CreateFileWithOptions] accepts an existing file, and
+// [OpenFile] creates or truncates one, as [os.Create] does.
+//
+// The errors of CreateFileWithOptions apply.
 func CreateFile(path *Path) error {
 	_, err := CreateFileWithOptions(path, DefaultFileOptions())
 	return err
 }
 
-/*
-CreateFileWithOptions creates the file at the defined path with given options.
-
-If FileOptions.ExistOk is true and the file already exists, no action is taken and false is returned.
-Otherwise an existing file returns [ErrFileExist]. Parent directories must
-exist.
-
-An existing path that is not a file returns ErrNotFile. This includes a broken symlink,
-whose target is never created.
-
-FileOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
-and defaults to DefaultFileMode. Any bit outside PermissionBits returns ErrPermissionRange.
-
-A missing parent directory returns [ErrNotExist], and denied access returns
-[ErrPermissionDenied]. Any other failure to check the path returns [ErrStat],
-and any other failed creation returns [ErrCreate].
-
-Returns true if a new file was created, false otherwise.
-*/
+// CreateFileWithOptions creates an empty file at path with options and reports
+// whether it created one. The parent directory must exist.
+//
+// An existing file returns [ErrFileExist], unless FileOptions.ExistOk accepts
+// it. Then the file is left untouched and false is returned. An existing path
+// that is no file returns [ErrNotFile]. This includes a broken symlink, whose
+// target is never created.
+//
+// A FileOptions.Mode with bits outside [PermissionBits] returns
+// [ErrInvalidPermission]. A missing parent directory returns
+// [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
+// other failure to check the path returns [ErrStat], and any other failed
+// creation returns [ErrCreate].
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 	err := checkPermission(options.Mode, path)
 	if err != nil {
 		return false, err
 	}
 
-	exists, err := checkCreateTarget(path, path.IsFile, options.ExistOk, ErrNotFile, ErrFileExist)
+	check := func() (bool, error) {
+		return checkCreateTarget(path, path.IsFile, options.ExistOk, ErrNotFile, ErrFileExist)
+	}
+
+	exists, err := check()
 	if err != nil || exists {
 		return false, err
 	}
@@ -118,10 +105,15 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 	// existing file is never truncated and no symlink target is created.
 	file, err := os.OpenFile(path.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, options.Mode)
 	if err != nil {
-		if options.ExistOk && errors.Is(err, fs.ErrExist) && path.IsFile() {
-			return false, nil
+		// Another process may have created the path since the check. Checking
+		// again returns the same error as an existing path before the call.
+		if errors.Is(err, fs.ErrExist) {
+			exists, checkErr := check()
+			if checkErr != nil || exists {
+				return false, checkErr
+			}
 		}
-		return false, osErr(ErrCreate, err, *path)
+		return false, osCreateErr(ErrCreate, err, *path)
 	}
 
 	err = file.Close()
@@ -132,40 +124,39 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 	return true, nil
 }
 
-/*
-MkDir creates the directory at the defined path with mode 0755.
-Parent directories must exist.
-
-The errors of [MkDirWithOptions] apply.
-*/
+// MkDir creates a directory at path with [DefaultDirMode]. The parent
+// directory must exist.
+//
+// The errors of [MkDirWithOptions] apply.
 func MkDir(path *Path) error {
 	_, err := MkDirWithOptions(path, DefaultDirOptions())
 	return err
 }
 
-/*
-MkDirWithOptions creates the directory at the defined path with given options.
-If ExistOk is true and the directory already exists, no action is taken.
-Otherwise an existing directory returns [ErrDirExist].
-
-An existing path that is not a directory returns ErrNotDir. This includes a broken symlink.
-
-DirOptions.Mode can never be set explicitly to 0000. This is not allowed by the operating system
-and defaults to DefaultDirMode. Any bit outside PermissionBits returns ErrPermissionRange.
-
-A missing parent directory without DirOptions.CreateAll returns [ErrNotExist],
-and denied access returns [ErrPermissionDenied]. Any other failure to check the
-path returns [ErrStat], and any other failed creation returns [ErrCreate].
-
-Returns true if a new directory was created, false otherwise.
-*/
+// MkDirWithOptions creates a directory at path with options and reports
+// whether it created one. The parent directory must exist, unless
+// DirOptions.CreateAll creates it.
+//
+// An existing directory returns [ErrDirExist], unless DirOptions.ExistOk
+// accepts it. Then false is returned. An existing path that is no directory
+// returns [ErrNotDir]. This includes a broken symlink.
+//
+// A DirOptions.Mode with bits outside [PermissionBits] returns
+// [ErrInvalidPermission]. A missing parent directory returns
+// [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
+// other failure to check the path returns [ErrStat], and any other failed
+// creation returns [ErrCreate].
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	err := checkPermission(options.Mode, path)
 	if err != nil {
 		return false, err
 	}
 
-	exists, err := checkCreateTarget(path, path.IsDir, options.ExistOk, ErrNotDir, ErrDirExist)
+	check := func() (bool, error) {
+		return checkCreateTarget(path, path.IsDir, options.ExistOk, ErrNotDir, ErrDirExist)
+	}
+
+	exists, err := check()
 	if err != nil || exists {
 		return false, err
 	}
@@ -181,28 +172,28 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	}
 
 	if err != nil {
-		// Another process may have created the directory since the check.
-		if options.ExistOk && errors.Is(err, fs.ErrExist) && path.IsDir() {
-			return false, nil
+		// Another process may have created the path since the check. Checking
+		// again returns the same error as an existing path before the call.
+		if errors.Is(err, fs.ErrExist) {
+			exists, checkErr := check()
+			if checkErr != nil || exists {
+				return false, checkErr
+			}
 		}
-		return false, osErr(ErrCreate, err, *path)
+		return false, osCreateErr(ErrCreate, err, *path)
 	}
 
 	return true, nil
 }
 
-/*
-CreateSymlink creates a symlink at the symlinkPath that points to symlinkTarget.
-
-symlinkTarget may be relative or absolute.
-
-symlinkPath may not exist, but parent directory should. A broken symlink at
-symlinkPath exists too and returns [ErrExist].
-
-A missing parent directory returns [ErrParentNotExist], and denied access
-returns [ErrPermissionDenied]. Any other failure to check the path returns
-[ErrStat], and any other failed creation returns [ErrCreate].
-*/
+// CreateSymlink creates a symbolic link at symlinkPath that points to
+// symlinkTarget, which may be relative or absolute. The parent directory of
+// symlinkPath must exist. It wraps [os.Symlink].
+//
+// An existing symlinkPath returns [ErrExist], and this includes a broken
+// symlink. A missing parent directory returns [ErrParentNotExist], and denied
+// access returns [ErrPermissionDenied]. Any other failure to check the path
+// returns [ErrStat], and any other failed creation returns [ErrCreate].
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 	exists, err := lexists(symlinkPath)
 	if err != nil {
@@ -218,21 +209,32 @@ func CreateSymlink(symlinkTarget, symlinkPath *Path) error {
 
 	err = os.Symlink(symlinkTarget.String(), symlinkPath.String())
 	if err != nil {
-		return osErr(ErrCreate, err, *symlinkPath)
+		return osCreateErr(ErrCreate, err, *symlinkPath)
 	}
 
 	return nil
 }
 
-/*
-checkCreateTarget checks the path an entry is created at and reports whether
-the path exists. isKind reports whether the existing path has the kind of the
-created entry.
+// SymlinkTo creates a symbolic link at linkPath that points to this Path, as
+// [CreateSymlink] does.
+//
+// If this Path does not exist, [ErrNotExist] is returned. The errors of
+// CreateSymlink apply.
+func (p *Path) SymlinkTo(linkPath *Path) error {
+	if !p.Exists() {
+		return wrapErr(ErrNotExist, fs.ErrNotExist, *p)
+	}
 
-An existing path of another kind returns notKind, and an existing path of the
-kind returns exist unless existOk is set. A path that cannot be checked returns
-[ErrStat].
-*/
+	return CreateSymlink(p, linkPath)
+}
+
+// checkCreateTarget checks the path an entry is created at and reports whether
+// the path exists. isKind reports whether the existing path has the kind of
+// the created entry.
+//
+// An existing path of another kind returns notKind, and an existing path of
+// the kind returns exist unless existOk is set. A path that cannot be checked
+// returns the error of [lexists].
 func checkCreateTarget(path *Path, isKind func() bool, existOk bool, notKind, exist *PathlibError) (bool, error) {
 	exists, err := lexists(path)
 	if err != nil {

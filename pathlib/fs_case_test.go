@@ -7,12 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPath_IsOnCaseSensitiveFs(t *testing.T) {
+func TestPath_IsOnCaseSensitiveFS(t *testing.T) {
 	t.Parallel()
 
-	// This test is tricky because file system case-sensitivity depends on the OS/FS.
-	// We'll create a temp directory and use its behavior to determine the expected outcome.
-	// The function's internal logic already handles the detection.
+	// This test is tricky because file system case-sensitivity depends on the
+	// OS/FS. We'll create a temp directory and use its behavior to determine
+	// the expected outcome. The function's internal logic already handles the
+	// detection.
 
 	root := setupTempDir(t)
 
@@ -44,11 +45,16 @@ func TestPath_IsOnCaseSensitiveFs(t *testing.T) {
 			Expect: isFsCaseSensitiveExpected,
 		},
 		{
-			Name: "Test with file having no letters in base (should create temp)",
+			Name: "File with letters in the extension alone",
 			Input: func() *Path {
-				// Path with no letters, e.g., only numbers or symbols
-				noLetterPath := writeTempFile(t, root, "12345.ext", "content")
-				return noLetterPath
+				return writeTempFile(t, root, "12345.ext", "content")
+			}(),
+			Expect: isFsCaseSensitiveExpected,
+		},
+		{
+			Name: "File without letters creates a temporary file",
+			Input: func() *Path {
+				return writeTempFile(t, root, "12345", "content")
 			}(),
 			Expect: isFsCaseSensitiveExpected,
 		},
@@ -64,12 +70,12 @@ func TestPath_IsOnCaseSensitiveFs(t *testing.T) {
 	runForResults(t, cases, func(t *testing.T, input *Path, expect bool) {
 		t.Helper()
 
-		actual := input.IsOnCaseSensitiveFs()
+		actual := input.IsOnCaseSensitiveFS()
 		require.Equal(t, expect, actual)
 	})
 }
 
-func TestPath_EqualsFs(t *testing.T) {
+func TestPath_EqualsFS(t *testing.T) {
 	t.Parallel()
 
 	type Input struct {
@@ -133,17 +139,17 @@ func TestPath_EqualsFs(t *testing.T) {
 
 		root := setupTempDir(t)
 		p1, p2 := input.Setup(t, root)
-		require.Equal(t, expect, p1.EqualsFs(p2))
+		require.Equal(t, expect, p1.EqualsFS(p2))
 	})
 }
 
-func TestPath_EqualsFsNil(t *testing.T) {
+func TestPath_EqualsFSNil(t *testing.T) {
 	t.Parallel()
 
 	var nilPath *Path
 	root := setupTempDir(t)
 
-	require.False(t, nilPath.EqualsFs(nil), "nil points to no file, so it is never equal")
-	require.False(t, nilPath.EqualsFs(root))
-	require.False(t, root.EqualsFs(nil))
+	require.False(t, nilPath.EqualsFS(nil), "nil points to no file, so it is never equal")
+	require.False(t, nilPath.EqualsFS(root))
+	require.False(t, root.EqualsFS(nil))
 }

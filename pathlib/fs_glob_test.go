@@ -63,9 +63,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 	}
 
 	cases := []TestCase[Input, Expect]{
-		/*
-		 * Basic non-recursive
-		 */
+		// Basic non-recursive
 		{
 			Name: "Non-recursive: all files and dirs (*)",
 			Input: Input{
@@ -103,9 +101,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 
-		/*
-		 * Recursive
-		 */
+		// Recursive
 		{
 			Name: "Recursive: all files and dirs (**) - should match all",
 			Input: Input{
@@ -143,9 +139,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 
-		/*
-		 * Limit - note: order is not guaranteed, so we just check length
-		 */
+		// Limit - note: order is not guaranteed, so we just check length
 		{
 			Name: "Limit=1",
 			Input: Input{
@@ -165,9 +159,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 
-		/*
-		 * CaseSensitivity
-		 */
+		// CaseSensitivity
 		{
 			Name: "CaseSensitive, *.txt - matches only lowercase .txt",
 			Input: Input{
@@ -214,9 +206,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 
-		/*
-		 * Filter
-		 */
+		// Filter
 		{
 			Name: "Filter: Files only",
 			Input: Input{
@@ -236,9 +226,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 
-		/*
-		 * FilterFunc
-		 */
+		// FilterFunc
 		{
 			Name: "FilterFunc: only .md files (recursive)",
 			Input: Input{
@@ -253,9 +241,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error:  false,
 		},
 
-		/*
-		 * SkipOnDirError
-		 */
+		// SkipOnDirError
 		{
 			Name: "SkipOnDirError=true with unreadable dir",
 			Input: Input{
@@ -270,7 +256,8 @@ func TestPath_GlobWithOptions(t *testing.T) {
 					return root
 				},
 			},
-			// The unreadable directory itself exists and matches, only its contents are skipped.
+			// The unreadable directory itself exists and matches, only its
+			// contents are skipped.
 			Expect: Expect{FoundPaths: append(slices.Clone(items), "data/unreadable_logs")},
 			Error:  false,
 		},
@@ -294,9 +281,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 			Error: true,
 		},
 
-		/*
-		 * Edge Cases
-		 */
+		// Edge Cases
 		{
 			Name: "Non-directory path",
 			Input: Input{
@@ -345,7 +330,7 @@ func TestPath_GlobWithOptions(t *testing.T) {
 		foundPaths, err := globPath.GlobWithOptions(input.Pattern, input.Options)
 
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			return
 		}
 		require.NoError(t, err)
@@ -494,7 +479,7 @@ func TestPath_HasGlobMatchE(t *testing.T) {
 		p := input.Setup(t, root)
 		hasMatch, err := p.HasGlobMatchE(input.Pattern)
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			return
 		}
 		require.NoError(t, err)
@@ -649,7 +634,7 @@ func TestPath_List(t *testing.T) {
 		p := input.Setup(t, root)
 		entries, err := p.List(input.Options)
 		if expectError {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 			return
 		}
 		require.NoError(t, err)
@@ -772,28 +757,6 @@ func TestGlob_InvalidInputFailsBeforeWalking(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidFilter)
 }
 
-func TestPatternMaxDepth(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]int{
-		"*":         1,
-		"*.txt":     1,
-		"a/*.txt":   2,
-		"a/b/c":     3,
-		`a\/b`:      2, // an escaped separator still matches only "/"
-		"**":        0,
-		"a/**/b":    0,
-		"**.txt":    0,
-		"a[bc]":     0, // character classes can match "/"
-		"a/[^x]/b":  0,
-		"Plugins/*": 2,
-	}
-
-	for pattern, expect := range cases {
-		require.Equal(t, expect, patternMaxDepth(pattern), "pattern %q", pattern)
-	}
-}
-
 func TestGlob_DepthPruning(t *testing.T) {
 	t.Parallel()
 
@@ -868,8 +831,9 @@ func TestGlob_DepthPruning(t *testing.T) {
 func TestGlob_DepthPruningKeepsSymlinkSiblings(t *testing.T) {
 	t.Parallel()
 
-	// A symlink to a directory is no directory for the walk. Returning SkipDir
-	// for it would skip the rest of its directory instead of its contents.
+	// A symlink to a directory is no directory for the walk, so its contents are
+	// never visited. Returning SkipDir for it would skip the rest of its
+	// directory.
 	root := setupTempDir(t)
 	createTempDir(t, root, "target")
 	dir := createTempDir(t, root, "dir")
@@ -891,7 +855,8 @@ func TestList_NonRecursiveIgnoresUnreadableSubdirectories(t *testing.T) {
 	lockDir(t, locked)
 	lockDir(t, deepLocked)
 
-	// Before, every non-recursive listing walked the whole tree and failed here.
+	// Before, every non-recursive listing walked the whole tree and failed
+	// here.
 	entries, err := root.List(DefaultListOptions())
 	require.NoError(t, err)
 	require.Equal(t, []string{"a", "locked", "top.txt"}, relPathsSorted(t, entries, root))
@@ -922,4 +887,26 @@ func topLevelPaths(paths []string) []string {
 		}
 	}
 	return topLevel
+}
+
+func TestPatternMaxDepth(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]int{
+		"*":         1,
+		"*.txt":     1,
+		"a/*.txt":   2,
+		"a/b/c":     3,
+		`a\/b`:      2, // an escaped separator still matches only "/"
+		"**":        0,
+		"a/**/b":    0,
+		"**.txt":    0,
+		"a[bc]":     0, // character classes can match "/"
+		"a/[^x]/b":  0,
+		"Plugins/*": 2,
+	}
+
+	for pattern, expect := range cases {
+		require.Equal(t, expect, patternMaxDepth(pattern), "pattern %q", pattern)
+	}
 }

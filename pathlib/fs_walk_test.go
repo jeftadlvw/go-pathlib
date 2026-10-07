@@ -11,9 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// errSimulated is returned by walk callbacks to abort a walk.
-var errSimulated = errors.New("simulated error")
-
 func TestPath_Walk(t *testing.T) {
 	t.Parallel()
 
@@ -162,7 +159,7 @@ func TestPath_Walk(t *testing.T) {
 		err := p.Walk(customWalkFunc)
 
 		if expect.Error {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 		} else {
 			require.NoError(t, err)
 		}
@@ -401,8 +398,8 @@ func TestPath_WalkR(t *testing.T) {
 				},
 			},
 			Expect: Expect{
-				// unreadable_dir is passed twice: before it is read, and with the
-				// directory error after reading it failed.
+				// unreadable_dir is passed twice: before it is read, and with
+				// the directory error after reading it failed.
 				WalkedPaths: []string{
 					"another_dir",
 					"another_dir/another_file.txt",
@@ -419,11 +416,12 @@ func TestPath_WalkR(t *testing.T) {
 				RootSetup: func(t *testing.T, root *Path) *Path {
 					t.Helper()
 
-					// Entries are walked in lexical order, so naming the siblings
-					// a/b/c makes the traversal deterministic: a_readable is walked,
-					// b_unreadable raises a directory error that aborts the walk, and
-					// c_readable (lexically after the error) is never reached. This
-					// demonstrates that returning an error stops the walk.
+					// Entries are walked in lexical order, so naming the
+					// siblings a/b/c makes the traversal deterministic:
+					// a_readable is walked, b_unreadable raises a directory
+					// error that aborts the walk, and c_readable (lexically
+					// after the error) is never reached. This demonstrates that
+					// returning an error stops the walk.
 					dir := createTempDir(t, root, "root")
 					createTempDir(t, dir, "a_readable")
 					unreadableDir := createTempDir(t, dir, "b_unreadable")
@@ -439,9 +437,9 @@ func TestPath_WalkR(t *testing.T) {
 				},
 			},
 			Expect: Expect{
-				// b_unreadable is recorded once, before it is read. Reading it raises
-				// a directory error that aborts the walk (so the second call is not
-				// recorded), and c_readable is never reached.
+				// b_unreadable is recorded once, before it is read. Reading it
+				// raises a directory error that aborts the walk (so the second
+				// call is not recorded), and c_readable is never reached.
 				WalkedPaths: []string{
 					"a_readable",
 					"b_unreadable",
@@ -463,7 +461,7 @@ func TestPath_WalkR(t *testing.T) {
 		err := p.WalkR(customWalkRFunc)
 
 		if expect.Error {
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrPathlib)
 		} else {
 			require.NoError(t, err)
 		}
@@ -595,12 +593,12 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ErrOpen and ErrReadDir are members of the ErrAccess group", func(t *testing.T) {
+	t.Run("ErrOpen and ErrReadDir are members of the ErrOperation group", func(t *testing.T) {
 		t.Parallel()
 
 		// Both are catchable through the shared parent group.
-		require.ErrorIs(t, ErrOpen, ErrAccess)
-		require.ErrorIs(t, ErrReadDir, ErrAccess)
+		require.ErrorIs(t, ErrOpen, ErrOperation)
+		require.ErrorIs(t, ErrReadDir, ErrOperation)
 
 		// The two remain distinguishable from each other.
 		require.NotErrorIs(t, ErrOpen, ErrReadDir)
@@ -624,7 +622,6 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Error(t, captured)
 		require.ErrorIs(t, captured, ErrPermissionDenied)
 		require.ErrorIs(t, captured, fs.ErrPermission)
 	})

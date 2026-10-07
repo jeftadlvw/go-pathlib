@@ -2,14 +2,16 @@ package pathlib
 
 import (
 	"io/fs"
+	"os"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 // permissionFuncs returns functions that pass a mode to every function that
-// accepts a permission. Each returns the path the mode was meant for and whether
-// the path existed before.
+// accepts a permission. Each returns the path the mode was meant for and
+// whether the path existed before.
 func permissionFuncs() map[string]func(t *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
 	return map[string]func(t *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error){
 		"OpenFileWithOptions": func(_ *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
@@ -63,7 +65,7 @@ func TestPermissionBits_RefusesOtherBits(t *testing.T) {
 				root := setupTempDir(t)
 				p, existed, err := apply(t, root, mode)
 
-				require.ErrorIs(t, err, ErrPermissionRange)
+				require.ErrorIs(t, err, ErrInvalidPermission)
 				require.ErrorIs(t, err, ErrInvalidPermission)
 				var permErr *PermissionError
 				require.ErrorAs(t, err, &permErr)
@@ -97,6 +99,65 @@ func TestPermissionBits_AcceptsSpecialBits(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestSetPermission(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping permission test on Windows")
+	}
+
+	root := setupTempDir(t)
+
+	t.Run("file", func(t *testing.T) {
+		t.Parallel()
+
+		filePath := writeTempFile(t, root, "file.txt", "content")
+
+		err := SetPermission(filePath, 0600)
+		require.NoError(t, err)
+
+		info, err := filePath.Stat()
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0600).Perm(), info.Mode().Perm())
+
+		// Change again
+		err = SetPermission(filePath, 0755)
+		require.NoError(t, err)
+
+		info, err = filePath.Stat()
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0755).Perm(), info.Mode().Perm())
+	})
+
+	t.Run("directory", func(t *testing.T) {
+		t.Parallel()
+
+		dirPath := createTempDir(t, root, "permdir")
+
+		err := SetPermission(dirPath, 0700)
+		require.NoError(t, err)
+
+		info, err := dirPath.Stat()
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0700).Perm(), info.Mode().Perm())
+
+		err = SetPermission(dirPath, 0755)
+		require.NoError(t, err)
+
+		info, err = dirPath.Stat()
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0755).Perm(), info.Mode().Perm())
+	})
+
+	t.Run("non-existent path", func(t *testing.T) {
+		t.Parallel()
+
+		nonExistent := root.JoinStrings("does_not_exist")
+		err := SetPermission(nonExistent, 0644)
+		require.ErrorIs(t, err, ErrNotExist)
+	})
 }
 
 func TestSetPermission_SetsSetuidReliably(t *testing.T) {

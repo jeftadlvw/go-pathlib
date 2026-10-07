@@ -6,25 +6,23 @@ import (
 	"strconv"
 )
 
-/*
-GlobOptionFilterType selects the types of entries a glob includes. The zero value
-is GlobOptionFilterAll.
-*/
+// GlobOptionFilterType selects the types of entries a glob includes. The zero
+// value is GlobOptionFilterAll.
 type GlobOptionFilterType int
 
 const (
 	// GlobOptionFilterAll includes files and directories.
 	GlobOptionFilterAll GlobOptionFilterType = iota
+
 	// GlobOptionFilterFiles includes files only.
 	GlobOptionFilterFiles
+
 	// GlobOptionFilterDirectories includes directories only.
 	GlobOptionFilterDirectories
 )
 
-/*
-Valid reports whether the filter is one of the defined GlobOptionFilterType
-constants.
-*/
+// Valid reports whether the filter is one of the defined GlobOptionFilterType
+// constants.
 func (f GlobOptionFilterType) Valid() bool {
 	switch f {
 	case GlobOptionFilterAll, GlobOptionFilterFiles, GlobOptionFilterDirectories:
@@ -34,10 +32,8 @@ func (f GlobOptionFilterType) Valid() bool {
 	}
 }
 
-/*
-String returns the name of the filter, such as "files". An invalid filter
-returns its numeric value, as in "GlobOptionFilterType(7)".
-*/
+// String returns the name of the filter, such as "files". An invalid filter
+// returns its numeric value, as in "GlobOptionFilterType(7)".
 func (f GlobOptionFilterType) String() string {
 	switch f {
 	case GlobOptionFilterAll:

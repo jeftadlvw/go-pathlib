@@ -1,60 +1,48 @@
-/*
-Package pathlib contains source code for go-pathlib.
-
-Every error the package returns pairs a kind with a cause. A kind is a
-*[PathlibError] below [ErrPathlib], such as [ErrNotExist], and is matched with
-[errors.Is]. A cause holds the data of the failure, such as its paths, and is
-read with [errors.As]. It is a *[PathError], unless the kind names another.
-*/
+// Package pathlib handles filesystem paths through the immutable type [Path].
+// A Path holds a path in a canonical Posix form and converts it to the native
+// form of the platform at the boundary to the operating system.
+//
+// Every error the package returns pairs a kind with a cause. A kind is a
+// *[PathlibError] below [ErrPathlib], such as [ErrNotAbsolute], and is matched
+// with [errors.Is]. A cause holds the data of the failure, such as its paths,
+// and is read with [errors.As]. It is a *[PathError], unless the kind names
+// another.
 package pathlib
 
 import (
 	"os"
 )
 
-/*
-Path is a struct that represents a filesystem path.
-
-Create a new instance using NewPath() for paths coming from the operating
-system, or NewPathFromPosix() / NewPathFromWindows() to interpret a string in a
-specific format regardless of the runtime OS.
-Other constructor functions are prefixed with 'New'.
-
-Implements the fmt.Stringer interface.
-*/
+// Path is a filesystem path. It holds the path in a canonical Posix form and
+// is immutable.
+//
+// [NewPath] creates a Path from a string of the operating system.
+// [NewPathFromPosix] and [NewPathFromWindows] interpret a string in one format
+// on every platform.
+//
+// A Path implements [fmt.Stringer], [encoding.TextMarshaler], and
+// [encoding.TextUnmarshaler].
 type Path struct {
-
-	// The underlying filepath string representation in canonical (unix-style) form.
-	// For Windows paths this holds only the portion after the anchor.
+	// path is the path in canonical Posix form. For a Windows-anchored path it
+	// holds the part after the anchor.
 	path string
 
-	// windowsAnchor holds the Windows-specific anchor in canonical (forward-slash) form.
-	// "C:"           for volume paths  (windowsPathStateVolume)
-	// "//host/share" for UNC paths     (windowsPathStateUNC)
-	// ""             for all others
+	// windowsAnchor is the Windows anchor with forward slashes, such as "C:"
+	// for a volume path or "//host/share" for a UNC path. It is empty for
+	// every other path.
 	windowsAnchor string
 
-	// windowsPathEncodings is a bitmask of windowsPathState* flags.
+	// windowsPathEncodings is a bitmask of the windowsPathState flags.
 	windowsPathEncodings uint8
 }
 
-/*
-NewPath ensures correct internal state and behavior depending on the current
-operating system. It is meant to be used when handling file paths received
-by the operating system by system calls or subprocesses.
-
-The result is platform-dependent, meaning the same input may produce a different
-Path on Windows than on Posix. It branches to either NewPathFromPosix or
-NewPathFromWindows.
-
-When the input format is known ahead of time (serialization, cross-platform handling,
-tests), prefer those format-explicit constructors so the result is deterministic across
-platforms.
-
-Rule of thumb: reach for NewPath only for strings handed to you by the operating
-system. If you already hold a path in a known format, use the format-explicit
-constructor instead.
-*/
+// NewPath returns the Path of a string the operating system handed over, such
+// as the result of a system call or the output of a subprocess.
+//
+// It calls [NewPathFromWindows] on Windows and [NewPathFromPosix] on every
+// other platform, so one string can result in different paths. A string in a
+// known format, such as a serialized path, goes to the constructor of that
+// format, which returns the same Path on every platform.
 func NewPath(path string) *Path {
 	if runningOnWindows {
 		return NewPathFromWindows(path)
@@ -63,122 +51,92 @@ func NewPath(path string) *Path {
 	return NewPathFromPosix(path)
 }
 
-/*
-NewPathFromPosix interprets the passed string as a Posix path, independent of the
-runtime OS. A backslash is treated as an ordinary filename character, not a
-separator. Such a path changes its structure on Windows, use HasBackslash to check for it.
-
-The passed path string is automatically cleaned and ready for further use using the following rules:
-  - Parts can include whitespaces wherever they want (leading, somewhere in between and ending).
-  - Parts are separated by a single forward slash ("/").
-  - Multiple forward slashes are replaced by one single slash.
-  - Trailing forward slashes are removed.
-
-Defined edge cases:
-  - an empty string, "." and "./" results into "."
-  - if all rules result into an empty string, the path also result into "."
-  - ".." stays ".."
-  - "/", "/.", and "/.." result into "/"
-
-The path is not lowercased, because the path might be used on a case-sensitive filesystem.
-Functions that are case-insensitive must additionally lowercase this representation.
-*/
+// NewPathFromPosix returns the Path of a Posix path string on every platform.
+// A backslash is an ordinary character of a name. Such a path changes its
+// structure on Windows, which [Path.HasBackslash] reports.
+//
+// It cleans the path with [path.Clean]. A single forward slash separates
+// names, "." names and resolvable ".." names are removed, and trailing slashes
+// are dropped. Names keep their whitespace and casing. The empty string
+// becomes ".", and "/.." becomes "/".
 func NewPathFromPosix(path string) *Path {
 	return &Path{path: normalizePath(path)}
 }
 
-/*
-NewPathFromWindows interprets the passed string as a Windows path, independent of
-the runtime OS. Use it to parse Windows-formatted strings on any platform (e.g.
-when reading serialized paths on a Posix server).
-
-It is effectively a superset of NewPathFromPosix. Backslashes are converted to the
-canonical separator and Windows volume names (e.g. "C:") and UNC anchors (e.g.
-"\\\\host\\share") are split off, after which the same normalization rules as
-NewPathFromPosix apply to the remainder.
-*/
+// NewPathFromWindows returns the Path of a Windows path string on every
+// platform, such as a path written on Windows and read on Linux.
+//
+// Backslashes and forward slashes both separate names. A volume, such as
+// "C:", or a UNC root, such as `\\host\share`, becomes the anchor of the path.
+// The rest is cleaned as [NewPathFromPosix] cleans it, and ".." names never
+// climb above the root of a volume.
 func NewPathFromWindows(path string) *Path {
 	return normalizeWindowsPath(path)
 }
 
-/*
-NewCwd returns a new Path instance pointing to the application's current working directory.
+// NewPathFromParts returns the Path of parts, joined as [Path.JoinStrings]
+// joins them.
+func NewPathFromParts(parts ...string) *Path {
+	return NewPathFromPosix(".").JoinStrings(parts...)
+}
 
-This function wraps os.Getwd.
-
-If the directory cannot be determined, [ErrLookup] is returned with the error
-of the os package as its cause.
-*/
+// NewCwd returns the Path of the current working directory. It wraps
+// [os.Getwd].
+//
+// A directory that cannot be determined returns [ErrLookup] with the error of
+// the os package as its cause.
 func NewCwd() (*Path, error) {
 	cwdPath, err := os.Getwd()
 	if err != nil {
-		return nil, raiseError(ErrLookup, err)
+		return nil, wrapError(ErrLookup, err)
 	}
 
 	return NewPath(cwdPath), nil
 }
 
-/*
-NewHome returns a new Path instance pointing to the user's home directory.
-
-This function wraps os.UserHomeDir.
-
-If the directory cannot be determined, [ErrLookup] is returned with the error
-of the os package as its cause.
-*/
+// NewHome returns the Path of the home directory of the user. It wraps
+// [os.UserHomeDir].
+//
+// A directory that cannot be determined returns [ErrLookup] with the error of
+// the os package as its cause.
 func NewHome() (*Path, error) {
 	homePath, err := os.UserHomeDir()
 	if err != nil {
-		return nil, raiseError(ErrLookup, err)
+		return nil, wrapError(ErrLookup, err)
 	}
 
 	return NewPath(homePath), nil
 }
 
-/*
-NewConfig returns a new Path instance pointing to the user's configuration directory.
-
-This function wraps os.UserConfigDir.
-
-If the directory cannot be determined, [ErrLookup] is returned with the error
-of the os package as its cause.
-*/
+// NewConfig returns the Path of the configuration directory of the user. It
+// wraps [os.UserConfigDir].
+//
+// A directory that cannot be determined returns [ErrLookup] with the error of
+// the os package as its cause.
 func NewConfig() (*Path, error) {
-	homePath, err := os.UserConfigDir()
+	configPath, err := os.UserConfigDir()
 	if err != nil {
-		return nil, raiseError(ErrLookup, err)
+		return nil, wrapError(ErrLookup, err)
 	}
 
-	return NewPath(homePath), nil
+	return NewPath(configPath), nil
 }
 
-/*
-NewCache returns a new Path instance pointing to the user's cache directory.
-
-This function wraps os.UserCacheDir.
-
-If the directory cannot be determined, [ErrLookup] is returned with the error
-of the os package as its cause.
-*/
+// NewCache returns the Path of the cache directory of the user. It wraps
+// [os.UserCacheDir].
+//
+// A directory that cannot be determined returns [ErrLookup] with the error of
+// the os package as its cause.
 func NewCache() (*Path, error) {
-	homePath, err := os.UserCacheDir()
+	cachePath, err := os.UserCacheDir()
 	if err != nil {
-		return nil, raiseError(ErrLookup, err)
+		return nil, wrapError(ErrLookup, err)
 	}
 
-	return NewPath(homePath), nil
+	return NewPath(cachePath), nil
 }
 
-/*
-PathFromParts combines passed parts into a new Path.
-*/
-func PathFromParts(parts ...string) *Path {
-	return NewPathFromPosix(".").JoinStrings(parts...)
-}
-
-/*
-Copy creates a copy of this Path.
-*/
+// Copy returns a copy of this Path.
 func (p *Path) Copy() *Path {
 	return &Path{
 		path:                 p.path,
@@ -187,12 +145,9 @@ func (p *Path) Copy() *Path {
 	}
 }
 
-/*
-String returns this Path in platform-native form.
-
-On Windows this uses backslashes and prepends the anchor. On Posix it uses forward slashes.
-Use ToPosix or ToWindows for an explicit representation.
-*/
+// String returns this Path in the native form of the platform. It is the form
+// of [Path.ToWindows] on Windows and the form of [Path.ToPosix] on every other
+// platform.
 func (p *Path) String() string {
 	if runningOnWindows {
 		return p.ToWindows()
@@ -201,16 +156,14 @@ func (p *Path) String() string {
 	return p.ToPosix()
 }
 
-/*
-ToPosix returns a string representation with forward slashes.
-*/
+// ToPosix returns this Path with forward slashes, including its Windows
+// anchor, such as "C:/a".
 func (p *Path) ToPosix() string {
 	return p.pathWithWindowsAnchor()
 }
 
-/*
-ToWindows returns a string representation with backward slashes.
-*/
+// ToWindows returns this Path with backslashes, including its Windows anchor,
+// such as `C:\a`.
 func (p *Path) ToWindows() string {
 	pathWindows := multipleWindowsPathSeparatorsRegex.ReplaceAllString(
 		toWindowsSeparators(p.path), windowsPathSeparator,
@@ -231,42 +184,35 @@ func (p *Path) ToWindows() string {
 	return pathWindows
 }
 
-/*
-TrimWindowsAnchor returns a copy of this Path with stripped
-Windows anchor encoding information.
-*/
+// TrimWindowsAnchor returns a copy of this Path without its Windows anchor.
 func (p *Path) TrimWindowsAnchor() *Path {
-	// p.path is already canonical posix (the anchor is held separately), so
-	// interpret it as posix rather than re-running OS-dependent detection.
+	// The path part holds no anchor and is in Posix form already, so it skips
+	// the detection of Windows anchors.
 	return NewPathFromPosix(p.path)
 }
 
-/*
-MarshalText marshals this Path's Posix representation into a byte array.
-Implements the encoding.TextMarshaler interface.
-*/
+// MarshalText returns the Posix form of this Path. It implements
+// [encoding.TextMarshaler].
 func (p *Path) MarshalText() ([]byte, error) {
 	return []byte(p.ToPosix()), nil
 }
 
-/*
-UnmarshalText unmarshalls any byte array into a Path type.
-Implements the encoding.TextUnmarshaler interface.
-
-Uses NewPathFromWindows to ensure Windows anchors survive a marshal/unmarshal round-trip,
-since MarshalText serializes them in forward-slash form (e.g. "c:/" or "//host/share").
-
-UnmarshalText overwrites this Path and is meant for decoders such as encoding/json,
-which call it on the field they fill. A Path is otherwise immutable, and the library
-never shares a *Path with its caller, so this only changes Paths the caller owns.
-*/
+// UnmarshalText sets this Path to text, interpreted by [NewPathFromWindows].
+// It implements [encoding.TextUnmarshaler].
+//
+// The Windows interpretation keeps the anchors [Path.MarshalText] writes with
+// forward slashes, such as "c:/" or "//host/share".
+//
+// UnmarshalText changes this Path in place for decoders such as
+// [encoding/json], which fill a field they own. The library never shares a
+// *Path with its caller, so only Paths the caller owns change.
 func (p *Path) UnmarshalText(text []byte) error {
 	*p = *NewPathFromWindows(string(text))
 	return nil
 }
 
-// copyWithNewPath creates a copy of this Path with a different path portion,
-// preserving the Windows anchor fields.
+// copyWithNewPath returns a copy of this Path with the path part newPath and
+// the same Windows anchor.
 func (p *Path) copyWithNewPath(newPath string) *Path {
 	c := p.Copy()
 	c.path = newPath

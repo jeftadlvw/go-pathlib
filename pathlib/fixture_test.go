@@ -1,24 +1,25 @@
 package pathlib
 
 import (
-	"fmt"
+	"errors"
 	"io/fs"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-type TestCase[I any, E any] struct {
-	Name   string
-	Input  I
-	Expect E
-	Error  bool
-}
+// randomStringCharset holds the digits and the Latin letters in both cases.
+const randomStringCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+// errSimulated is an error of a test, such as of a walk callback.
+var errSimulated = errors.New("simulated error")
+
+// platformNativeUNC returns posixForm, a UNC path with forward slashes, in the
+// native form of the platform.
 func platformNativeUNC(posixForm string) string {
 	if runningOnWindows {
 		return toWindowsSeparators(posixForm)
@@ -36,44 +37,19 @@ func onWindows[T any](posixVal, windowsVal T) T {
 	return posixVal
 }
 
-func runForResultsE[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E, expectError bool)) {
-	t.Helper()
-
-	for _, test := range cases {
-		caseName := test.Name
-		if strings.TrimSpace(caseName) == "" {
-			caseName = fmt.Sprintf("case--\"%v\"", test.Input)
-		}
-
-		t.Run(caseName, func(t *testing.T) {
-			t.Parallel()
-
-			testFunc(t, test.Input, test.Expect, test.Error)
-		})
-	}
-}
-
-func runForResults[I any, E any](t *testing.T, cases []TestCase[I, E], testFunc func(t *testing.T, input I, expect E)) {
-	t.Helper()
-
-	runForResultsE(t, cases, func(t *testing.T, input I, expect E, _ bool) {
-		t.Helper()
-
-		testFunc(t, input, expect)
-	})
-}
-
+// setupTempDir returns a temporary directory that is removed when the test
+// ends.
 func setupTempDir(t *testing.T) *Path {
 	t.Helper()
 
-	tempDir := t.TempDir()
-	return NewPath(tempDir)
+	return NewPath(t.TempDir())
 }
 
 // setupRelativeTempDir creates a directory below the working directory and
 // returns it as a relative Path, so tests can pass relative paths to the
 // library. Its name starts with an underscore, so the go tool ignores a
-// directory left behind by an interrupted run. It is removed when the test ends.
+// directory left behind by an interrupted run. It is removed when the test
+// ends.
 func setupRelativeTempDir(t *testing.T) *Path {
 	t.Helper()
 
@@ -87,8 +63,8 @@ func setupRelativeTempDir(t *testing.T) *Path {
 	return root
 }
 
-// writeTempFile creates a file with content inside a given root.
-// Returns the Path to the created file.
+// writeTempFile creates the file relPath with content below root, together
+// with its missing parent directories, and returns its path.
 func writeTempFile(t *testing.T, root *Path, relPath string, content string) *Path {
 	t.Helper()
 
@@ -103,8 +79,8 @@ func writeTempFile(t *testing.T, root *Path, relPath string, content string) *Pa
 	return filePath
 }
 
-// createTempDir creates a directory inside a given root.
-// Returns the Path to the created directory.
+// createTempDir creates the directory relPath below root, together with its
+// missing parent directories, and returns its path.
 func createTempDir(t *testing.T, root *Path, relPath string) *Path {
 	t.Helper()
 
@@ -114,11 +90,8 @@ func createTempDir(t *testing.T, root *Path, relPath string) *Path {
 	return dirPath
 }
 
-// createTempSymlinkAbs creates a symlink inside a given root.
-// targetRelPath is relative to the root.
-// linkRelPath is relative to the root.
-// Both paths are made absolute for symlink creation.
-// Returns the Path to the created symlink.
+// createTempSymlinkAbs creates the symlink linkRelPath below root with the
+// absolute target root joined with targetRelPath, and returns its path.
 func createTempSymlinkAbs(t *testing.T, root *Path, targetRelPath string, linkRelPath string) *Path {
 	t.Helper()
 
@@ -127,17 +100,13 @@ func createTempSymlinkAbs(t *testing.T, root *Path, targetRelPath string, linkRe
 	err := os.MkdirAll(linkPath.Parent().String(), 0755) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 
-	// Create absolute symlinks
 	err = os.Symlink(targetPath.String(), linkPath.String())
 	require.NoError(t, err)
 	return linkPath
 }
 
-// createTempSymlinkRel creates a symlink inside a given root.
-// targetRelPath is relative to the root.
-// linkRelPath is relative to the root.
-// Only linkRelPath is made absolute for symlink creation. targetRelPath is kept relative.
-// Returns the Path to the created symlink.
+// createTempSymlinkRel creates the symlink linkRelPath below root with the
+// relative target targetRelPath, and returns its path.
 func createTempSymlinkRel(t *testing.T, root *Path, targetRelPath string, linkRelPath string) *Path {
 	t.Helper()
 
@@ -146,14 +115,14 @@ func createTempSymlinkRel(t *testing.T, root *Path, targetRelPath string, linkRe
 	err := os.MkdirAll(linkPath.Parent().String(), 0755) //nolint:gosec // Fixtures use common permissions.
 	require.NoError(t, err)
 
-	// Create relative symlink
 	err = os.Symlink(targetPath.String(), linkPath.String())
 	require.NoError(t, err)
 	return linkPath
 }
 
-// readDirEntries reads all entries (files and directories) recursively within a given Path,
-// returning their paths relative to the `root` Path, sorted.
+// readDirEntries returns the entries below dir, recursively and sorted, as
+// paths relative to root with forward slashes. dir itself is included unless
+// it is root.
 func readDirEntries(t *testing.T, root *Path, dir *Path) []string {
 	t.Helper()
 
@@ -165,19 +134,12 @@ func readDirEntries(t *testing.T, root *Path, dir *Path) []string {
 		if err != nil {
 			return err
 		}
-		if path == dir.String() && path == root.String() { // Skip the root directory itself if it's the walk start
+		if path == dir.String() && path == root.String() {
 			return nil
 		}
-		if path == dir.String() && path != root.String() { // Include the walked directory itself if it's not the root
-			relPath, _ := filepath.Rel(root.String(), path)
-			entries = append(entries, filepath.ToSlash(relPath))
-			return nil
-		}
-		if path != dir.String() { // For actual children
-			relPath, err := filepath.Rel(root.String(), path)
-			require.NoError(t, err)
-			entries = append(entries, filepath.ToSlash(relPath))
-		}
+		relPath, err := filepath.Rel(root.String(), path)
+		require.NoError(t, err)
+		entries = append(entries, filepath.ToSlash(relPath))
 		return nil
 	})
 	require.NoError(t, err)
@@ -185,7 +147,7 @@ func readDirEntries(t *testing.T, root *Path, dir *Path) []string {
 	return entries
 }
 
-// relPathsSorted collects paths relative to base, sorts them, and returns the sorted slice.
+// relPathsSorted returns entries relative to base in Posix form, sorted.
 func relPathsSorted(t *testing.T, entries []*Path, base *Path) []string {
 	t.Helper()
 
@@ -200,9 +162,9 @@ func relPathsSorted(t *testing.T, entries []*Path, base *Path) []string {
 	return relPaths
 }
 
-// lockDir removes all permissions from dir, so entries below it cannot be checked,
-// and restores them when the test ends. The test is skipped where directory
-// permissions are not enforced (Windows, or when running as root).
+// lockDir removes all permissions from dir, so entries below it cannot be
+// checked, and restores them when the test ends. The test is skipped where
+// directory permissions are not enforced, on Windows or for the root user.
 func lockDir(t *testing.T, dir *Path) {
 	t.Helper()
 	if runningOnWindows || os.Geteuid() == 0 {
@@ -218,4 +180,19 @@ func requireLExists(t *testing.T, expect bool, p *Path, msgAndArgs ...any) {
 	t.Helper()
 	_, err := os.Lstat(p.String())
 	require.Equal(t, expect, err == nil, msgAndArgs...)
+}
+
+// generateRandomString returns a string of random letters and digits whose
+// length lies between minLength and maxLength.
+func generateRandomString(minLength, maxLength int) string {
+	//nolint:gosec // The strings are no secrets.
+	length := rand.IntN(maxLength-minLength+1) + minLength
+
+	result := make([]byte, length)
+	for i := range length {
+		//nolint:gosec // The strings are no secrets.
+		result[i] = randomStringCharset[rand.IntN(len(randomStringCharset))]
+	}
+
+	return string(result)
 }
