@@ -87,8 +87,6 @@ missing.txt
 - [func CreateTempDirWithOptions\(options TempPathOptions\) \(\*Path, DisposeFunc, error\)](<#CreateTempDirWithOptions>)
 - [func CreateTempFile\(\) \(\*Path, DisposeFunc, error\)](<#CreateTempFile>)
 - [func CreateTempFileWithOptions\(options TempPathOptions\) \(\*Path, DisposeFunc, error\)](<#CreateTempFileWithOptions>)
-- [func DefaultDirMode\(\) fs.FileMode](<#DefaultDirMode>)
-- [func DefaultFileMode\(\) fs.FileMode](<#DefaultFileMode>)
 - [func MkDir\(path \*Path\) error](<#MkDir>)
 - [func MkDirWithOptions\(path \*Path, options DirOptions\) \(bool, error\)](<#MkDirWithOptions>)
 - [func Move\(source, destination \*Path\) error](<#Move>)
@@ -100,7 +98,7 @@ missing.txt
 - [func RemoveAll\(path \*Path\) error](<#RemoveAll>)
 - [func RemoveWithOptions\(path \*Path, options RemoveOptions\) error](<#RemoveWithOptions>)
 - [func Rename\(source \*Path, name string\) error](<#Rename>)
-- [func SetPermission\(path \*Path, mode fs.FileMode\) error](<#SetPermission>)
+- [func SetPermission\(path \*Path, mode FileMode\) error](<#SetPermission>)
 - [func SetTimes\(path \*Path, accessTime, modTime time.Time\) error](<#SetTimes>)
 - [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
 - [func WriteBytesWithOptions\(path \*Path, data \[\]byte, options FileOptions\) \(int, error\)](<#WriteBytesWithOptions>)
@@ -112,6 +110,17 @@ missing.txt
 - [type DirOptions](<#DirOptions>)
   - [func DefaultDirOptions\(\) DirOptions](<#DefaultDirOptions>)
 - [type DisposeFunc](<#DisposeFunc>)
+- [type FileInfo](<#FileInfo>)
+  - [func \(fi \*FileInfo\) IsDir\(\) bool](<#FileInfo.IsDir>)
+  - [func \(fi \*FileInfo\) ModTime\(\) time.Time](<#FileInfo.ModTime>)
+  - [func \(fi \*FileInfo\) Mode\(\) FileMode](<#FileInfo.Mode>)
+  - [func \(fi \*FileInfo\) Name\(\) string](<#FileInfo.Name>)
+  - [func \(fi \*FileInfo\) SameFile\(other \*FileInfo\) bool](<#FileInfo.SameFile>)
+  - [func \(fi \*FileInfo\) Size\(\) int64](<#FileInfo.Size>)
+  - [func \(fi \*FileInfo\) Sys\(\) any](<#FileInfo.Sys>)
+- [type FileMode](<#FileMode>)
+  - [func DefaultDirMode\(\) FileMode](<#DefaultDirMode>)
+  - [func DefaultFileMode\(\) FileMode](<#DefaultFileMode>)
 - [type FileOptions](<#FileOptions>)
   - [func DefaultFileOptions\(\) FileOptions](<#DefaultFileOptions>)
 - [type FilterFunc](<#FilterFunc>)
@@ -171,7 +180,7 @@ missing.txt
   - [func \(p \*Path\) List\(options ListOptions\) \(\[\]\*Path, error\)](<#Path.List>)
   - [func \(p \*Path\) ListDirs\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListDirs>)
   - [func \(p \*Path\) ListFiles\(recursive bool\) \(\[\]\*Path, error\)](<#Path.ListFiles>)
-  - [func \(p \*Path\) Lstat\(\) \(os.FileInfo, error\)](<#Path.Lstat>)
+  - [func \(p \*Path\) Lstat\(\) \(\*FileInfo, error\)](<#Path.Lstat>)
   - [func \(p \*Path\) MakeAbsolute\(\) \(\*Path, error\)](<#Path.MakeAbsolute>)
   - [func \(p \*Path\) MarshalText\(\) \(\[\]byte, error\)](<#Path.MarshalText>)
   - [func \(p \*Path\) MatchesPattern\(pattern string, opts ...CompareOption\) bool](<#Path.MatchesPattern>)
@@ -183,7 +192,7 @@ missing.txt
   - [func \(p \*Path\) RelativeTo\(other \*Path\) \(\*Path, error\)](<#Path.RelativeTo>)
   - [func \(p \*Path\) Resolve\(\) \(\*Path, error\)](<#Path.Resolve>)
   - [func \(p \*Path\) Split\(\) \(\*Path, string\)](<#Path.Split>)
-  - [func \(p \*Path\) Stat\(\) \(os.FileInfo, error\)](<#Path.Stat>)
+  - [func \(p \*Path\) Stat\(\) \(\*FileInfo, error\)](<#Path.Stat>)
   - [func \(p \*Path\) Stem\(\) string](<#Path.Stem>)
   - [func \(p \*Path\) String\(\) string](<#Path.String>)
   - [func \(p \*Path\) SymlinkTo\(linkPath \*Path\) error](<#Path.SymlinkTo>)
@@ -222,7 +231,7 @@ missing.txt
   - [func \(e \*PermissionError\) MarshalJSON\(\) \(\[\]byte, error\)](<#PermissionError.MarshalJSON>)
   - [func \(e \*PermissionError\) Mode\(\) string](<#PermissionError.Mode>)
   - [func \(e \*PermissionError\) Paths\(\) \[\]Path](<#PermissionError.Paths>)
-  - [func \(e \*PermissionError\) Perm\(\) os.FileMode](<#PermissionError.Perm>)
+  - [func \(e \*PermissionError\) Perm\(\) FileMode](<#PermissionError.Perm>)
 - [type RemoveOptions](<#RemoveOptions>)
   - [func DefaultRemoveOptions\(\) RemoveOptions](<#DefaultRemoveOptions>)
 - [type TempPathOptions](<#TempPathOptions>)
@@ -232,14 +241,67 @@ missing.txt
 
 ## Constants
 
-<a name="PermissionBits"></a>PermissionBits are the mode bits accepted wherever a permission is passed. They are the Unix permission bits \[fs.ModePerm\] plus \[fs.ModeSetuid\], \[fs.ModeSetgid\], and \[fs.ModeSticky\].
+<a name="ModeDir"></a>The bits of a FileMode. They are the bits of \[fs.FileMode\], so they can be combined with the constants of the io/fs and os packages.
 
-Any other bit returns [ErrInvalidPermission](<#ErrInvalidFilter>). This includes file type bits, such as \[fs.ModeDir\], and the Unix octal notation of the special bits, such as 0o4755, which the os package silently drops.
+```go
+const (
+    // ModeDir marks a directory.
+    ModeDir = fs.ModeDir
+
+    // ModeAppend marks a file that can only be appended to.
+    ModeAppend = fs.ModeAppend
+
+    // ModeExclusive marks a file for exclusive use.
+    ModeExclusive = fs.ModeExclusive
+
+    // ModeTemporary marks a temporary file. It is used on Plan 9 alone.
+    ModeTemporary = fs.ModeTemporary
+
+    // ModeSymlink marks a symbolic link.
+    ModeSymlink = fs.ModeSymlink
+
+    // ModeDevice marks a device file.
+    ModeDevice = fs.ModeDevice
+
+    // ModeNamedPipe marks a named pipe (FIFO).
+    ModeNamedPipe = fs.ModeNamedPipe
+
+    // ModeSocket marks a Unix domain socket.
+    ModeSocket = fs.ModeSocket
+
+    // ModeSetuid is the setuid permission bit. It is one of [PermissionBits].
+    ModeSetuid = fs.ModeSetuid
+
+    // ModeSetgid is the setgid permission bit. It is one of PermissionBits.
+    ModeSetgid = fs.ModeSetgid
+
+    // ModeCharDevice marks a character device. It is set together with
+    // ModeDevice.
+    ModeCharDevice = fs.ModeCharDevice
+
+    // ModeSticky is the sticky permission bit. It is one of PermissionBits.
+    ModeSticky = fs.ModeSticky
+
+    // ModeIrregular marks an entry of an unknown type.
+    ModeIrregular = fs.ModeIrregular
+
+    // ModeType is the mask of the type bits. A regular file has none of them.
+    ModeType = fs.ModeType
+
+    // ModePerm is the mask of the Unix permission bits, 0777. It is part of
+    // PermissionBits.
+    ModePerm = fs.ModePerm
+)
+```
+
+<a name="PermissionBits"></a>PermissionBits are the mode bits accepted wherever a permission is passed. They are the Unix permission bits [ModePerm](<#ModeDir>) plus [ModeSetuid](<#ModeDir>), [ModeSetgid](<#ModeDir>), and [ModeSticky](<#ModeDir>).
+
+Any other bit returns [ErrInvalidPermission](<#ErrInvalidFilter>). This includes file type bits, such as [ModeDir](<#ModeDir>), and the Unix octal notation of the special bits, such as 0o4755, which the os package silently drops.
 
 Whether the setuid and setgid bits survive the creation of a file or directory depends on the operating system. macOS drops them, for example. [SetPermission](<#SetPermission>) sets them reliably. On Windows, the special bits have no effect.
 
 ```go
-const PermissionBits = fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky
+const PermissionBits = ModePerm | ModeSetuid | ModeSetgid | ModeSticky
 ```
 
 ## Variables
@@ -668,24 +730,6 @@ The caller calls the returned [DisposeFunc](<#DisposeFunc>) to remove the file. 
 
 A missing TempPathOptions.BaseDir returns [ErrNotExist](<#ErrInvalidFilter>), and one that is no directory returns [ErrNotDir](<#ErrInvalidFilter>). Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>), and any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), both with the base directory as their path.
 
-<a name="DefaultDirMode"></a>
-## func [DefaultDirMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L52>)
-
-```go
-func DefaultDirMode() fs.FileMode
-```
-
-DefaultDirMode returns the default permission of a directory. It is 0755 \(rwxr\-xr\-x\) on Unix and 0777 on Windows, which applies 0777 to every directory.
-
-<a name="DefaultFileMode"></a>
-## func [DefaultFileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L45>)
-
-```go
-func DefaultFileMode() fs.FileMode
-```
-
-DefaultFileMode returns the default permission of a file. It is 0644 \(rw\-r\-\-r\-\-\) on Unix and 0666 on Windows, which only knows writable and read\-only files.
-
 <a name="MkDir"></a>
 ## func [MkDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L149>)
 
@@ -812,10 +856,10 @@ func Rename(source *Path, name string) error
 Rename moves the entry at source to name in the same directory, as [Move](<#Move>) does. The errors of Move apply.
 
 <a name="SetPermission"></a>
-## func [SetPermission](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L62>)
+## func [SetPermission](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L61>)
 
 ```go
-func SetPermission(path *Path, mode fs.FileMode) error
+func SetPermission(path *Path, mode FileMode) error
 ```
 
 SetPermission sets the permission of path to mode. It wraps [os.Chmod](<https://pkg.go.dev/os/#Chmod>) and follows symlinks. The setuid and setgid bits are set reliably.
@@ -940,7 +984,7 @@ type DirOptions struct {
     // Mode is the permission of a created directory. It may only contain
     // PermissionBits. Zero selects DefaultDirMode, because the operating
     // system refuses a directory without permissions.
-    Mode fs.FileMode
+    Mode FileMode
 
     // CreateAll creates missing parent directories as well.
     CreateAll bool
@@ -967,6 +1011,111 @@ It is returned next to the path, so the creator alone can remove the path, and t
 type DisposeFunc func() error
 ```
 
+<a name="FileInfo"></a>
+## type [FileInfo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L25-L28>)
+
+FileInfo describes the filesystem entry at a path, as [Path.Stat](<#Path.Stat>) and [Path.Lstat](<#Path.Lstat>) return it. It implements \[fs.FileInfo\] and wraps the file info of the operating system.
+
+FileInfo normalizes the size, which the platforms report differently for entries that are no regular file. [FileInfo.Sys](<#FileInfo.Sys>) returns the data of the operating system as it is.
+
+[os.SameFile](<https://pkg.go.dev/os/#SameFile>) accepts the file info of the os package alone, so it reports false for a FileInfo. [FileInfo.SameFile](<#FileInfo.SameFile>) compares two FileInfo values.
+
+```go
+type FileInfo struct {
+    // contains filtered or unexported fields
+}
+```
+
+<a name="FileInfo.IsDir"></a>
+### func \(\*FileInfo\) [IsDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L68>)
+
+```go
+func (fi *FileInfo) IsDir() bool
+```
+
+IsDir reports whether the entry is a directory. It is short for Mode\(\).IsDir\(\).
+
+<a name="FileInfo.ModTime"></a>
+### func \(\*FileInfo\) [ModTime](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L62>)
+
+```go
+func (fi *FileInfo) ModTime() time.Time
+```
+
+ModTime returns the modification time.
+
+<a name="FileInfo.Mode"></a>
+### func \(\*FileInfo\) [Mode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L57>)
+
+```go
+func (fi *FileInfo) Mode() FileMode
+```
+
+Mode returns the [FileMode](<#FileMode>) of the entry. On Windows, the permission bits tell writable \(0666\) and read\-only \(0444\) entries apart alone, and a directory adds 0111.
+
+<a name="FileInfo.Name"></a>
+### func \(\*FileInfo\) [Name](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L38>)
+
+```go
+func (fi *FileInfo) Name() string
+```
+
+Name returns the base name of the path the file info was read for, as [os.Stat](<https://pkg.go.dev/os/#Stat>) reports it.
+
+<a name="FileInfo.SameFile"></a>
+### func \(\*FileInfo\) [SameFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L81>)
+
+```go
+func (fi *FileInfo) SameFile(other *FileInfo) bool
+```
+
+SameFile reports whether this FileInfo and other describe the same file, as [os.SameFile](<https://pkg.go.dev/os/#SameFile>) does. A nil other describes no file.
+
+<a name="FileInfo.Size"></a>
+### func \(\*FileInfo\) [Size](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L46>)
+
+```go
+func (fi *FileInfo) Size() int64
+```
+
+Size returns the length in bytes of a regular file. It returns 0 for every other type, such as a directory, a symlink, or a device, whose size the platforms report differently. Unix reports the storage of a directory and the length of the target of a symlink, for example, and Windows reports 0.
+
+<a name="FileInfo.Sys"></a>
+### func \(\*FileInfo\) [Sys](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_info.go#L75>)
+
+```go
+func (fi *FileInfo) Sys() any
+```
+
+Sys returns the data of the operating system, such as a \*syscall.Stat\_t on Unix and a \*syscall.Win32FileAttributeData on Windows. Its type differs between platforms.
+
+<a name="FileMode"></a>
+## type [FileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_mode.go#L65>)
+
+FileMode holds the type and permission bits of a filesystem entry. It is an alias of \[fs.FileMode\], so its methods, such as IsDir, IsRegular, and Perm, apply, and a FileMode passes to the io/fs and os packages without a conversion.
+
+```go
+type FileMode = fs.FileMode
+```
+
+<a name="DefaultDirMode"></a>
+### func [DefaultDirMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L51>)
+
+```go
+func DefaultDirMode() FileMode
+```
+
+DefaultDirMode returns the default permission of a directory. It is 0755 \(rwxr\-xr\-x\) on Unix and 0777 on Windows, which applies 0777 to every directory.
+
+<a name="DefaultFileMode"></a>
+### func [DefaultFileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L44>)
+
+```go
+func DefaultFileMode() FileMode
+```
+
+DefaultFileMode returns the default permission of a file. It is 0644 \(rw\-r\-\-r\-\-\) on Unix and 0666 on Windows, which only knows writable and read\-only files.
+
 <a name="FileOptions"></a>
 ## type [FileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L14-L29>)
 
@@ -987,7 +1136,7 @@ type FileOptions struct {
     // Mode is the permission of a created file. It may only contain
     // PermissionBits. Zero selects DefaultFileMode, because the operating
     // system refuses a file without permissions.
-    Mode fs.FileMode
+    Mode FileMode
 }
 ```
 
@@ -1125,7 +1274,7 @@ type OpenOptions struct {
 
     // Permission is the permission of a created file. It may only contain
     // PermissionBits. Zero selects 0644.
-    Permission os.FileMode
+    Permission FileMode
 
     // Mode is the open mode, made of "r" (read), "w" (write), and "a"
     // (append) in this order. "a" needs "w", and "w" without "a" truncates
@@ -1619,10 +1768,10 @@ ListFiles returns the files of this directory, sorted by their Posix form, as [P
 ### func \(\*Path\) [Lstat](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_stat.go#L90>)
 
 ```go
-func (p *Path) Lstat() (os.FileInfo, error)
+func (p *Path) Lstat() (*FileInfo, error)
 ```
 
-Lstat returns the file info of this Path without following symbolic links. It wraps [os.Lstat](<https://pkg.go.dev/os/#Lstat>).
+Lstat returns the [FileInfo](<#FileInfo>) of this Path without following symbolic links. It wraps [os.Lstat](<https://pkg.go.dev/os/#Lstat>).
 
 A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrStat](<#ErrInvalidFilter>).
 
@@ -1760,10 +1909,10 @@ Split returns the parent directory and the base name of this Path. It wraps [pat
 ### func \(\*Path\) [Stat](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_stat.go#L76>)
 
 ```go
-func (p *Path) Stat() (os.FileInfo, error)
+func (p *Path) Stat() (*FileInfo, error)
 ```
 
-Stat returns the file info of this Path. It wraps [os.Stat](<https://pkg.go.dev/os/#Stat>) and follows symbolic links.
+Stat returns the [FileInfo](<#FileInfo>) of this Path. It wraps [os.Stat](<https://pkg.go.dev/os/#Stat>) and follows symbolic links.
 
 A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrStat](<#ErrInvalidFilter>).
 
@@ -2100,7 +2249,7 @@ func (e *PatternError) Unwrap() error
 Unwrap returns the underlying error, or nil.
 
 <a name="PermissionError"></a>
-## type [PermissionError](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L24-L37>)
+## type [PermissionError](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L23-L36>)
 
 PermissionError is the cause of the failures of [ErrInvalidPermission](<#ErrInvalidFilter>) and [ErrInvalidMode](<#ErrInvalidMode>). It holds the rejected permission or open\-mode value and the paths the failure concerns.
 
@@ -2120,7 +2269,7 @@ type PermissionError struct {
 ```
 
 <a name="PermissionError.Error"></a>
-### func \(\*PermissionError\) [Error](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L55>)
+### func \(\*PermissionError\) [Error](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L54>)
 
 ```go
 func (e *PermissionError) Error() string
@@ -2129,7 +2278,7 @@ func (e *PermissionError) Error() string
 Error renders the paths and the rejected value.
 
 <a name="PermissionError.LogValue"></a>
-### func \(\*PermissionError\) [LogValue](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L70>)
+### func \(\*PermissionError\) [LogValue](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L69>)
 
 ```go
 func (e *PermissionError) LogValue() slog.Value
@@ -2138,7 +2287,7 @@ func (e *PermissionError) LogValue() slog.Value
 LogValue describes the paths in their Posix form and the rejected value.
 
 <a name="PermissionError.MarshalJSON"></a>
-### func \(\*PermissionError\) [MarshalJSON](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L80>)
+### func \(\*PermissionError\) [MarshalJSON](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L79>)
 
 ```go
 func (e *PermissionError) MarshalJSON() ([]byte, error)
@@ -2147,7 +2296,7 @@ func (e *PermissionError) MarshalJSON() ([]byte, error)
 MarshalJSON describes the paths in their Posix form and the rejected value.
 
 <a name="PermissionError.Mode"></a>
-### func \(\*PermissionError\) [Mode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L50>)
+### func \(\*PermissionError\) [Mode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L49>)
 
 ```go
 func (e *PermissionError) Mode() string
@@ -2156,7 +2305,7 @@ func (e *PermissionError) Mode() string
 Mode returns the rejected open\-mode string, or "" when not applicable.
 
 <a name="PermissionError.Paths"></a>
-### func \(\*PermissionError\) [Paths](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L40>)
+### func \(\*PermissionError\) [Paths](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L39>)
 
 ```go
 func (e *PermissionError) Paths() []Path
@@ -2165,10 +2314,10 @@ func (e *PermissionError) Paths() []Path
 Paths returns a copy of the paths the failure concerns. It may be empty.
 
 <a name="PermissionError.Perm"></a>
-### func \(\*PermissionError\) [Perm](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L45>)
+### func \(\*PermissionError\) [Perm](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L44>)
 
 ```go
-func (e *PermissionError) Perm() os.FileMode
+func (e *PermissionError) Perm() FileMode
 ```
 
 Perm returns the rejected permission value, or 0 when not applicable.

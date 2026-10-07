@@ -204,7 +204,8 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | --- | --- | --- |
 | `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
 | `os.WriteFile` | `WriteBytes`, `WriteString` | Creates the file with `DefaultFileMode`. Use `WriteBytesWithOptions` for another mode, or to refuse an existing file. A broken symlink returns `ErrNotFile` instead of creating its target. |
-| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrInvalidPermission`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
+| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `ModePerm` (`0777`) plus `ModeSetuid`, `ModeSetgid` and `ModeSticky`. Other bits return `ErrInvalidPermission`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
+| `os.Stat`, `os.Lstat` | `Path.Stat`, `Path.Lstat` | Return a `*pathlib.FileInfo`, which implements `fs.FileInfo`. `Size` is 0 for every entry that is no regular file, such as a directory. `os.SameFile` reports false for a `FileInfo`. Use `FileInfo.SameFile` or `EqualsFS` instead. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
 
@@ -225,6 +226,10 @@ The creation functions differ in what they do with an existing entry:
 **Removing paths**
 
 `Remove` returns `ErrNotExist` for a missing path, as `os.Remove` does. `RemoveAll` accepts a missing path, as `os.RemoveAll` does. `RemoveWithOptions` combines both behaviors with `RemoveOptions.MissingOk` and `RemoveOptions.Recursive`.
+
+**File modes**
+
+`pathlib.FileMode` is an alias of `fs.FileMode`, and `pathlib.ModeDir` and the other `Mode` constants are the constants of `io/fs`. Modes pass between pathlib, `io/fs` and `os` without a conversion, so code that works with modes needs no import of `io/fs`.
 
 ## Contributing
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
