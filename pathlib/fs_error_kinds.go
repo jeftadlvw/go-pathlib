@@ -122,6 +122,10 @@ var (
 	// changed. It is a member of the ErrOperation group.
 	ErrSetPermission = defineError(ErrOperation, "SET_PERMISSION", "could not set permission")
 
+	// ErrSetTimes is returned when the access and modification times of a
+	// path could not be changed. It is a member of the ErrOperation group.
+	ErrSetTimes = defineError(ErrOperation, "SET_TIMES", "could not set times")
+
 	// ErrWalk is returned when a walk is stopped by an error of the walk
 	// callback or by a done context. The underlying error is the error of the
 	// callback or of the context. An error of the callback can hold another

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"time"
 )
 
 // FileOptions configures the creation of a file. The zero value creates a new
@@ -14,6 +15,12 @@ type FileOptions struct {
 	// ExistOk accepts an existing file. CreateFileWithOptions leaves it
 	// untouched, and WriteBytesWithOptions truncates it.
 	ExistOk bool
+
+	// UpdateTimes sets the access and modification times of an existing file
+	// that ExistOk accepts to the current time, as the touch command does.
+	// Without ExistOk it has no effect. WriteBytesWithOptions ignores it,
+	// because writing sets the modification time.
+	UpdateTimes bool
 
 	// Mode is the permission of a created file. It may only contain
 	// PermissionBits. Zero selects DefaultFileMode, because the operating
@@ -28,6 +35,11 @@ type DirOptions struct {
 	// ExistOk accepts an existing directory.
 	ExistOk bool
 
+	// UpdateTimes sets the access and modification times of an existing
+	// directory that ExistOk accepts to the current time, as the touch command
+	// does. Without ExistOk it has no effect.
+	UpdateTimes bool
+
 	// Mode is the permission of a created directory. It may only contain
 	// PermissionBits. Zero selects DefaultDirMode, because the operating
 	// system refuses a directory without permissions.
@@ -41,8 +53,9 @@ type DirOptions struct {
 // file with [DefaultFileMode].
 func DefaultFileOptions() FileOptions {
 	return FileOptions{
-		ExistOk: false,
-		Mode:    DefaultFileMode(),
+		ExistOk:     false,
+		UpdateTimes: false,
+		Mode:        DefaultFileMode(),
 	}
 }
 
@@ -50,9 +63,10 @@ func DefaultFileOptions() FileOptions {
 // directory with [DefaultDirMode] in an existing parent directory.
 func DefaultDirOptions() DirOptions {
 	return DirOptions{
-		ExistOk:   false,
-		Mode:      DefaultDirMode(),
-		CreateAll: false,
+		ExistOk:     false,
+		UpdateTimes: false,
+		Mode:        DefaultDirMode(),
+		CreateAll:   false,
 	}
 }
 
@@ -60,8 +74,10 @@ func DefaultDirOptions() DirOptions {
 // directory must exist.
 //
 // CreateFile never truncates. An existing file returns [ErrFileExist] and is
-// left untouched. [CreateFileWithOptions] accepts an existing file, and
-// [OpenFile] creates or truncates one, as [os.Create] does.
+// left untouched. [CreateFileWithOptions] accepts an existing file with
+// FileOptions.ExistOk. With FileOptions.UpdateTimes as well, it sets the times
+// of the file to the current time, as a touch command does. [OpenFile]
+// creates or truncates a file, as [os.Create] does.
 //
 // The errors of CreateFileWithOptions apply.
 func CreateFile(path *Path) error {
@@ -73,15 +89,17 @@ func CreateFile(path *Path) error {
 // whether it created one. The parent directory must exist.
 //
 // An existing file returns [ErrFileExist], unless FileOptions.ExistOk accepts
-// it. Then the file is left untouched and false is returned. An existing path
-// that is no file returns [ErrNotFile]. This includes a broken symlink, whose
-// target is never created.
+// it. Then false is returned, and the file is left untouched. With
+// FileOptions.UpdateTimes, its access and modification times are set to the
+// current time, as [SetTimes] does. An existing path that is no file returns
+// [ErrNotFile]. This includes a broken symlink, whose target is never created.
 //
 // A FileOptions.Mode with bits outside [PermissionBits] returns
 // [ErrInvalidPermission]. A missing parent directory returns
 // [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
-// other failure to check the path returns [ErrStat], and any other failed
-// creation returns [ErrCreate].
+// other failure to check the path returns [ErrStat], any other failed
+// creation returns [ErrCreate], and any other failed update of the times
+// returns [ErrSetTimes].
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 	err := checkPermission(options.Mode, path)
 	if err != nil {
@@ -89,7 +107,7 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 	}
 
 	check := func() (bool, error) {
-		return checkCreateTarget(path, path.IsFile, options.ExistOk, ErrNotFile, ErrFileExist)
+		return checkCreateTarget(path, path.IsFile, options.ExistOk, options.UpdateTimes, ErrNotFile, ErrFileExist)
 	}
 
 	exists, err := check()
@@ -138,14 +156,17 @@ func MkDir(path *Path) error {
 // DirOptions.CreateAll creates it.
 //
 // An existing directory returns [ErrDirExist], unless DirOptions.ExistOk
-// accepts it. Then false is returned. An existing path that is no directory
+// accepts it. Then false is returned, and the directory is left untouched.
+// With DirOptions.UpdateTimes, its access and modification times are set to
+// the current time, as [SetTimes] does. An existing path that is no directory
 // returns [ErrNotDir]. This includes a broken symlink.
 //
 // A DirOptions.Mode with bits outside [PermissionBits] returns
 // [ErrInvalidPermission]. A missing parent directory returns
 // [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
-// other failure to check the path returns [ErrStat], and any other failed
-// creation returns [ErrCreate].
+// other failure to check the path returns [ErrStat], any other failed
+// creation returns [ErrCreate], and any other failed update of the times
+// returns [ErrSetTimes].
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	err := checkPermission(options.Mode, path)
 	if err != nil {
@@ -153,7 +174,7 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 	}
 
 	check := func() (bool, error) {
-		return checkCreateTarget(path, path.IsDir, options.ExistOk, ErrNotDir, ErrDirExist)
+		return checkCreateTarget(path, path.IsDir, options.ExistOk, options.UpdateTimes, ErrNotDir, ErrDirExist)
 	}
 
 	exists, err := check()
@@ -233,9 +254,13 @@ func (p *Path) SymlinkTo(linkPath *Path) error {
 // the created entry.
 //
 // An existing path of another kind returns notKind, and an existing path of
-// the kind returns exist unless existOk is set. A path that cannot be checked
-// returns the error of [lexists].
-func checkCreateTarget(path *Path, isKind func() bool, existOk bool, notKind, exist *PathlibError) (bool, error) {
+// the kind returns exist unless existOk is set. An accepted existing entry has
+// its access and modification times set to the current time if updateTimes is
+// set. A path that cannot be checked returns the error of [lexists], and times
+// that cannot be set return the errors of [SetTimes].
+func checkCreateTarget(
+	path *Path, isKind func() bool, existOk, updateTimes bool, notKind, exist *PathlibError,
+) (bool, error) {
 	exists, err := lexists(path)
 	if err != nil {
 		return false, err
@@ -251,6 +276,11 @@ func checkCreateTarget(path *Path, isKind func() bool, existOk bool, notKind, ex
 
 	if !existOk {
 		return true, wrapErr(exist, fs.ErrExist, *path)
+	}
+
+	if updateTimes {
+		now := time.Now()
+		return true, SetTimes(path, now, now)
 	}
 
 	return true, nil

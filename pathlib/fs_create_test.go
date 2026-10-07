@@ -114,6 +114,113 @@ func TestCreateFileWithOptions(t *testing.T) {
 	})
 }
 
+// updateTimesInput selects the options of a creation function in the
+// UpdateTimes tests.
+type updateTimesInput struct {
+	ExistOk     bool
+	UpdateTimes bool
+}
+
+// updateTimesExpect is the expected result of a creation function for an
+// existing entry in the UpdateTimes tests.
+type updateTimesExpect struct {
+	// Err is the expected error kind, or nil for success.
+	Err *PathlibError
+
+	// Updated reports whether the modification time is set to the current
+	// time.
+	Updated bool
+}
+
+// runUpdateTimesCases calls create with the options of every case on an
+// existing entry made by setup, whose modification time is pastTime. existErr
+// is the kind create returns for an existing entry without ExistOk.
+func runUpdateTimesCases(
+	t *testing.T,
+	setup func(*testing.T, *Path) *Path,
+	create func(*Path, updateTimesInput) (bool, error),
+	existErr *PathlibError,
+) {
+	t.Helper()
+
+	cases := []TestCase[updateTimesInput, updateTimesExpect]{
+		{
+			Name:   "ExistOk and UpdateTimes set the times",
+			Input:  updateTimesInput{ExistOk: true, UpdateTimes: true},
+			Expect: updateTimesExpect{Updated: true},
+		},
+		{
+			Name:   "ExistOk alone leaves the times untouched",
+			Input:  updateTimesInput{ExistOk: true, UpdateTimes: false},
+			Expect: updateTimesExpect{Updated: false},
+		},
+		{
+			Name:   "UpdateTimes without ExistOk has no effect",
+			Input:  updateTimesInput{ExistOk: false, UpdateTimes: true},
+			Expect: updateTimesExpect{Err: existErr, Updated: false},
+		},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input updateTimesInput, expect updateTimesExpect) {
+		t.Helper()
+
+		root := setupTempDir(t)
+		p := setup(t, root)
+		require.NoError(t, os.Chtimes(p.String(), pastTime(), pastTime()))
+
+		created, err := create(p, input)
+		require.False(t, created)
+		if expect.Err != nil {
+			require.ErrorIs(t, err, expect.Err)
+		} else {
+			require.NoError(t, err)
+		}
+
+		info, err := os.Stat(p.String())
+		require.NoError(t, err)
+		require.Equal(t, expect.Updated, info.ModTime().After(pastTime()))
+	})
+
+	t.Run("Missing entry is created", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		created, err := create(root.JoinStrings("missing"), updateTimesInput{ExistOk: true, UpdateTimes: true})
+		require.NoError(t, err)
+		require.True(t, created)
+	})
+}
+
+func TestCreateFileWithOptions_UpdateTimes(t *testing.T) {
+	t.Parallel()
+
+	setup := func(t *testing.T, root *Path) *Path {
+		t.Helper()
+
+		return writeTempFile(t, root, "file.txt", "content")
+	}
+	create := func(p *Path, input updateTimesInput) (bool, error) {
+		return CreateFileWithOptions(p, FileOptions{ExistOk: input.ExistOk, UpdateTimes: input.UpdateTimes})
+	}
+
+	runUpdateTimesCases(t, setup, create, ErrFileExist)
+}
+
+func TestMkDirWithOptions_UpdateTimes(t *testing.T) {
+	t.Parallel()
+
+	setup := func(t *testing.T, root *Path) *Path {
+		t.Helper()
+
+		return createTempDir(t, root, "dir")
+	}
+	create := func(p *Path, input updateTimesInput) (bool, error) {
+		return MkDirWithOptions(p, DirOptions{ExistOk: input.ExistOk, UpdateTimes: input.UpdateTimes})
+	}
+
+	runUpdateTimesCases(t, setup, create, ErrDirExist)
+}
+
 func TestMkDirWithOptions(t *testing.T) {
 	t.Parallel()
 

@@ -24,7 +24,7 @@ func allKinds() []*PathlibError {
 		ErrPermissionDenied,
 		ErrWrongType, ErrNotFile, ErrNotDir, ErrNotSymlink, ErrTypeMismatch, ErrUnsupportedType,
 		ErrOperation, ErrLookup, ErrStat, ErrOpen, ErrRead, ErrReadDir, ErrReadSymlink, ErrResolve,
-		ErrCreate, ErrWrite, ErrCopy, ErrRemove, ErrSetPermission,
+		ErrCreate, ErrWrite, ErrCopy, ErrRemove, ErrSetPermission, ErrSetTimes,
 		ErrWalk,
 	}
 }
