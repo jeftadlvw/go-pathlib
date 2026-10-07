@@ -25,7 +25,7 @@ type FileOptions struct {
 	// Mode is the permission of a created file. It may only contain
 	// PermissionBits. Zero selects DefaultFileMode, because the operating
 	// system refuses a file without permissions.
-	Mode fs.FileMode
+	Mode FileMode
 }
 
 // DirOptions configures the creation of a directory. The zero value creates a
@@ -43,7 +43,7 @@ type DirOptions struct {
 	// Mode is the permission of a created directory. It may only contain
 	// PermissionBits. Zero selects DefaultDirMode, because the operating
 	// system refuses a directory without permissions.
-	Mode fs.FileMode
+	Mode FileMode
 
 	// CreateAll creates missing parent directories as well.
 	CreateAll bool

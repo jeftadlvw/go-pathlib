@@ -1,8 +1,6 @@
 package pathlib
 
 import (
-	"io/fs"
-	"os"
 	"runtime"
 	"testing"
 
@@ -12,9 +10,9 @@ import (
 // permissionFuncs returns functions that pass a mode to every function that
 // accepts a permission. Each returns the path the mode was meant for and
 // whether the path existed before.
-func permissionFuncs() map[string]func(t *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
-	return map[string]func(t *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error){
-		"OpenFileWithOptions": func(_ *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
+func permissionFuncs() map[string]func(t *testing.T, root *Path, mode FileMode) (*Path, bool, error) {
+	return map[string]func(t *testing.T, root *Path, mode FileMode) (*Path, bool, error){
+		"OpenFileWithOptions": func(_ *testing.T, root *Path, mode FileMode) (*Path, bool, error) {
 			p := root.JoinStrings("file")
 			file, err := OpenFileWithOptions(p, OpenOptions{CreateIfNotExists: true, Permission: mode, Mode: "w"})
 			if file != nil {
@@ -22,22 +20,22 @@ func permissionFuncs() map[string]func(t *testing.T, root *Path, mode fs.FileMod
 			}
 			return p, false, err
 		},
-		"CreateFileWithOptions": func(_ *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
+		"CreateFileWithOptions": func(_ *testing.T, root *Path, mode FileMode) (*Path, bool, error) {
 			p := root.JoinStrings("file")
 			_, err := CreateFileWithOptions(p, FileOptions{Mode: mode})
 			return p, false, err
 		},
-		"WriteBytesWithOptions": func(_ *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
+		"WriteBytesWithOptions": func(_ *testing.T, root *Path, mode FileMode) (*Path, bool, error) {
 			p := root.JoinStrings("file")
 			_, err := WriteBytesWithOptions(p, []byte("content"), FileOptions{Mode: mode})
 			return p, false, err
 		},
-		"MkDirWithOptions": func(_ *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
+		"MkDirWithOptions": func(_ *testing.T, root *Path, mode FileMode) (*Path, bool, error) {
 			p := root.JoinStrings("dir")
 			_, err := MkDirWithOptions(p, DirOptions{Mode: mode})
 			return p, false, err
 		},
-		"SetPermission": func(t *testing.T, root *Path, mode fs.FileMode) (*Path, bool, error) {
+		"SetPermission": func(t *testing.T, root *Path, mode FileMode) (*Path, bool, error) {
 			t.Helper()
 
 			p := writeTempFile(t, root, "file", "")
@@ -49,9 +47,9 @@ func permissionFuncs() map[string]func(t *testing.T, root *Path, mode fs.FileMod
 func TestPermissionBits_RefusesOtherBits(t *testing.T) {
 	t.Parallel()
 
-	modes := map[string]fs.FileMode{
-		"directory type bit":          fs.ModeDir | 0755,
-		"symlink type bit":            fs.ModeSymlink | 0644,
+	modes := map[string]FileMode{
+		"directory type bit":          ModeDir | 0755,
+		"symlink type bit":            ModeSymlink | 0644,
 		"Unix octal setuid (0o4755)":  0o4755,
 		"Unix octal sticky (0o1644)":  0o1644,
 		"permission above 0o777 only": 0o1000,
@@ -82,10 +80,10 @@ func TestPermissionBits_RefusesOtherBits(t *testing.T) {
 func TestPermissionBits_AcceptsSpecialBits(t *testing.T) {
 	t.Parallel()
 
-	modes := map[string]fs.FileMode{
-		"setuid": fs.ModeSetuid | 0755,
-		"setgid": fs.ModeSetgid | 0755,
-		"sticky": fs.ModeSticky | 0755,
+	modes := map[string]FileMode{
+		"setuid": ModeSetuid | 0755,
+		"setgid": ModeSetgid | 0755,
+		"sticky": ModeSticky | 0755,
 	}
 
 	for funcName, apply := range permissionFuncs() {
@@ -120,7 +118,7 @@ func TestSetPermission(t *testing.T) {
 
 		info, err := filePath.Stat()
 		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0600).Perm(), info.Mode().Perm())
+		require.Equal(t, FileMode(0600).Perm(), info.Mode().Perm())
 
 		// Change again
 		err = SetPermission(filePath, 0755)
@@ -128,7 +126,7 @@ func TestSetPermission(t *testing.T) {
 
 		info, err = filePath.Stat()
 		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0755).Perm(), info.Mode().Perm())
+		require.Equal(t, FileMode(0755).Perm(), info.Mode().Perm())
 	})
 
 	t.Run("directory", func(t *testing.T) {
@@ -141,14 +139,14 @@ func TestSetPermission(t *testing.T) {
 
 		info, err := dirPath.Stat()
 		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0700).Perm(), info.Mode().Perm())
+		require.Equal(t, FileMode(0700).Perm(), info.Mode().Perm())
 
 		err = SetPermission(dirPath, 0755)
 		require.NoError(t, err)
 
 		info, err = dirPath.Stat()
 		require.NoError(t, err)
-		require.Equal(t, os.FileMode(0755).Perm(), info.Mode().Perm())
+		require.Equal(t, FileMode(0755).Perm(), info.Mode().Perm())
 	})
 
 	t.Run("non-existent path", func(t *testing.T) {
@@ -169,9 +167,9 @@ func TestSetPermission_SetsSetuidReliably(t *testing.T) {
 
 	// Creating a file may drop the setuid bit (e.g. on macOS), chmod does not.
 	file := writeTempFile(t, setupTempDir(t), "file", "")
-	require.NoError(t, SetPermission(file, fs.ModeSetuid|0755))
+	require.NoError(t, SetPermission(file, ModeSetuid|0755))
 
 	info, err := file.Stat()
 	require.NoError(t, err)
-	require.Equal(t, fs.ModeSetuid|0755, info.Mode()&PermissionBits)
+	require.Equal(t, ModeSetuid|0755, info.Mode()&PermissionBits)
 }

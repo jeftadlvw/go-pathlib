@@ -26,7 +26,7 @@ type OpenOptions struct {
 
 	// Permission is the permission of a created file. It may only contain
 	// PermissionBits. Zero selects 0644.
-	Permission os.FileMode
+	Permission FileMode
 
 	// Mode is the open mode, made of "r" (read), "w" (write), and "a"
 	// (append) in this order. "a" needs "w", and "w" without "a" truncates
@@ -268,7 +268,7 @@ func openModeFlags(mode string, path *Path) (int, error) {
 // createIfMissing creates an empty file with permission perm at path if
 // nothing exists there. A failed creation returns the error of osCreateErr for
 // [ErrCreate].
-func createIfMissing(path *Path, perm os.FileMode) error {
+func createIfMissing(path *Path, perm FileMode) error {
 	_, err := os.Stat(path.String())
 	if err == nil {
 		return nil
@@ -287,7 +287,7 @@ func createIfMissing(path *Path, perm os.FileMode) error {
 // A file that cannot be opened returns the error of osErr for [ErrOpen], or of
 // osCreateErr if flag creates the file. A failed check of the opened path
 // returns [ErrStat], and a directory returns [ErrNotFile].
-func openNonDir(path *Path, flag int, perm os.FileMode) (*os.File, error) {
+func openNonDir(path *Path, flag int, perm FileMode) (*os.File, error) {
 	file, err := os.OpenFile(path.String(), flag, perm)
 	if err != nil {
 		if flag&os.O_CREATE != 0 {

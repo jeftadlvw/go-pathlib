@@ -1,7 +1,6 @@
 package pathlib
 
 import (
-	"io/fs"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func TestPermissionError(t *testing.T) {
 
 		var permErr *PermissionError
 		require.ErrorAs(t, permRangeErr(0o1000, p), &permErr)
-		require.Equal(t, fs.FileMode(0o1000), permErr.Perm())
+		require.Equal(t, FileMode(0o1000), permErr.Perm())
 		require.Empty(t, permErr.Mode())
 	})
 }

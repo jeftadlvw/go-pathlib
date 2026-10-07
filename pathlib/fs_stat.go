@@ -68,57 +68,57 @@ func (p *Path) Resolve() (*Path, error) {
 	return NewPath(ep).MakeAbsolute()
 }
 
-// Stat returns the file info of this Path. It wraps [os.Stat] and follows
+// Stat returns the [FileInfo] of this Path. It wraps [os.Stat] and follows
 // symbolic links.
 //
 // A missing path returns [ErrNotExist], and denied access returns
 // [ErrPermissionDenied]. Any other failure returns [ErrStat].
-func (p *Path) Stat() (os.FileInfo, error) {
+func (p *Path) Stat() (*FileInfo, error) {
 	info, err := os.Stat(p.String())
 	if err != nil {
 		return nil, osErr(ErrStat, err, *p)
 	}
 
-	return info, nil
+	return newFileInfo(info), nil
 }
 
-// Lstat returns the file info of this Path without following symbolic links.
+// Lstat returns the [FileInfo] of this Path without following symbolic links.
 // It wraps [os.Lstat].
 //
 // A missing path returns [ErrNotExist], and denied access returns
 // [ErrPermissionDenied]. Any other failure returns [ErrStat].
-func (p *Path) Lstat() (os.FileInfo, error) {
+func (p *Path) Lstat() (*FileInfo, error) {
 	info, err := os.Lstat(p.String())
 	if err != nil {
 		return nil, osErr(ErrStat, err, *p)
 	}
 
-	return info, nil
+	return newFileInfo(info), nil
 }
 
 // IsSymlink reports whether this Path is a symbolic link.
 func (p *Path) IsSymlink() bool {
-	return checkFileMode(p, os.ModeSymlink)
+	return checkFileMode(p, ModeSymlink)
 }
 
 // IsBlockDevice reports whether this Path is a block device.
 func (p *Path) IsBlockDevice() bool {
-	return checkFileMode(p, os.ModeDevice) && !checkFileMode(p, os.ModeCharDevice)
+	return checkFileMode(p, ModeDevice) && !checkFileMode(p, ModeCharDevice)
 }
 
 // IsCharDevice reports whether this Path is a character device.
 func (p *Path) IsCharDevice() bool {
-	return checkFileMode(p, os.ModeDevice) && checkFileMode(p, os.ModeCharDevice)
+	return checkFileMode(p, ModeDevice) && checkFileMode(p, ModeCharDevice)
 }
 
 // IsFIFO reports whether this Path is a named pipe (FIFO).
 func (p *Path) IsFIFO() bool {
-	return checkFileMode(p, os.ModeNamedPipe)
+	return checkFileMode(p, ModeNamedPipe)
 }
 
 // IsSocket reports whether this Path is a Unix domain socket.
 func (p *Path) IsSocket() bool {
-	return checkFileMode(p, os.ModeSocket)
+	return checkFileMode(p, ModeSocket)
 }
 
 // ReadSymlinkTarget returns the target of the symbolic link at this Path. It
@@ -180,7 +180,7 @@ func lexists(p *Path) (bool, error) {
 
 // checkFileMode reports whether the mode of p, without following symbolic
 // links, has a bit of modeMask. A path that cannot be checked has none.
-func checkFileMode(p *Path, modeMask os.FileMode) bool {
+func checkFileMode(p *Path, modeMask FileMode) bool {
 	info, err := p.Lstat()
 	if err != nil {
 		return false

@@ -18,7 +18,7 @@ func TestDefaultOpenOptions(t *testing.T) {
 
 	options := DefaultOpenOptions()
 	require.True(t, options.CreateIfNotExists, "default creation mismatch")
-	require.Equal(t, os.FileMode(0644), options.Permission, "default open permission mismatch")
+	require.Equal(t, FileMode(0644), options.Permission, "default open permission mismatch")
 	require.Equal(t, "rw", options.Mode, "default open mode mismatch")
 }
 
@@ -116,7 +116,7 @@ func TestOpenFileWithOptions(t *testing.T) {
 	}
 
 	// these are expected to work
-	permissionCases := []os.FileMode{
+	permissionCases := []FileMode{
 		000, // first value is the default
 		DefaultOpenOptions().Permission,
 		0600,
@@ -185,7 +185,7 @@ type openFileCase struct {
 	// mode is the open mode that applies, with the default filled in.
 	mode string
 	// permission is the permission that applies, with the default filled in.
-	permission os.FileMode
+	permission FileMode
 }
 
 // openFileRun is the state of one run of an openFileCase. Its steps run in
@@ -223,7 +223,7 @@ func runOpenFileCase(t *testing.T, c openFileCase) {
 	r.file, err = OpenFileWithOptions(r.filePath, r.options)
 
 	// Decimal cases like 744 (0o1350) set the Unix octal sticky bit,
-	// which is not fs.ModeSticky and lies outside PermissionBits.
+	// which is not ModeSticky and lies outside PermissionBits.
 	permissionOutOfBounds := r.permission&^PermissionBits != 0
 
 	t.Run("file did not exist", func(t *testing.T) {

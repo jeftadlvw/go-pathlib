@@ -1,7 +1,6 @@
 package pathlib
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,7 +27,7 @@ func TestPath_IsOnCaseSensitiveFS(t *testing.T) {
 	// The filesystem is case-sensitive if:
 	// - the mixed-case path doesn't exist (err2 != nil), or
 	// - both exist but point to different inodes
-	isFsCaseSensitiveExpected := err1 == nil && (err2 != nil || !os.SameFile(stat1, stat2))
+	isFsCaseSensitiveExpected := err1 == nil && (err2 != nil || !stat1.SameFile(stat2))
 
 	cases := []TestCase[*Path, bool]{
 		{

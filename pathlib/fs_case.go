@@ -31,7 +31,7 @@ func (p *Path) EqualsFS(other *Path) bool {
 		return false
 	}
 
-	return os.SameFile(stat1, stat2)
+	return stat1.SameFile(stat2)
 }
 
 // IsOnCaseSensitiveFS reports whether the filesystem at this Path is

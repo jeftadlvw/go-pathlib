@@ -2,7 +2,6 @@ package pathlib
 
 import (
 	"io/fs"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -518,7 +517,7 @@ func TestPath_Lstat(t *testing.T) {
 	info, err := link.Lstat()
 	require.NoError(t, err)
 	require.NotNil(t, info)
-	require.NotEqual(t, 0, info.Mode()&os.ModeSymlink, "Lstat should report symlink mode")
+	require.NotEqual(t, 0, info.Mode()&ModeSymlink, "Lstat should report symlink mode")
 }
 
 func TestDeviceMethods(t *testing.T) {

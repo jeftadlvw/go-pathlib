@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"slices"
 )
 
@@ -26,7 +25,7 @@ type PermissionError struct {
 	paths []Path
 
 	// perm is the rejected permission value (0 when not applicable).
-	perm os.FileMode
+	perm FileMode
 
 	// mode is the rejected open-mode string (empty when not applicable).
 	mode string
@@ -42,7 +41,7 @@ func (e *PermissionError) Paths() []Path {
 }
 
 // Perm returns the rejected permission value, or 0 when not applicable.
-func (e *PermissionError) Perm() os.FileMode {
+func (e *PermissionError) Perm() FileMode {
 	return e.perm
 }
 
@@ -93,7 +92,7 @@ func (e *PermissionError) MarshalJSON() ([]byte, error) {
 
 // permRangeErr returns ErrInvalidPermission for a permission with bits
 // outside PermissionBits.
-func permRangeErr(perm os.FileMode, paths ...Path) error {
+func permRangeErr(perm FileMode, paths ...Path) error {
 	return wrapError(ErrInvalidPermission, &PermissionError{paths: slices.Clone(paths), perm: perm})
 }
 
