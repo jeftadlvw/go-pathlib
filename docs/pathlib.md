@@ -98,8 +98,10 @@ missing.txt
 - [func ReadFileToString\(path \*Path\) \(string, error\)](<#ReadFileToString>)
 - [func Remove\(path \*Path\) error](<#Remove>)
 - [func RemoveAll\(path \*Path\) error](<#RemoveAll>)
+- [func RemoveWithOptions\(path \*Path, options RemoveOptions\) error](<#RemoveWithOptions>)
 - [func Rename\(source \*Path, name string\) error](<#Rename>)
 - [func SetPermission\(path \*Path, mode fs.FileMode\) error](<#SetPermission>)
+- [func SetTimes\(path \*Path, accessTime, modTime time.Time\) error](<#SetTimes>)
 - [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
 - [func WriteBytesWithOptions\(path \*Path, data \[\]byte, options FileOptions\) \(int, error\)](<#WriteBytesWithOptions>)
 - [func WriteString\(path \*Path, data string\) \(int, error\)](<#WriteString>)
@@ -221,6 +223,8 @@ missing.txt
   - [func \(e \*PermissionError\) Mode\(\) string](<#PermissionError.Mode>)
   - [func \(e \*PermissionError\) Paths\(\) \[\]Path](<#PermissionError.Paths>)
   - [func \(e \*PermissionError\) Perm\(\) os.FileMode](<#PermissionError.Perm>)
+- [type RemoveOptions](<#RemoveOptions>)
+  - [func DefaultRemoveOptions\(\) RemoveOptions](<#DefaultRemoveOptions>)
 - [type TempPathOptions](<#TempPathOptions>)
 - [type WalkFunc](<#WalkFunc>)
 - [type WalkRFunc](<#WalkRFunc>)
@@ -410,6 +414,10 @@ var (
     // changed. It is a member of the ErrOperation group.
     ErrSetPermission = defineError(ErrOperation, "SET_PERMISSION", "could not set permission")
 
+    // ErrSetTimes is returned when the access and modification times of a
+    // path could not be changed. It is a member of the ErrOperation group.
+    ErrSetTimes = defineError(ErrOperation, "SET_TIMES", "could not set times")
+
     // ErrWalk is returned when a walk is stopped by an error of the walk
     // callback or by a done context. The underlying error is the error of the
     // callback or of the context. An error of the callback can hold another
@@ -491,7 +499,7 @@ A missing source returns [ErrNotExist](<#ErrInvalidFilter>), and a missing paren
 Rebasing a symlink target resolves relative paths against the working directory and returns [ErrLookup](<#ErrPathlib>) if it cannot be determined. On Windows, a source and destination on different volumes return [ErrAnchorMismatch](<#ErrPathlib>).
 
 <a name="CreateFile"></a>
-## func [CreateFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L67>)
+## func [CreateFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L83>)
 
 ```go
 func CreateFile(path *Path) error
@@ -499,12 +507,12 @@ func CreateFile(path *Path) error
 
 CreateFile creates an empty file at path with [DefaultFileMode](<#DefaultFileMode>). The parent directory must exist.
 
-CreateFile never truncates. An existing file returns [ErrFileExist](<#ErrInvalidFilter>) and is left untouched. [CreateFileWithOptions](<#CreateFileWithOptions>) accepts an existing file, and [OpenFile](<#OpenFile>) creates or truncates one, as [os.Create](<https://pkg.go.dev/os/#Create>) does.
+CreateFile never truncates. An existing file returns [ErrFileExist](<#ErrInvalidFilter>) and is left untouched. [CreateFileWithOptions](<#CreateFileWithOptions>) accepts an existing file with FileOptions.ExistOk. With FileOptions.UpdateTimes as well, it sets the times of the file to the current time, as a touch command does. [OpenFile](<#OpenFile>) creates or truncates a file, as [os.Create](<https://pkg.go.dev/os/#Create>) does.
 
 The errors of CreateFileWithOptions apply.
 
 <a name="CreateFileWithOptions"></a>
-## func [CreateFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L85>)
+## func [CreateFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L103>)
 
 ```go
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error)
@@ -512,12 +520,12 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error)
 
 CreateFileWithOptions creates an empty file at path with options and reports whether it created one. The parent directory must exist.
 
-An existing file returns [ErrFileExist](<#ErrInvalidFilter>), unless FileOptions.ExistOk accepts it. Then the file is left untouched and false is returned. An existing path that is no file returns [ErrNotFile](<#ErrInvalidFilter>). This includes a broken symlink, whose target is never created.
+An existing file returns [ErrFileExist](<#ErrInvalidFilter>), unless FileOptions.ExistOk accepts it. Then false is returned, and the file is left untouched. With FileOptions.UpdateTimes, its access and modification times are set to the current time, as [SetTimes](<#SetTimes>) does. An existing path that is no file returns [ErrNotFile](<#ErrInvalidFilter>). This includes a broken symlink, whose target is never created.
 
-A FileOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failed creation returns [ErrCreate](<#ErrInvalidFilter>).
+A FileOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), and any other failed update of the times returns [ErrSetTimes](<#ErrInvalidFilter>).
 
 <a name="CreateSymlink"></a>
-## func [CreateSymlink](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L197>)
+## func [CreateSymlink](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L218>)
 
 ```go
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error
@@ -528,7 +536,7 @@ CreateSymlink creates a symbolic link at symlinkPath that points to symlinkTarge
 An existing symlinkPath returns [ErrExist](<#ErrInvalidFilter>), and this includes a broken symlink. A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failed creation returns [ErrCreate](<#ErrInvalidFilter>).
 
 <a name="CreateTempDir"></a>
-## func [CreateTempDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L75>)
+## func [CreateTempDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L76>)
 
 ```go
 func CreateTempDir() (*Path, DisposeFunc, error)
@@ -539,7 +547,7 @@ CreateTempDir creates an empty directory in the temporary directory of the opera
 The errors of CreateTempDirWithOptions apply.
 
 <a name="CreateTempDirWithOptions"></a>
-## func [CreateTempDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L89>)
+## func [CreateTempDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L90>)
 
 ```go
 func CreateTempDirWithOptions(options TempPathOptions) (*Path, DisposeFunc, error)
@@ -601,7 +609,7 @@ true
 </details>
 
 <a name="CreateTempFile"></a>
-## func [CreateTempFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L34>)
+## func [CreateTempFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L35>)
 
 ```go
 func CreateTempFile() (*Path, DisposeFunc, error)
@@ -648,7 +656,7 @@ true
 </details>
 
 <a name="CreateTempFileWithOptions"></a>
-## func [CreateTempFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L48>)
+## func [CreateTempFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L49>)
 
 ```go
 func CreateTempFileWithOptions(options TempPathOptions) (*Path, DisposeFunc, error)
@@ -679,7 +687,7 @@ func DefaultFileMode() fs.FileMode
 DefaultFileMode returns the default permission of a file. It is 0644 \(rw\-r\-\-r\-\-\) on Unix and 0666 on Windows, which only knows writable and read\-only files.
 
 <a name="MkDir"></a>
-## func [MkDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L131>)
+## func [MkDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L149>)
 
 ```go
 func MkDir(path *Path) error
@@ -690,7 +698,7 @@ MkDir creates a directory at path with [DefaultDirMode](<#DefaultDirMode>). The 
 The errors of [MkDirWithOptions](<#MkDirWithOptions>) apply.
 
 <a name="MkDirWithOptions"></a>
-## func [MkDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L149>)
+## func [MkDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L170>)
 
 ```go
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error)
@@ -698,9 +706,9 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error)
 
 MkDirWithOptions creates a directory at path with options and reports whether it created one. The parent directory must exist, unless DirOptions.CreateAll creates it.
 
-An existing directory returns [ErrDirExist](<#ErrInvalidFilter>), unless DirOptions.ExistOk accepts it. Then false is returned. An existing path that is no directory returns [ErrNotDir](<#ErrInvalidFilter>). This includes a broken symlink.
+An existing directory returns [ErrDirExist](<#ErrInvalidFilter>), unless DirOptions.ExistOk accepts it. Then false is returned, and the directory is left untouched. With DirOptions.UpdateTimes, its access and modification times are set to the current time, as [SetTimes](<#SetTimes>) does. An existing path that is no directory returns [ErrNotDir](<#ErrInvalidFilter>). This includes a broken symlink.
 
-A DirOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failed creation returns [ErrCreate](<#ErrInvalidFilter>).
+A DirOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), and any other failed update of the times returns [ErrSetTimes](<#ErrInvalidFilter>).
 
 <a name="Move"></a>
 ## func [Move](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L72>)
@@ -760,24 +768,37 @@ ReadFileToString returns the content of the file at path as a string, as [ReadFi
 The errors of ReadFile apply.
 
 <a name="Remove"></a>
-## func [Remove](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L17>)
+## func [Remove](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L35>)
 
 ```go
 func Remove(path *Path) error
 ```
 
-Remove removes the file or empty directory at path. It wraps [os.Remove](<https://pkg.go.dev/os/#Remove>). A missing path is no error. A symlink is removed itself, never its target, and this includes a broken symlink.
+Remove removes the file or empty directory at path, as [os.Remove](<https://pkg.go.dev/os/#Remove>) does. A missing path returns [ErrNotExist](<#ErrInvalidFilter>).
 
-Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failed removal returns [ErrRemove](<#ErrInvalidFilter>).
+It removes as [RemoveWithOptions](<#RemoveWithOptions>) does with [DefaultRemoveOptions](<#DefaultRemoveOptions>), and the errors of RemoveWithOptions apply.
 
 <a name="RemoveAll"></a>
-## func [RemoveAll](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L42>)
+## func [RemoveAll](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L44>)
 
 ```go
 func RemoveAll(path *Path) error
 ```
 
-RemoveAll removes the entry at path and, for a directory, its whole tree. It wraps [os.RemoveAll](<https://pkg.go.dev/os/#RemoveAll>). A missing path is no error. A symlink is removed itself, never its target, and this includes a symlink to a directory and a broken symlink.
+RemoveAll removes the entry at path and, for a directory, its whole tree, as [os.RemoveAll](<https://pkg.go.dev/os/#RemoveAll>) does. A missing path is no error.
+
+It removes as [RemoveWithOptions](<#RemoveWithOptions>) does with RemoveOptions.MissingOk and RemoveOptions.Recursive set, and the errors of RemoveWithOptions apply.
+
+<a name="RemoveWithOptions"></a>
+## func [RemoveWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L59>)
+
+```go
+func RemoveWithOptions(path *Path, options RemoveOptions) error
+```
+
+RemoveWithOptions removes the entry at path with options. It wraps [os.Remove](<https://pkg.go.dev/os/#Remove>), or [os.RemoveAll](<https://pkg.go.dev/os/#RemoveAll>) with RemoveOptions.Recursive. A symlink is removed itself, never its target, and this includes a symlink to a directory and a broken symlink.
+
+A missing path returns [ErrNotExist](<#ErrInvalidFilter>), unless RemoveOptions.MissingOk accepts it. A broken symlink exists. A directory with entries returns [ErrNotEmptyDir](<#ErrInvalidFilter>), unless RemoveOptions.Recursive removes its whole tree.
 
 Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failed removal returns [ErrRemove](<#ErrInvalidFilter>).
 
@@ -797,9 +818,22 @@ Rename moves the entry at source to name in the same directory, as [Move](<#Move
 func SetPermission(path *Path, mode fs.FileMode) error
 ```
 
-SetPermission sets the permission of path to mode. It wraps [os.Chmod](<https://pkg.go.dev/os/#Chmod>), and the setuid and setgid bits are set reliably.
+SetPermission sets the permission of path to mode. It wraps [os.Chmod](<https://pkg.go.dev/os/#Chmod>) and follows symlinks. The setuid and setgid bits are set reliably.
 
 A mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrSetPermission](<#ErrInvalidFilter>).
+
+<a name="SetTimes"></a>
+## func [SetTimes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_times.go#L20>)
+
+```go
+func SetTimes(path *Path, accessTime, modTime time.Time) error
+```
+
+SetTimes sets the access time of path to accessTime and its modification time to modTime. It wraps [os.Chtimes](<https://pkg.go.dev/os/#Chtimes>) and follows symlinks. The path may be any existing entry, such as a file or a directory.
+
+A zero [time.Time](<https://pkg.go.dev/time/#Time>) leaves the corresponding time unchanged. The filesystem may round the times to its precision.
+
+A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrSetTimes](<#ErrInvalidFilter>).
 
 <a name="WriteBytes"></a>
 ## func [WriteBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L134>)
@@ -889,7 +923,7 @@ func (o CompareOption) Valid() bool
 Valid reports whether the option is one of the defined CompareOption constants.
 
 <a name="DirOptions"></a>
-## type [DirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L27-L38>)
+## type [DirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L34-L50>)
 
 DirOptions configures the creation of a directory. The zero value creates a new directory with [DefaultDirMode](<#DefaultDirMode>) in an existing parent directory and refuses an existing one.
 
@@ -897,6 +931,11 @@ DirOptions configures the creation of a directory. The zero value creates a new 
 type DirOptions struct {
     // ExistOk accepts an existing directory.
     ExistOk bool
+
+    // UpdateTimes sets the access and modification times of an existing
+    // directory that ExistOk accepts to the current time, as the touch command
+    // does. Without ExistOk it has no effect.
+    UpdateTimes bool
 
     // Mode is the permission of a created directory. It may only contain
     // PermissionBits. Zero selects DefaultDirMode, because the operating
@@ -909,7 +948,7 @@ type DirOptions struct {
 ```
 
 <a name="DefaultDirOptions"></a>
-### func [DefaultDirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L51>)
+### func [DefaultDirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L64>)
 
 ```go
 func DefaultDirOptions() DirOptions
@@ -918,9 +957,9 @@ func DefaultDirOptions() DirOptions
 DefaultDirOptions returns the options [MkDir](<#MkDir>) uses. They create a new directory with [DefaultDirMode](<#DefaultDirMode>) in an existing parent directory.
 
 <a name="DisposeFunc"></a>
-## type [DisposeFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L15>)
+## type [DisposeFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L16>)
 
-DisposeFunc removes a temporary path created by [CreateTempFile](<#CreateTempFile>) or [CreateTempDir](<#CreateTempDir>). Calling it again is a no\-op.
+DisposeFunc removes a temporary path created by [CreateTempFile](<#CreateTempFile>) or [CreateTempDir](<#CreateTempDir>). A missing path is no error, so calling it again, or after the path was moved away, is a no\-op.
 
 It is returned next to the path, so the creator alone can remove the path, and the code the path is passed to cannot. A symlink that replaced the temporary path is removed itself, never its target.
 
@@ -929,7 +968,7 @@ type DisposeFunc func() error
 ```
 
 <a name="FileOptions"></a>
-## type [FileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L13-L22>)
+## type [FileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L14-L29>)
 
 FileOptions configures the creation of a file. The zero value creates a new file with [DefaultFileMode](<#DefaultFileMode>) and refuses an existing one.
 
@@ -939,6 +978,12 @@ type FileOptions struct {
     // untouched, and WriteBytesWithOptions truncates it.
     ExistOk bool
 
+    // UpdateTimes sets the access and modification times of an existing file
+    // that ExistOk accepts to the current time, as the touch command does.
+    // Without ExistOk it has no effect. WriteBytesWithOptions ignores it,
+    // because writing sets the modification time.
+    UpdateTimes bool
+
     // Mode is the permission of a created file. It may only contain
     // PermissionBits. Zero selects DefaultFileMode, because the operating
     // system refuses a file without permissions.
@@ -947,7 +992,7 @@ type FileOptions struct {
 ```
 
 <a name="DefaultFileOptions"></a>
-### func [DefaultFileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L42>)
+### func [DefaultFileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L54>)
 
 ```go
 func DefaultFileOptions() FileOptions
@@ -1201,7 +1246,7 @@ NewPathFromWindows returns the Path of a Windows path string on every platform, 
 Backslashes and forward slashes both separate names. A volume, such as "C:", or a UNC root, such as \`\\\\host\\share\`, becomes the anchor of the path. The rest is cleaned as [NewPathFromPosix](<#NewPathFromPosix>) cleans it, and ".." names never climb above the root of a volume.
 
 <a name="TempBaseDir"></a>
-### func [TempBaseDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L110>)
+### func [TempBaseDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L111>)
 
 ```go
 func TempBaseDir() *Path
@@ -1741,7 +1786,7 @@ func (p *Path) String() string
 String returns this Path in the native form of the platform. It is the form of [Path.ToWindows](<#Path.ToWindows>) on Windows and the form of [Path.ToPosix](<#Path.ToPosix>) on every other platform.
 
 <a name="Path.SymlinkTo"></a>
-### func \(\*Path\) [SymlinkTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L223>)
+### func \(\*Path\) [SymlinkTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L244>)
 
 ```go
 func (p *Path) SymlinkTo(linkPath *Path) error
@@ -2128,8 +2173,32 @@ func (e *PermissionError) Perm() os.FileMode
 
 Perm returns the rejected permission value, or 0 when not applicable.
 
+<a name="RemoveOptions"></a>
+## type [RemoveOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L13-L19>)
+
+RemoveOptions configures the removal of a path. The zero value removes a file or an empty directory and refuses a missing path.
+
+```go
+type RemoveOptions struct {
+    // MissingOk accepts a missing path.
+    MissingOk bool
+
+    // Recursive removes a directory with its whole tree.
+    Recursive bool
+}
+```
+
+<a name="DefaultRemoveOptions"></a>
+### func [DefaultRemoveOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L23>)
+
+```go
+func DefaultRemoveOptions() RemoveOptions
+```
+
+DefaultRemoveOptions returns the options [Remove](<#Remove>) uses. They remove a file or an empty directory and refuse a missing path.
+
 <a name="TempPathOptions"></a>
-## type [TempPathOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L20-L27>)
+## type [TempPathOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/temp.go#L21-L28>)
 
 TempPathOptions configures the creation of a temporary path. The zero value creates the path in the temporary directory of the operating system, without a prefix.
 

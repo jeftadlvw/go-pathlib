@@ -174,7 +174,8 @@ PATHLIB                          ErrPathlib
 │  ├─ WRITE                      ErrWrite
 │  ├─ COPY                       ErrCopy
 │  ├─ REMOVE                     ErrRemove
-│  └─ SET_PERMISSION             ErrSetPermission
+│  ├─ SET_PERMISSION             ErrSetPermission
+│  └─ SET_TIMES                  ErrSetTimes
 └─ WALK                          ErrWalk
 ```
 
@@ -206,6 +207,24 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrInvalidPermission`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
+
+**Creating files and directories**
+
+The creation functions differ in what they do with an existing entry:
+
+| Call | Existing entry |
+| --- | --- |
+| `CreateFile`, `MkDir` | Returns `ErrFileExist` or `ErrDirExist`. |
+| `CreateFileWithOptions`, `MkDirWithOptions` with `ExistOk` | Leaves it untouched. |
+| `CreateFileWithOptions`, `MkDirWithOptions` with `ExistOk` and `UpdateTimes` | Sets its access and modification times to the current time, as the `touch` command does. |
+| `WriteBytes`, `WriteString` | Truncates the file and writes it. |
+| `OpenFile` | Truncates the file, as `os.Create` does. |
+
+`SetTimes` sets the times of any existing path, as `os.Chtimes` does.
+
+**Removing paths**
+
+`Remove` returns `ErrNotExist` for a missing path, as `os.Remove` does. `RemoveAll` accepts a missing path, as `os.RemoveAll` does. `RemoveWithOptions` combines both behaviors with `RemoveOptions.MissingOk` and `RemoveOptions.Recursive`.
 
 ## Contributing
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!
