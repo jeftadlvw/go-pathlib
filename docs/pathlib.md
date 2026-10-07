@@ -98,7 +98,7 @@ missing.txt
 - [func RemoveAll\(path \*Path\) error](<#RemoveAll>)
 - [func RemoveWithOptions\(path \*Path, options RemoveOptions\) error](<#RemoveWithOptions>)
 - [func Rename\(source \*Path, name string\) error](<#Rename>)
-- [func SetPermission\(path \*Path, mode FileMode\) error](<#SetPermission>)
+- [func SetMode\(path \*Path, mode FileMode\) error](<#SetMode>)
 - [func SetTimes\(path \*Path, accessTime, modTime time.Time\) error](<#SetTimes>)
 - [func WriteBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#WriteBytes>)
 - [func WriteBytesWithOptions\(path \*Path, data \[\]byte, options FileOptions\) \(int, error\)](<#WriteBytesWithOptions>)
@@ -121,6 +121,12 @@ missing.txt
 - [type FileMode](<#FileMode>)
   - [func DefaultDirMode\(\) FileMode](<#DefaultDirMode>)
   - [func DefaultFileMode\(\) FileMode](<#DefaultFileMode>)
+- [type FileModeError](<#FileModeError>)
+  - [func \(e \*FileModeError\) Error\(\) string](<#FileModeError.Error>)
+  - [func \(e \*FileModeError\) FileMode\(\) FileMode](<#FileModeError.FileMode>)
+  - [func \(e \*FileModeError\) LogValue\(\) slog.Value](<#FileModeError.LogValue>)
+  - [func \(e \*FileModeError\) MarshalJSON\(\) \(\[\]byte, error\)](<#FileModeError.MarshalJSON>)
+  - [func \(e \*FileModeError\) Paths\(\) \[\]Path](<#FileModeError.Paths>)
 - [type FileOptions](<#FileOptions>)
   - [func DefaultFileOptions\(\) FileOptions](<#DefaultFileOptions>)
 - [type FilterFunc](<#FilterFunc>)
@@ -131,6 +137,15 @@ missing.txt
   - [func DefaultGlobOptions\(\) GlobOptions](<#DefaultGlobOptions>)
 - [type ListOptions](<#ListOptions>)
   - [func DefaultListOptions\(\) ListOptions](<#DefaultListOptions>)
+- [type OpenMode](<#OpenMode>)
+  - [func \(m OpenMode\) String\(\) string](<#OpenMode.String>)
+  - [func \(m OpenMode\) Valid\(\) bool](<#OpenMode.Valid>)
+- [type OpenModeError](<#OpenModeError>)
+  - [func \(e \*OpenModeError\) Error\(\) string](<#OpenModeError.Error>)
+  - [func \(e \*OpenModeError\) LogValue\(\) slog.Value](<#OpenModeError.LogValue>)
+  - [func \(e \*OpenModeError\) MarshalJSON\(\) \(\[\]byte, error\)](<#OpenModeError.MarshalJSON>)
+  - [func \(e \*OpenModeError\) OpenMode\(\) OpenMode](<#OpenModeError.OpenMode>)
+  - [func \(e \*OpenModeError\) Paths\(\) \[\]Path](<#OpenModeError.Paths>)
 - [type OpenOptions](<#OpenOptions>)
   - [func DefaultOpenOptions\(\) OpenOptions](<#DefaultOpenOptions>)
 - [type Path](<#Path>)
@@ -170,6 +185,7 @@ missing.txt
   - [func \(p \*Path\) IsEmptyDir\(\) bool](<#Path.IsEmptyDir>)
   - [func \(p \*Path\) IsFIFO\(\) bool](<#Path.IsFIFO>)
   - [func \(p \*Path\) IsFile\(\) bool](<#Path.IsFile>)
+  - [func \(p \*Path\) IsLocal\(\) bool](<#Path.IsLocal>)
   - [func \(p \*Path\) IsOnCaseSensitiveFS\(\) bool](<#Path.IsOnCaseSensitiveFS>)
   - [func \(p \*Path\) IsRelative\(\) bool](<#Path.IsRelative>)
   - [func \(p \*Path\) IsSocket\(\) bool](<#Path.IsSocket>)
@@ -225,13 +241,6 @@ missing.txt
   - [func \(e \*PatternError\) Paths\(\) \[\]Path](<#PatternError.Paths>)
   - [func \(e \*PatternError\) Pattern\(\) string](<#PatternError.Pattern>)
   - [func \(e \*PatternError\) Unwrap\(\) error](<#PatternError.Unwrap>)
-- [type PermissionError](<#PermissionError>)
-  - [func \(e \*PermissionError\) Error\(\) string](<#PermissionError.Error>)
-  - [func \(e \*PermissionError\) LogValue\(\) slog.Value](<#PermissionError.LogValue>)
-  - [func \(e \*PermissionError\) MarshalJSON\(\) \(\[\]byte, error\)](<#PermissionError.MarshalJSON>)
-  - [func \(e \*PermissionError\) Mode\(\) string](<#PermissionError.Mode>)
-  - [func \(e \*PermissionError\) Paths\(\) \[\]Path](<#PermissionError.Paths>)
-  - [func \(e \*PermissionError\) Perm\(\) FileMode](<#PermissionError.Perm>)
 - [type RemoveOptions](<#RemoveOptions>)
   - [func DefaultRemoveOptions\(\) RemoveOptions](<#DefaultRemoveOptions>)
 - [type TempPathOptions](<#TempPathOptions>)
@@ -241,7 +250,7 @@ missing.txt
 
 ## Constants
 
-<a name="ModeDir"></a>The bits of a FileMode. They are the bits of \[fs.FileMode\], so they can be combined with the constants of the io/fs and os packages.
+<a name="ModeDir"></a>The bits and masks of a FileMode. They are the bits of \[fs.FileMode\], so they can be combined with the constants of the io/fs and os packages.
 
 ```go
 const (
@@ -269,17 +278,17 @@ const (
     // ModeSocket marks a Unix domain socket.
     ModeSocket = fs.ModeSocket
 
-    // ModeSetuid is the setuid permission bit. It is one of [PermissionBits].
+    // ModeSetuid is the setuid bit. It is one of the bits of [ModeSpecial].
     ModeSetuid = fs.ModeSetuid
 
-    // ModeSetgid is the setgid permission bit. It is one of PermissionBits.
+    // ModeSetgid is the setgid bit. It is one of the bits of ModeSpecial.
     ModeSetgid = fs.ModeSetgid
 
     // ModeCharDevice marks a character device. It is set together with
     // ModeDevice.
     ModeCharDevice = fs.ModeCharDevice
 
-    // ModeSticky is the sticky permission bit. It is one of PermissionBits.
+    // ModeSticky is the sticky bit. It is one of the bits of ModeSpecial.
     ModeSticky = fs.ModeSticky
 
     // ModeIrregular marks an entry of an unknown type.
@@ -288,20 +297,14 @@ const (
     // ModeType is the mask of the type bits. A regular file has none of them.
     ModeType = fs.ModeType
 
-    // ModePerm is the mask of the Unix permission bits, 0777. It is part of
-    // PermissionBits.
+    // ModePerm is the mask of the permission bits, 0o777. They are the read,
+    // write, and execute bits of the owner, the group, and others.
     ModePerm = fs.ModePerm
+
+    // ModeSpecial is the mask of the special mode bits ModeSetuid,
+    // ModeSetgid, and ModeSticky.
+    ModeSpecial = ModeSetuid | ModeSetgid | ModeSticky
 )
-```
-
-<a name="PermissionBits"></a>PermissionBits are the mode bits accepted wherever a permission is passed. They are the Unix permission bits [ModePerm](<#ModeDir>) plus [ModeSetuid](<#ModeDir>), [ModeSetgid](<#ModeDir>), and [ModeSticky](<#ModeDir>).
-
-Any other bit returns [ErrInvalidPermission](<#ErrInvalidFilter>). This includes file type bits, such as [ModeDir](<#ModeDir>), and the Unix octal notation of the special bits, such as 0o4755, which the os package silently drops.
-
-Whether the setuid and setgid bits survive the creation of a file or directory depends on the operating system. macOS drops them, for example. [SetPermission](<#SetPermission>) sets them reliably. On Windows, the special bits have no effect.
-
-```go
-const PermissionBits = ModePerm | ModeSetuid | ModeSetgid | ModeSticky
 ```
 
 ## Variables
@@ -372,10 +375,11 @@ var (
     // value. It is a member of the [ErrInvalid] group.
     ErrInvalidFilter = defineError(ErrInvalid, "FILTER", "invalid glob filter option")
 
-    // ErrInvalidPermission is returned when a permission has bits outside
-    // [PermissionBits]. It is a member of the ErrInvalid group. Its cause is a
-    // *[PermissionError].
-    ErrInvalidPermission = defineError(ErrInvalid, "PERMISSION", "permission has bits outside PermissionBits")
+    // ErrInvalidFileMode is returned when a [FileMode] passed to the library
+    // has bits outside [ModePerm] and [ModeSpecial], such as a CreateMode or
+    // the mode of [SetMode]. It is a member of the ErrInvalid group. Its cause
+    // is a *[FileModeError].
+    ErrInvalidFileMode = defineError(ErrInvalid, "FILE_MODE", "file mode has bits outside ModePerm and ModeSpecial")
 
     // ErrNotExist is returned when a required path does not exist, whether a
     // check of the library or the operating system found it. Match it with
@@ -472,9 +476,9 @@ var (
     // of the ErrOperation group.
     ErrRemove = defineError(ErrOperation, "REMOVE", "could not remove path")
 
-    // ErrSetPermission is returned when the permission of a path could not be
-    // changed. It is a member of the ErrOperation group.
-    ErrSetPermission = defineError(ErrOperation, "SET_PERMISSION", "could not set permission")
+    // ErrSetMode is returned when the mode of a path could not be changed. It
+    // is a member of the ErrOperation group.
+    ErrSetMode = defineError(ErrOperation, "SET_MODE", "could not set mode")
 
     // ErrSetTimes is returned when the access and modification times of a
     // path could not be changed. It is a member of the ErrOperation group.
@@ -503,13 +507,14 @@ var (
 )
 ```
 
-<a name="ErrInvalidMode"></a>Kinds returned by the io group. Their cause is a \*[PathError](<#PathError>), unless a kind names another.
+<a name="ErrInvalidOpenMode"></a>Kinds returned by the io group. Their cause is a \*[PathError](<#PathError>), unless a kind names another.
 
 ```go
 var (
-    // ErrInvalidMode is returned when an open mode is not supported. It is a
-    // member of the [ErrInvalid] group. Its cause is a *[PermissionError].
-    ErrInvalidMode = defineError(ErrInvalid, "MODE", "invalid open mode")
+    // ErrInvalidOpenMode is returned when the open mode of [OpenOptions] is
+    // no [OpenMode] constant. It is a member of the [ErrInvalid] group. Its
+    // cause is an *[OpenModeError].
+    ErrInvalidOpenMode = defineError(ErrInvalid, "OPEN_MODE", "invalid open mode")
 
     // ErrRead is returned when a file could not be read. It is a member of the
     // [ErrOperation] group.
@@ -522,7 +527,7 @@ var (
 ```
 
 <a name="AppendBytes"></a>
-## func [AppendBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L185>)
+## func [AppendBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L173>)
 
 ```go
 func AppendBytes(path *Path, data []byte) (int, error)
@@ -532,10 +537,10 @@ AppendBytes appends data to the file at path and returns the number of written b
 
 A symlink to a file is written through. An existing path that is no file returns [ErrNotFile](<#ErrInvalidFilter>). This includes a broken symlink, whose target is never created.
 
-A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), to open the file [ErrOpen](<#ErrInvalidFilter>), and to write [ErrWrite](<#ErrInvalidMode>).
+A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), to open the file [ErrOpen](<#ErrInvalidFilter>), and to write [ErrWrite](<#ErrInvalidOpenMode>).
 
 <a name="AppendString"></a>
-## func [AppendString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L192>)
+## func [AppendString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L180>)
 
 ```go
 func AppendString(path *Path, data string) (int, error)
@@ -561,7 +566,7 @@ A missing source returns [ErrNotExist](<#ErrInvalidFilter>), and a missing paren
 Rebasing a symlink target resolves relative paths against the working directory and returns [ErrLookup](<#ErrPathlib>) if it cannot be determined. On Windows, a source and destination on different volumes return [ErrAnchorMismatch](<#ErrPathlib>).
 
 <a name="CreateFile"></a>
-## func [CreateFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L83>)
+## func [CreateFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L85>)
 
 ```go
 func CreateFile(path *Path) error
@@ -574,7 +579,7 @@ CreateFile never truncates. An existing file returns [ErrFileExist](<#ErrInvalid
 The errors of CreateFileWithOptions apply.
 
 <a name="CreateFileWithOptions"></a>
-## func [CreateFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L103>)
+## func [CreateFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L105>)
 
 ```go
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error)
@@ -584,10 +589,10 @@ CreateFileWithOptions creates an empty file at path with options and reports whe
 
 An existing file returns [ErrFileExist](<#ErrInvalidFilter>), unless FileOptions.ExistOk accepts it. Then false is returned, and the file is left untouched. With FileOptions.UpdateTimes, its access and modification times are set to the current time, as [SetTimes](<#SetTimes>) does. An existing path that is no file returns [ErrNotFile](<#ErrInvalidFilter>). This includes a broken symlink, whose target is never created.
 
-A FileOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), and any other failed update of the times returns [ErrSetTimes](<#ErrInvalidFilter>).
+A FileOptions.CreateMode with bits outside [ModePerm](<#ModeDir>) and [ModeSpecial](<#ModeDir>) returns [ErrInvalidFileMode](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), and any other failed update of the times returns [ErrSetTimes](<#ErrInvalidFilter>).
 
 <a name="CreateSymlink"></a>
-## func [CreateSymlink](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L218>)
+## func [CreateSymlink](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L220>)
 
 ```go
 func CreateSymlink(symlinkTarget, symlinkPath *Path) error
@@ -731,7 +736,7 @@ The caller calls the returned [DisposeFunc](<#DisposeFunc>) to remove the file. 
 A missing TempPathOptions.BaseDir returns [ErrNotExist](<#ErrInvalidFilter>), and one that is no directory returns [ErrNotDir](<#ErrInvalidFilter>). Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>), and any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), both with the base directory as their path.
 
 <a name="MkDir"></a>
-## func [MkDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L149>)
+## func [MkDir](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L151>)
 
 ```go
 func MkDir(path *Path) error
@@ -742,7 +747,7 @@ MkDir creates a directory at path with [DefaultDirMode](<#DefaultDirMode>). The 
 The errors of [MkDirWithOptions](<#MkDirWithOptions>) apply.
 
 <a name="MkDirWithOptions"></a>
-## func [MkDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L170>)
+## func [MkDirWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L172>)
 
 ```go
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error)
@@ -752,7 +757,7 @@ MkDirWithOptions creates a directory at path with options and reports whether it
 
 An existing directory returns [ErrDirExist](<#ErrInvalidFilter>), unless DirOptions.ExistOk accepts it. Then false is returned, and the directory is left untouched. With DirOptions.UpdateTimes, its access and modification times are set to the current time, as [SetTimes](<#SetTimes>) does. An existing path that is no directory returns [ErrNotDir](<#ErrInvalidFilter>). This includes a broken symlink.
 
-A DirOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), and any other failed update of the times returns [ErrSetTimes](<#ErrInvalidFilter>).
+A DirOptions.CreateMode with bits outside [ModePerm](<#ModeDir>) and [ModeSpecial](<#ModeDir>) returns [ErrInvalidFileMode](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), any other failed creation returns [ErrCreate](<#ErrInvalidFilter>), and any other failed update of the times returns [ErrSetTimes](<#ErrInvalidFilter>).
 
 <a name="Move"></a>
 ## func [Move](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L72>)
@@ -768,18 +773,18 @@ The parent directory of destination must exist. destination must not exist, unle
 A missing source returns [ErrNotExist](<#ErrInvalidFilter>), and an existing destination returns [ErrExist](<#ErrInvalidFilter>). Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>), and any other failure to check a path returns [ErrStat](<#ErrInvalidFilter>). The errors of [Copy](<#Copy>) and [RemoveAll](<#RemoveAll>) apply.
 
 <a name="OpenFile"></a>
-## func [OpenFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L54>)
+## func [OpenFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L46>)
 
 ```go
 func OpenFile(path *Path) (*os.File, error)
 ```
 
-OpenFile opens the file at path for reading and writing, as [OpenFileWithOptions](<#OpenFileWithOptions>) does with [DefaultOpenOptions](<#DefaultOpenOptions>). A missing file is created with permission 0644, and an existing file is truncated. The caller closes the returned file.
+OpenFile opens the file at path for reading and writing, as [OpenFileWithOptions](<#OpenFileWithOptions>) does with [DefaultOpenOptions](<#DefaultOpenOptions>). A missing file is created with mode 0o644, and an existing file is truncated. The caller closes the returned file.
 
 The errors of OpenFileWithOptions apply.
 
 <a name="OpenFileWithOptions"></a>
-## func [OpenFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L68>)
+## func [OpenFileWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L60>)
 
 ```go
 func OpenFileWithOptions(path *Path, options OpenOptions) (*os.File, error)
@@ -787,10 +792,10 @@ func OpenFileWithOptions(path *Path, options OpenOptions) (*os.File, error)
 
 OpenFileWithOptions opens the file at path with options. The caller closes the returned file.
 
-An OpenOptions.Permission with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>), and an unsupported OpenOptions.Mode returns [ErrInvalidMode](<#ErrInvalidMode>). A directory returns [ErrNotFile](<#ErrInvalidFilter>). A missing file returns [ErrNotExist](<#ErrInvalidFilter>), or [ErrParentNotExist](<#ErrInvalidFilter>) for a missing parent directory with OpenOptions.CreateIfNotExists. Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to open the file returns [ErrOpen](<#ErrInvalidFilter>), to create it [ErrCreate](<#ErrInvalidFilter>), and to check it [ErrStat](<#ErrInvalidFilter>).
+An OpenOptions.CreateMode with bits outside [ModePerm](<#ModeDir>) and [ModeSpecial](<#ModeDir>) returns [ErrInvalidFileMode](<#ErrInvalidFilter>), and an OpenOptions.OpenMode that is no [OpenMode](<#OpenMode>) constant returns [ErrInvalidOpenMode](<#ErrInvalidOpenMode>). A directory returns [ErrNotFile](<#ErrInvalidFilter>). A missing file returns [ErrNotExist](<#ErrInvalidFilter>), or [ErrParentNotExist](<#ErrInvalidFilter>) for a missing parent directory with OpenOptions.CreateIfNotExists. Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to open the file returns [ErrOpen](<#ErrInvalidFilter>), to create it [ErrCreate](<#ErrInvalidFilter>), and to check it [ErrStat](<#ErrInvalidFilter>).
 
 <a name="ReadFile"></a>
-## func [ReadFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L109>)
+## func [ReadFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L97>)
 
 ```go
 func ReadFile(path *Path) ([]byte, error)
@@ -798,10 +803,10 @@ func ReadFile(path *Path) ([]byte, error)
 
 ReadFile returns the content of the file at path. It wraps [os.ReadFile](<https://pkg.go.dev/os/#ReadFile>).
 
-A missing file returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrRead](<#ErrInvalidMode>).
+A missing file returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrRead](<#ErrInvalidOpenMode>).
 
 <a name="ReadFileToString"></a>
-## func [ReadFileToString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L122>)
+## func [ReadFileToString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L110>)
 
 ```go
 func ReadFileToString(path *Path) (string, error)
@@ -855,16 +860,16 @@ func Rename(source *Path, name string) error
 
 Rename moves the entry at source to name in the same directory, as [Move](<#Move>) does. The errors of Move apply.
 
-<a name="SetPermission"></a>
-## func [SetPermission](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L61>)
+<a name="SetMode"></a>
+## func [SetMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L46>)
 
 ```go
-func SetPermission(path *Path, mode FileMode) error
+func SetMode(path *Path, mode FileMode) error
 ```
 
-SetPermission sets the permission of path to mode. It wraps [os.Chmod](<https://pkg.go.dev/os/#Chmod>) and follows symlinks. The setuid and setgid bits are set reliably.
+SetMode sets the mode of path to mode. It wraps [os.Chmod](<https://pkg.go.dev/os/#Chmod>) and follows symlinks. The setuid and setgid bits are set reliably.
 
-A mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrSetPermission](<#ErrInvalidFilter>).
+A mode with bits outside [ModePerm](<#ModeDir>) and [ModeSpecial](<#ModeDir>) returns [ErrInvalidFileMode](<#ErrInvalidFilter>). A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrSetMode](<#ErrInvalidFilter>).
 
 <a name="SetTimes"></a>
 ## func [SetTimes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_times.go#L20>)
@@ -880,7 +885,7 @@ A zero [time.Time](<https://pkg.go.dev/time/#Time>) leaves the corresponding tim
 A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure returns [ErrSetTimes](<#ErrInvalidFilter>).
 
 <a name="WriteBytes"></a>
-## func [WriteBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L134>)
+## func [WriteBytes](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L122>)
 
 ```go
 func WriteBytes(path *Path, data []byte) (int, error)
@@ -891,7 +896,7 @@ WriteBytes writes data to the file at path and returns the number of written byt
 It writes as [WriteBytesWithOptions](<#WriteBytesWithOptions>) does with FileOptions\{ExistOk: true\}, and the errors of WriteBytesWithOptions apply.
 
 <a name="WriteBytesWithOptions"></a>
-## func [WriteBytesWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L162>)
+## func [WriteBytesWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L150>)
 
 ```go
 func WriteBytesWithOptions(path *Path, data []byte, options FileOptions) (int, error)
@@ -899,14 +904,14 @@ func WriteBytesWithOptions(path *Path, data []byte, options FileOptions) (int, e
 
 WriteBytesWithOptions writes data to the file at path with options and returns the number of written bytes. The parent directory must exist.
 
-A missing file is created with FileOptions.Mode. The mode applies to a created file alone, and an existing file keeps its permission. An existing file is truncated if FileOptions.ExistOk is set. Otherwise it returns [ErrFileExist](<#ErrInvalidFilter>) and is left untouched, as in [CreateFileWithOptions](<#CreateFileWithOptions>).
+A missing file is created with FileOptions.CreateMode, and an existing file keeps its mode. An existing file is truncated if FileOptions.ExistOk is set. Otherwise it returns [ErrFileExist](<#ErrInvalidFilter>) and is left untouched, as in [CreateFileWithOptions](<#CreateFileWithOptions>).
 
 A symlink to a file is written through. An existing path that is no file returns [ErrNotFile](<#ErrInvalidFilter>). This includes a broken symlink, whose target is never created.
 
-A FileOptions.Mode with bits outside [PermissionBits](<#PermissionBits>) returns [ErrInvalidPermission](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), to open the file [ErrOpen](<#ErrInvalidFilter>), and to write [ErrWrite](<#ErrInvalidMode>).
+A FileOptions.CreateMode with bits outside [ModePerm](<#ModeDir>) and [ModeSpecial](<#ModeDir>) returns [ErrInvalidFileMode](<#ErrInvalidFilter>). A missing parent directory returns [ErrParentNotExist](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), to open the file [ErrOpen](<#ErrInvalidFilter>), and to write [ErrWrite](<#ErrInvalidOpenMode>).
 
 <a name="WriteString"></a>
-## func [WriteString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L141>)
+## func [WriteString](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L129>)
 
 ```go
 func WriteString(path *Path, data string) (int, error)
@@ -917,7 +922,7 @@ WriteString writes data to the file at path, as [WriteBytes](<#WriteBytes>) does
 The errors of WriteBytes apply.
 
 <a name="WriteStringWithOptions"></a>
-## func [WriteStringWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L170>)
+## func [WriteStringWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L158>)
 
 ```go
 func WriteStringWithOptions(path *Path, data string, options FileOptions) (int, error)
@@ -967,7 +972,7 @@ func (o CompareOption) Valid() bool
 Valid reports whether the option is one of the defined CompareOption constants.
 
 <a name="DirOptions"></a>
-## type [DirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L34-L50>)
+## type [DirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L35-L52>)
 
 DirOptions configures the creation of a directory. The zero value creates a new directory with [DefaultDirMode](<#DefaultDirMode>) in an existing parent directory and refuses an existing one.
 
@@ -981,10 +986,11 @@ type DirOptions struct {
     // does. Without ExistOk it has no effect.
     UpdateTimes bool
 
-    // Mode is the permission of a created directory. It may only contain
-    // PermissionBits. Zero selects DefaultDirMode, because the operating
-    // system refuses a directory without permissions.
-    Mode FileMode
+    // CreateMode is the mode of a created directory. An existing directory
+    // keeps its mode. It may only contain ModePerm and ModeSpecial bits. Zero
+    // selects DefaultDirMode, because the operating system refuses a directory
+    // without permissions.
+    CreateMode FileMode
 
     // CreateAll creates missing parent directories as well.
     CreateAll bool
@@ -992,7 +998,7 @@ type DirOptions struct {
 ```
 
 <a name="DefaultDirOptions"></a>
-### func [DefaultDirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L64>)
+### func [DefaultDirOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L66>)
 
 ```go
 func DefaultDirOptions() DirOptions
@@ -1090,34 +1096,109 @@ func (fi *FileInfo) Sys() any
 Sys returns the data of the operating system, such as a \*syscall.Stat\_t on Unix and a \*syscall.Win32FileAttributeData on Windows. Its type differs between platforms.
 
 <a name="FileMode"></a>
-## type [FileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_mode.go#L65>)
+## type [FileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_mode.go#L89>)
 
-FileMode holds the type and permission bits of a filesystem entry. It is an alias of \[fs.FileMode\], so its methods, such as IsDir, IsRegular, and Perm, apply, and a FileMode passes to the io/fs and os packages without a conversion.
+FileMode holds the mode of a filesystem entry. It is an alias of \[fs.FileMode\], so its methods, such as IsDir, IsRegular, and Perm, apply, and a FileMode passes to the io/fs and os packages without a conversion.
+
+A FileMode holds three groups of bits, each with a mask:
+
+- The type bits, [ModeType](<#ModeDir>), such as [ModeDir](<#ModeDir>) or [ModeSymlink](<#ModeDir>). A regular file has none of them.
+- The permission bits, [ModePerm](<#ModeDir>). They are the read, write, and execute bits of the owner, the group, and others, such as 0o755 \(rwxr\-xr\-x\).
+- The special mode bits, [ModeSpecial](<#ModeDir>). They are [ModeSetuid](<#ModeDir>), [ModeSetgid](<#ModeDir>), and [ModeSticky](<#ModeDir>).
+
+A FileMode passed to the library, such as a CreateMode or the mode of [SetMode](<#SetMode>), may only contain permission bits and special mode bits. Any other bit returns [ErrInvalidFileMode](<#ErrInvalidFilter>). This includes the type bits and the Unix octal notation of the special mode bits, such as 0o4755, which the os package silently drops. Write ModeSetuid|0o755 instead. A FileMode read with [Path.Stat](<#Path.Stat>) is passed on after masking it with ModePerm|ModeSpecial.
+
+Whether the setuid and setgid bits survive the creation of a file or directory depends on the operating system. macOS drops them, for example. SetMode sets them reliably. On Windows, the special mode bits have no effect, and the permission bits tell writable \(0o666\) and read\-only \(0o444\) files apart alone.
 
 ```go
 type FileMode = fs.FileMode
 ```
 
 <a name="DefaultDirMode"></a>
-### func [DefaultDirMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L51>)
+### func [DefaultDirMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L36>)
 
 ```go
 func DefaultDirMode() FileMode
 ```
 
-DefaultDirMode returns the default permission of a directory. It is 0755 \(rwxr\-xr\-x\) on Unix and 0777 on Windows, which applies 0777 to every directory.
+DefaultDirMode returns the default mode of a directory. It is 0o755 \(rwxr\-xr\-x\) on Unix and 0o777 on Windows, which applies 0o777 to every directory.
 
 <a name="DefaultFileMode"></a>
-### func [DefaultFileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L44>)
+### func [DefaultFileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_permission.go#L29>)
 
 ```go
 func DefaultFileMode() FileMode
 ```
 
-DefaultFileMode returns the default permission of a file. It is 0644 \(rw\-r\-\-r\-\-\) on Unix and 0666 on Windows, which only knows writable and read\-only files.
+DefaultFileMode returns the default mode of a file. It is 0o644 \(rw\-r\-\-r\-\-\) on Unix and 0o666 on Windows, which only knows writable and read\-only files.
+
+<a name="FileModeError"></a>
+## type [FileModeError](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_file_mode.go#L24-L30>)
+
+FileModeError is the cause of the failures of [ErrInvalidFileMode](<#ErrInvalidFilter>). It holds the rejected [FileMode](<#FileMode>) and the paths the failure concerns. The file mode is the value passed where the library accepts one, such as FileOptions.CreateMode or the mode of [SetMode](<#SetMode>).
+
+Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
+
+```
+var fileModeErr *FileModeError
+if errors.As(err, &fileModeErr) { use(fileModeErr.FileMode()) }
+```
+
+A FileModeError is immutable.
+
+```go
+type FileModeError struct {
+    // contains filtered or unexported fields
+}
+```
+
+<a name="FileModeError.Error"></a>
+### func \(\*FileModeError\) [Error](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_file_mode.go#L44>)
+
+```go
+func (e *FileModeError) Error() string
+```
+
+Error renders the paths and the rejected file mode.
+
+<a name="FileModeError.FileMode"></a>
+### func \(\*FileModeError\) [FileMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_file_mode.go#L39>)
+
+```go
+func (e *FileModeError) FileMode() FileMode
+```
+
+FileMode returns the rejected file mode, as the caller passed it, including the bits outside [ModePerm](<#ModeDir>) and [ModeSpecial](<#ModeDir>).
+
+<a name="FileModeError.LogValue"></a>
+### func \(\*FileModeError\) [LogValue](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_file_mode.go#L56>)
+
+```go
+func (e *FileModeError) LogValue() slog.Value
+```
+
+LogValue describes the paths in their Posix form and the rejected file mode.
+
+<a name="FileModeError.MarshalJSON"></a>
+### func \(\*FileModeError\) [MarshalJSON](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_file_mode.go#L65>)
+
+```go
+func (e *FileModeError) MarshalJSON() ([]byte, error)
+```
+
+MarshalJSON describes the paths in their Posix form and the rejected file mode.
+
+<a name="FileModeError.Paths"></a>
+### func \(\*FileModeError\) [Paths](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_file_mode.go#L33>)
+
+```go
+func (e *FileModeError) Paths() []Path
+```
+
+Paths returns a copy of the paths the failure concerns. It may be empty.
 
 <a name="FileOptions"></a>
-## type [FileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L14-L29>)
+## type [FileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L14-L30>)
 
 FileOptions configures the creation of a file. The zero value creates a new file with [DefaultFileMode](<#DefaultFileMode>) and refuses an existing one.
 
@@ -1133,15 +1214,16 @@ type FileOptions struct {
     // because writing sets the modification time.
     UpdateTimes bool
 
-    // Mode is the permission of a created file. It may only contain
-    // PermissionBits. Zero selects DefaultFileMode, because the operating
-    // system refuses a file without permissions.
-    Mode FileMode
+    // CreateMode is the mode of a created file. An existing file keeps its
+    // mode. It may only contain ModePerm and ModeSpecial bits. Zero selects
+    // DefaultFileMode, because the operating system refuses a file without
+    // permissions.
+    CreateMode FileMode
 }
 ```
 
 <a name="DefaultFileOptions"></a>
-### func [DefaultFileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L54>)
+### func [DefaultFileOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L56>)
 
 ```go
 func DefaultFileOptions() FileOptions
@@ -1262,36 +1344,158 @@ func DefaultListOptions() ListOptions
 
 DefaultListOptions returns the options of a listing of the direct entries of a directory with [DefaultGlobOptions](<#DefaultGlobOptions>).
 
-<a name="OpenOptions"></a>
-## type [OpenOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L23-L36>)
+<a name="OpenMode"></a>
+## type [OpenMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_open_mode.go#L43>)
 
-OpenOptions configures the opening of a file. The zero value opens an existing file for reading and writing, truncates it, and creates no file.
+OpenMode is the mode [OpenFileWithOptions](<#OpenFileWithOptions>) opens a file in. It sets whether the file is read, written, or both, and whether writing truncates the file or appends to it. The zero value is OpenRead.
+
+```go
+type OpenMode int
+```
+
+<a name="OpenRead"></a>The modes a file is opened in. Truncation and appending are part of the name, so an open mode that empties a file says so.
+
+```go
+const (
+    // OpenRead opens the file for reading alone. It is the zero value.
+    OpenRead OpenMode = iota
+
+    // OpenWrite opens the file for writing alone. The content is kept, and
+    // writing starts at the beginning of the file.
+    OpenWrite
+
+    // OpenWriteTruncate opens the file for writing alone and truncates it.
+    OpenWriteTruncate
+
+    // OpenReadWrite opens the file for reading and writing. The content is
+    // kept, and writing starts at the beginning of the file.
+    OpenReadWrite
+
+    // OpenReadWriteTruncate opens the file for reading and writing and
+    // truncates it.
+    OpenReadWriteTruncate
+
+    // OpenAppend opens the file for writing alone. Every write appends to the
+    // end of the file.
+    OpenAppend
+
+    // OpenReadAppend opens the file for reading and writing. Every write
+    // appends to the end of the file.
+    OpenReadAppend
+)
+```
+
+<a name="OpenMode.String"></a>
+### func \(OpenMode\) [String](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_open_mode.go#L53>)
+
+```go
+func (m OpenMode) String() string
+```
+
+String returns the name of the open mode, such as "OpenReadWrite", or "OpenMode\(9\)" for an invalid open mode.
+
+<a name="OpenMode.Valid"></a>
+### func \(OpenMode\) [Valid](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_open_mode.go#L46>)
+
+```go
+func (m OpenMode) Valid() bool
+```
+
+Valid reports whether the open mode is one of the OpenMode constants.
+
+<a name="OpenModeError"></a>
+## type [OpenModeError](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_error_open_mode.go#L21-L27>)
+
+OpenModeError is the cause of the failures of [ErrInvalidOpenMode](<#ErrInvalidOpenMode>). It holds the rejected [OpenMode](<#OpenMode>) and the paths the failure concerns.
+
+Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
+
+```
+var openModeErr *OpenModeError
+if errors.As(err, &openModeErr) { use(openModeErr.OpenMode()) }
+```
+
+An OpenModeError is immutable.
+
+```go
+type OpenModeError struct {
+    // contains filtered or unexported fields
+}
+```
+
+<a name="OpenModeError.Error"></a>
+### func \(\*OpenModeError\) [Error](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_error_open_mode.go#L40>)
+
+```go
+func (e *OpenModeError) Error() string
+```
+
+Error renders the paths and the rejected open mode.
+
+<a name="OpenModeError.LogValue"></a>
+### func \(\*OpenModeError\) [LogValue](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_error_open_mode.go#L53>)
+
+```go
+func (e *OpenModeError) LogValue() slog.Value
+```
+
+LogValue describes the paths in their Posix form and the rejected open mode.
+
+<a name="OpenModeError.MarshalJSON"></a>
+### func \(\*OpenModeError\) [MarshalJSON](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_error_open_mode.go#L62>)
+
+```go
+func (e *OpenModeError) MarshalJSON() ([]byte, error)
+```
+
+MarshalJSON describes the paths in their Posix form and the rejected open mode.
+
+<a name="OpenModeError.OpenMode"></a>
+### func \(\*OpenModeError\) [OpenMode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_error_open_mode.go#L35>)
+
+```go
+func (e *OpenModeError) OpenMode() OpenMode
+```
+
+OpenMode returns the rejected open mode, as the caller passed it.
+
+<a name="OpenModeError.Paths"></a>
+### func \(\*OpenModeError\) [Paths](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io_error_open_mode.go#L30>)
+
+```go
+func (e *OpenModeError) Paths() []Path
+```
+
+Paths returns a copy of the paths the failure concerns. It may be empty.
+
+<a name="OpenOptions"></a>
+## type [OpenOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L17-L28>)
+
+OpenOptions configures the opening of a file. The zero value opens an existing file for reading alone and creates no file.
 
 ```go
 type OpenOptions struct {
     // CreateIfNotExists creates a missing file.
     CreateIfNotExists bool
 
-    // Permission is the permission of a created file. It may only contain
-    // PermissionBits. Zero selects 0644.
-    Permission FileMode
+    // CreateMode is the mode of a created file. An existing file keeps its
+    // mode. It may only contain ModePerm and ModeSpecial bits. Zero selects
+    // 0o644.
+    CreateMode FileMode
 
-    // Mode is the open mode, made of "r" (read), "w" (write), and "a"
-    // (append) in this order. "a" needs "w", and "w" without "a" truncates
-    // the file. The supported modes are "r", "w", "rw", "wa", and "rwa". The
-    // empty string selects "rw".
-    Mode string
+    // OpenMode is the mode the file is opened in. The zero value is OpenRead.
+    OpenMode OpenMode
 }
 ```
 
 <a name="DefaultOpenOptions"></a>
-### func [DefaultOpenOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L40>)
+### func [DefaultOpenOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/io.go#L32>)
 
 ```go
 func DefaultOpenOptions() OpenOptions
 ```
 
-DefaultOpenOptions returns the options [OpenFile](<#OpenFile>) uses. They open a file for reading and writing, create it with permission 0644, and truncate it.
+DefaultOpenOptions returns the options [OpenFile](<#OpenFile>) uses. They open a file with [OpenReadWriteTruncate](<#OpenRead>) and create a missing one with mode 0o644.
 
 <a name="Path"></a>
 ## type [Path](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_path.go#L25-L37>)
@@ -1668,6 +1872,19 @@ func (p *Path) IsFile() bool
 
 IsFile reports whether this Path exists and is no directory, such as a regular file or a device. A symlink is judged by its target, and [Path.IsSymlink](<#Path.IsSymlink>) reports the symlink itself.
 
+<a name="Path.IsLocal"></a>
+### func \(\*Path\) [IsLocal](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_local.go#L24>)
+
+```go
+func (p *Path) IsLocal() bool
+```
+
+IsLocal reports whether this Path stays inside the directory it is relative to. It applies the rules \[filepath.IsLocal\] applies on Windows, on every platform, so a path from an untrusted source, such as the name of an entry in an archive, can be checked once for every platform. "." is local.
+
+A local Path is relative and has no Windows anchor. It does not start with a backslash, and its ".." names never lead above its start. A backslash in a name separates names, as on Windows, so \`a\\..\\..\` is not local. No name contains a colon, and no name is a device name Windows reserves, such as "NUL", "com1", or "CONIN$". A reserved name with an extension, such as "nul.txt", counts as reserved, because Windows 10 and older reserve it.
+
+The check is lexical. A symlink inside the path can still lead outside the directory.
+
 <a name="Path.IsOnCaseSensitiveFS"></a>
 ### func \(\*Path\) [IsOnCaseSensitiveFS](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_case.go#L47>)
 
@@ -1935,7 +2152,7 @@ func (p *Path) String() string
 String returns this Path in the native form of the platform. It is the form of [Path.ToWindows](<#Path.ToWindows>) on Windows and the form of [Path.ToPosix](<#Path.ToPosix>) on every other platform.
 
 <a name="Path.SymlinkTo"></a>
-### func \(\*Path\) [SymlinkTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L244>)
+### func \(\*Path\) [SymlinkTo](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L246>)
 
 ```go
 func (p *Path) SymlinkTo(linkPath *Path) error
@@ -2247,80 +2464,6 @@ func (e *PatternError) Unwrap() error
 ```
 
 Unwrap returns the underlying error, or nil.
-
-<a name="PermissionError"></a>
-## type [PermissionError](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L23-L36>)
-
-PermissionError is the cause of the failures of [ErrInvalidPermission](<#ErrInvalidFilter>) and [ErrInvalidMode](<#ErrInvalidMode>). It holds the rejected permission or open\-mode value and the paths the failure concerns.
-
-Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
-
-```
-var permErr *PermissionError
-if errors.As(err, &permErr) { use(permErr.Perm(), permErr.Mode()) }
-```
-
-A PermissionError is immutable.
-
-```go
-type PermissionError struct {
-    // contains filtered or unexported fields
-}
-```
-
-<a name="PermissionError.Error"></a>
-### func \(\*PermissionError\) [Error](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L54>)
-
-```go
-func (e *PermissionError) Error() string
-```
-
-Error renders the paths and the rejected value.
-
-<a name="PermissionError.LogValue"></a>
-### func \(\*PermissionError\) [LogValue](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L69>)
-
-```go
-func (e *PermissionError) LogValue() slog.Value
-```
-
-LogValue describes the paths in their Posix form and the rejected value.
-
-<a name="PermissionError.MarshalJSON"></a>
-### func \(\*PermissionError\) [MarshalJSON](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L79>)
-
-```go
-func (e *PermissionError) MarshalJSON() ([]byte, error)
-```
-
-MarshalJSON describes the paths in their Posix form and the rejected value.
-
-<a name="PermissionError.Mode"></a>
-### func \(\*PermissionError\) [Mode](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L49>)
-
-```go
-func (e *PermissionError) Mode() string
-```
-
-Mode returns the rejected open\-mode string, or "" when not applicable.
-
-<a name="PermissionError.Paths"></a>
-### func \(\*PermissionError\) [Paths](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L39>)
-
-```go
-func (e *PermissionError) Paths() []Path
-```
-
-Paths returns a copy of the paths the failure concerns. It may be empty.
-
-<a name="PermissionError.Perm"></a>
-### func \(\*PermissionError\) [Perm](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_error_permission.go#L44>)
-
-```go
-func (e *PermissionError) Perm() FileMode
-```
-
-Perm returns the rejected permission value, or 0 when not applicable.
 
 <a name="RemoveOptions"></a>
 ## type [RemoveOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_remove.go#L13-L19>)
