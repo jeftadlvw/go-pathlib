@@ -105,7 +105,7 @@ Whether you design the paths in your application to be case-sensitive or not is 
 Although we recommend handling paths in a case-insensitive manner, we respect stricter designs and follow the principle of **being strict by default, while allowing flexibility explicitly**. We provide functions to check for path equality:
 - `Equals`: default, lexical, case-sensitive by default, but switchable with flag
 - `EqualsString`: convenience wrapper for `Equals`, where the argument is interpreted as a canonical Posix string. Reserve it for strings you control, such as `ToPosix()` output or serialized config, not OS-native strings like `String()`. For those, parse first: `p.Equals(NewPath(s))`.
-- `EqualsFs`: filesystem equality (only in the `fs` group, not in the `core` bundle)
+- `EqualsFS`: filesystem equality (only in the `fs` group, not in the `core` bundle)
 
 All three are nil-safe. Never compare paths with `==`, which compares pointers.
 
@@ -127,9 +127,9 @@ case err != nil:
 }
 ```
 
-pathlib returns the most specific error it knows. An error also matches every value above it in the tree below, so `ErrFileExist` matches `ErrExist`, and every error matches `ErrPathlib`.
+pathlib returns the most specific error it knows. An error also matches every value above it in the tree below, so `ErrFileExist` matches `ErrExist`, and every error matches `ErrPathlib`. Three groups cover whole families: `ErrInvalid` for invalid values passed to pathlib, `ErrWrongType` for a path of a type the operation cannot handle, and `ErrOperation` for an operation of the operating system that failed for any other reason.
 
-Each error prints a stable code in brackets, so logs and metrics can rely on it:
+Each error prints a stable code in parentheses, so logs and metrics can rely on it:
 
 ```
 path does not exist (PATHLIB.NOT_EXIST): a/b: open a/b: no such file or directory
@@ -138,58 +138,59 @@ path does not exist (PATHLIB.NOT_EXIST): a/b: open a/b: no such file or director
 All errors with their codes. Most carry their paths in a `*pathlib.PathError`, which `errors.As` reads. The marked ones carry other details:
 
 ```
-PATHLIB                      ErrPathlib
-├─ EMPTY_PATTERN             ErrEmptyPattern      (*PatternError)
-├─ BAD_PATTERN               ErrBadPattern        (*PatternError)
-├─ ANCHOR_MISMATCH           ErrAnchorMismatch
-├─ NOT_ABSOLUTE              ErrNotAbsolute
-├─ REL_IMPOSSIBLE            ErrRelImpossible
-├─ LOOKUP                    ErrLookup            (os error only)
-├─ NOT_EXIST                 ErrNotExist
-│  └─ PARENT                 ErrParentNotExist
-├─ EXIST                     ErrExist
-│  ├─ FILE                   ErrFileExist
-│  └─ DIR                    ErrDirExist
-├─ PERMISSION_DENIED         ErrPermissionDenied
-├─ NOT_FILE                  ErrNotFile
-├─ NOT_DIR                   ErrNotDir
-├─ NOT_SYMLINK               ErrNotSymlink
-├─ NOT_EMPTY_DIR             ErrNotEmptyDir
-├─ COPY_TYPE                 ErrCopyType
-├─ TYPE_MISMATCH             ErrTypeMismatch
-├─ ACCESS                    ErrAccess
-│  ├─ OPEN                   ErrOpen
-│  └─ READ_DIR               ErrReadDir
-├─ STAT                      ErrStat
-├─ READ_SYMLINK              ErrReadSymlink
-├─ RESOLVE                   ErrResolve
-├─ CREATE                    ErrCreate
-├─ REMOVE                    ErrRemove
-├─ COPY                      ErrCopy
-├─ SET_PERMISSION            ErrSetPermission
-├─ WALK                      ErrWalk
-├─ INVALID_FILTER            ErrInvalidFilter
-├─ INVALID_PERMISSION        ErrInvalidPermission (*PermissionError)
-│  ├─ RANGE                  ErrPermissionRange
-│  └─ UNSUPPORTED_MODE       ErrUnsupportedMode
-├─ READ                      ErrRead
-├─ WRITE                     ErrWrite
-└─ IS_DIR                    ErrIsDir
+PATHLIB                          ErrPathlib
+├─ INVALID                       ErrInvalid
+│  ├─ PATTERN                    ErrInvalidPattern     (*PatternError)
+│  │  ├─ EMPTY                   ErrEmptyPattern
+│  │  └─ MALFORMED               ErrBadPattern
+│  ├─ NOT_ABSOLUTE               ErrNotAbsolute
+│  ├─ FILTER                     ErrInvalidFilter
+│  ├─ PERMISSION                 ErrInvalidPermission  (*PermissionError)
+│  └─ MODE                       ErrInvalidMode        (*PermissionError)
+├─ REL_IMPOSSIBLE                ErrRelImpossible
+│  └─ ANCHOR_MISMATCH            ErrAnchorMismatch
+├─ NOT_EXIST                     ErrNotExist
+│  └─ PARENT                     ErrParentNotExist
+├─ EXIST                         ErrExist
+│  ├─ FILE                       ErrFileExist
+│  ├─ DIR                        ErrDirExist
+│  └─ NOT_EMPTY_DIR              ErrNotEmptyDir
+├─ PERMISSION_DENIED             ErrPermissionDenied
+├─ WRONG_TYPE                    ErrWrongType
+│  ├─ NOT_FILE                   ErrNotFile
+│  ├─ NOT_DIR                    ErrNotDir
+│  ├─ NOT_SYMLINK                ErrNotSymlink
+│  ├─ MISMATCH                   ErrTypeMismatch
+│  └─ UNSUPPORTED                ErrUnsupportedType
+├─ OPERATION                     ErrOperation
+│  ├─ LOOKUP                     ErrLookup             (os error only)
+│  ├─ STAT                       ErrStat
+│  ├─ OPEN                       ErrOpen
+│  ├─ READ                       ErrRead
+│  ├─ READ_DIR                   ErrReadDir
+│  ├─ READ_SYMLINK               ErrReadSymlink
+│  ├─ RESOLVE                    ErrResolve
+│  ├─ CREATE                     ErrCreate
+│  ├─ WRITE                      ErrWrite
+│  ├─ COPY                       ErrCopy
+│  ├─ REMOVE                     ErrRemove
+│  └─ SET_PERMISSION             ErrSetPermission
+└─ WALK                          ErrWalk
 ```
 
-The `core` bundle contains the values from `ErrPathlib` to `ErrLookup`.
+The `core` bundle contains `ErrPathlib`, `ErrInvalid`, `ErrInvalidPattern` with its members, `ErrNotAbsolute`, `ErrRelImpossible`, `ErrAnchorMismatch`, `ErrOperation`, and `ErrLookup`.
 
 ### Migrating from `os` and `filepath`
 Most code ported from `os` and `filepath` keeps compiling after switching to `*Path`. The points below are the ones that then quietly behave differently.
 
 **Comparing paths**
-- Compare with `Equals`, `EqualsString` or `EqualsFs`, never with `==`. Two `*Path` values for the same path are different pointers.
+- Compare with `Equals`, `EqualsString` or `EqualsFS`, never with `==`. Two `*Path` values for the same path are different pointers.
 - `nil` is a natural "no path". The `Equals*` functions accept it, every other method panics on a nil `*Path`. Check for `nil` if uncertain.
 
 **Checking errors**
 - Errors of the operating system stay in the error chain (see [Handling errors](#handling-errors)). `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
 - Use `errors.Is(err, pathlib.ErrNotExist)`, `pathlib.ErrExist` and `pathlib.ErrPermissionDenied` instead. The error of the operating system stays wrapped, so `fs.ErrNotExist` and the other `fs` sentinels match as well.
-- `pathlib.ErrInvalidPermission` is about invalid permission or open-mode values passed to the library. Access denied by the operating system is `pathlib.ErrPermissionDenied`.
+- `pathlib.ErrInvalidPermission` and `pathlib.ErrInvalidMode` reject permission and open-mode values passed to the library. Access denied by the operating system is `pathlib.ErrPermissionDenied`.
 
 **Converting paths**
 - Pass `String()` to OS APIs and subprocess working directories. It is platform-native.
@@ -202,7 +203,7 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | --- | --- | --- |
 | `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
 | `os.WriteFile` | `WriteBytes`, `WriteString` | Creates the file with `DefaultFileMode`. Use `WriteBytesWithOptions` for another mode, or to refuse an existing file. A broken symlink returns `ErrNotFile` instead of creating its target. |
-| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrPermissionRange`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
+| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `0777` plus `fs.ModeSetuid`, `fs.ModeSetgid` and `fs.ModeSticky`. Other bits return `ErrInvalidPermission`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
 

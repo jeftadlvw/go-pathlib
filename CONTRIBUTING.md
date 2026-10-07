@@ -31,6 +31,7 @@ The library ships in two forms:
 - The library needs the standard library alone, so every bundle is a single
   file that compiles anywhere Go 1.22 does.
 - The API stabilizes toward a v1 release through use in real projects.
+  Breaking changes are allowed until then.
 
 ## General Implementation Instructions
 
@@ -61,20 +62,28 @@ differ from the model.
 | --- | --- |
 | Kind type | `PathlibError`, with the root `ErrPathlib` |
 | Kinds | the `Err*` values in `core_error_kinds.go`, `fs_error_kinds.go`, and `io_error_kinds.go` |
-| Causes | `PathError` for most kinds, `PatternError` for `ErrEmptyPattern` and `ErrBadPattern`, `PermissionError` below `ErrInvalidPermission`, and the `os` error for `ErrLookup` |
-| Failure | the unexported `raisedError`, created by `raiseError` |
+| Causes | `PathError` for most kinds, `PatternError` below `ErrInvalidPattern`, `PermissionError` for `ErrInvalidPermission` and `ErrInvalidMode`, and the `os` error for `ErrLookup` |
+| Failure | the unexported `wrappedError`, created by `wrapError` |
 
-Code raises failures through the helpers built on `raiseError`:
+Code creates failures through the helpers built on `wrapError`:
 
 - `pathErr(kind, paths...)` for a failure that concerns paths.
 - `osErr(operation, err, paths...)` for a failed call to the operating
   system. It picks the most specific kind, see below.
+- `osCreateErr(operation, err, path)` for a failed call to the operating
+  system that creates `path`. A missing path then is its missing parent
+  directory, so it returns `ErrParentNotExist`.
 - `wrapErr(kind, cause, paths...)` for a failure caused by another error that
   is not an error of the operating system, such as an error of a walk
   callback.
 - `patternErr(kind, pattern, cause, paths...)` for a rejected pattern.
-- `permRangeErr` and `permModeErr` for the `ErrInvalidPermission` group.
+- `permRangeErr` and `permModeErr` for `ErrInvalidPermission` and
+  `ErrInvalidMode`.
 - `raiseError(ErrLookup, err)` for a failed lookup of a well-known directory.
+
+A kind is never returned as an error on its own. Every failure is created
+through `wrapError` or one of the helpers above. An unexported function that
+fails in one way only returns a `bool`, and its caller creates the failure.
 
 ### Differences from the Model
 
@@ -83,15 +92,29 @@ Code raises failures through the helpers built on `raiseError`:
   `fs.ErrNotExist`, `fs.ErrExist`, or `fs.ErrPermission` into `ErrNotExist`,
   `ErrExist`, or `ErrPermissionDenied`. Any other error keeps the kind of the
   operation, such as `ErrRead`. A check of the library that finds a missing or
-  an existing path raises the same kinds with `fs.ErrNotExist` or
+  an existing path returns the same kinds with `fs.ErrNotExist` or
   `fs.ErrExist` as the underlying error, such as
-  `wrapErr(ErrNotExist, fs.ErrNotExist, p)`. Callers then check pathlib kinds
-  alone, and the `fs` sentinels still match through the chain.
-- **Kinds per group.** Each group declares the kinds it raises in its own
+  `wrapErr(ErrNotExist, fs.ErrNotExist, p)`. A creation that finds the path
+  created since its check runs the check again, so it returns the same kind,
+  such as `ErrFileExist`. Callers then check pathlib kinds alone, and the `fs`
+  sentinels still match through the chain.
+- **Three families.** A kind below `ErrInvalid` rejects a value the caller
+  passed. A kind below `ErrOperation` names an operation of the operating
+  system that failed for a reason no condition describes. Every other kind
+  names a condition the library or the operating system found, such as
+  `ErrNotExist`, and conditions of one sort share a group, such as
+  `ErrWrongType`.
+- **Kinds per group.** Each group declares the kinds it returns in its own
   `<group>_error_kinds.go`, so the `core` bundle stays self-contained. The
-  README shows the whole tree.
+  family groups `ErrInvalid` and `ErrOperation` live in the `core` group, so
+  every group can declare kinds below them. The README shows the whole tree.
 - **Code format.** Names are UPPER_SNAKE_CASE, and a code joins them with
   dots, such as `PATHLIB.EXIST.FILE`.
+- **Error text.** A failure prints the message of its kind, the code in
+  parentheses, and the text of its cause, such as
+  `path does not exist (PATHLIB.NOT_EXIST): a/b: open a/b: no such file or directory`.
+  Parentheses read naturally in plain output. Logs and JSON carry the code
+  in a field of its own.
 - **One shared cause.** Most failures carry the same data, the paths and an
   underlying error. `PathError` is their cause, independent of the group.
 - **errors.As.** Callers read kinds and causes with `errors.As`.
@@ -102,12 +125,12 @@ Code raises failures through the helpers built on `raiseError`:
 
 ### Adding a Kind
 
-1. Declare it with `defineError` in the kinds file of the group that raises
-   it, below the group callers handle it with.
+1. Declare it with `defineError` in the kinds file of the group that returns
+   it, in its family and below the group callers handle it with.
 2. Document its cause when it differs from `PathError`.
 3. Add it to the tree in the README and to `allKinds` in
    `core_error_test.go`.
 4. Name it in the doc comment of every function that returns it.
 
-Kinds are part of the API. Once released, a kind is never moved or renamed,
+Kinds are part of the API. From v1 on, a kind is never moved or renamed,
 because its code and its group would change.

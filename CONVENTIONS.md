@@ -33,6 +33,7 @@ commit messages.
 
 ## 2. Comments
 
+- Comments are line comments (`//`). No block comments (`/* */`).
 - Every exported identifier has a doc comment. Struct fields, unexported
   types, and non-trivial unexported functions have one too.
 - Doc comments are full sentences. They start with the identifier's name and
@@ -43,6 +44,8 @@ commit messages.
     3. Special cases. Nil, empty and zero inputs, returned errors, panics,
        concurrency safety.
     4. Example, only when usage is not obvious. Prefer an `Example` test.
+- A function that wraps a function of the standard library names it in the
+  elaboration, as in `It wraps [os.Getwd].`
 - Doc comments do not describe callers, other packages, or where the
   identifier is used.
 - Doc comments refer to the receiver in words ("the client", "the client's
@@ -59,7 +62,8 @@ commit messages.
 - `TODO` comments reference an issue, as in `// TODO(#123): ...`. No bare
   `TODO`, `FIXME`, or `XXX`.
 - No commented-out code.
-- Wrap comments at 80 columns.
+- Wrap comments at 80 columns. A tab counts as four columns, as in
+  `.editorconfig`.
 - Every Go file starts with a short comment that names the file and says
   what it holds. A blank line separates it from the package clause, so it
   never becomes the package comment. The file that carries the package
@@ -113,6 +117,16 @@ The Makefile wraps every tool. `make install-dev-tools` installs them.
 - Abbreviations only where established: `ctx`, `cfg`, `err`, `buf`, `i`,
   `n`.
 
+Variants of a function share its name and add suffixes in this order:
+
+- `WithOptions` takes a configuration struct, as in `CreateFileWithOptions`.
+  `Default<Options>()` returns the configuration the variant without the
+  suffix uses, as in `DefaultFileOptions()`.
+- `Context` takes a `context.Context`, as in `WalkContext`. The variant
+  without the suffix passes `context.Background()`.
+- `E` returns an error next to a boolean result, as in `MatchesPatternE`. The
+  variant without the suffix returns false on an error.
+
 ## 5. Files and Packages
 
 - Source files in `pathlib/` are named `<group>.go` or
@@ -120,8 +134,9 @@ The Makefile wraps every tool. `make install-dev-tools` installs them.
   and their prefixes are defined in `bundle.json`. `tools/bundle` merges the
   files of the groups into single-file bundles.
 - Code of the `core` group uses no code of another group, so the `core`
-  bundle compiles on its own. The other groups are bundled together and may
-  use each other.
+  bundle compiles on its own. Its doc comments link no identifier of another
+  group, because the link is dead in the `core` bundle. The other groups are
+  bundled together and may use each other.
 - A file holds one concern, such as the comparison of paths. A type lives in
   the file of its concern, together with its constructors and methods. A
   type that serves several concerns gets a file named after it, such as
@@ -136,7 +151,8 @@ The Makefile wraps every tool. `make install-dev-tools` installs them.
 - The library is the single package `pathlib`, because each bundle is a
   single file. Code not meant for importers is unexported.
 - Tests sit beside the code. `core_path.go` is tested in
-  `core_path_test.go`.
+  `core_path_test.go`. Test helpers shared by several test files live in a
+  test file named after their concern (`fixture_test.go`).
 
 ## 6. Types and Data Ownership
 
@@ -171,6 +187,8 @@ Types that are built once and only read afterwards.
   pointer.
 - Copying a struct shares its slices, maps, and pointers. The consumer
   clones every such field it retains.
+- A configuration struct may embed another configuration struct to share
+  its fields, as `ListOptions` embeds `GlobOptions`.
 
 ### General
 
@@ -229,13 +247,18 @@ Types that are built once and only read afterwards.
   stops the test.
 - Check errors with `require.ErrorIs` against kinds, such as `ErrNotExist`.
   Never compare error strings. Tests of rendering are the exception.
-- Tests are table-driven with named cases run through `t.Run`.
+- Tests are table-driven with named cases run through `t.Run`. A table that
+  maps inputs to expected results uses `TestCase` and `runForResults`.
 - Tests and subtests call `t.Parallel()`.
-- Tests of public behavior use the external test package
-  (`package client_test`).
+- Tests use `package pathlib`, so they share their helpers and reach the
+  unexported code of the error model. Tests of public behavior call the
+  public API alone. Examples use `package pathlib_test`, so they show the API
+  as importers call it.
 - Use `t.TempDir()` for files and `context.Background()` for contexts.
   Fixtures live in `testdata/`. Never synchronize with `time.Sleep`.
-- Test names are `Test<Type>_<Method>` or `Test<Function>`.
+- Test names are `Test<Type>_<Method>` or `Test<Function>`. A test of one
+  scenario appends it, as in `TestCopy_BrokenSymlinks`. `Path` is the
+  central type, so `TestPath_<Method>` covers most of the API.
 - Examples live in `example_test.go` and carry an `// Output:` comment.
 
 ## 11. Dependencies
