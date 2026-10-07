@@ -174,12 +174,44 @@ func defaultTempPathOptionsTests(t *testing.T, p *Path, opts TempPathOptions) {
 func TestDisposeFunc_IsIdempotent(t *testing.T) {
 	t.Parallel()
 
-	dir, dispose, err := CreateTempDir()
-	require.NoError(t, err)
+	for name, create := range map[string]func() (*Path, DisposeFunc, error){
+		"CreateTempFile": CreateTempFile,
+		"CreateTempDir":  CreateTempDir,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	require.NoError(t, dispose())
-	require.NoError(t, dispose(), "a second call is a no-op")
-	requireLExists(t, false, dir)
+			p, dispose, err := create()
+			require.NoError(t, err)
+
+			require.NoError(t, dispose())
+			require.NoError(t, dispose(), "a second call is a no-op")
+			requireLExists(t, false, p)
+		})
+	}
+}
+
+func TestDisposeFunc_MovedPathIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	for name, create := range map[string]func(TempPathOptions) (*Path, DisposeFunc, error){
+		"CreateTempFileWithOptions": CreateTempFileWithOptions,
+		"CreateTempDirWithOptions":  CreateTempDirWithOptions,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			root := setupTempDir(t)
+			p, dispose, err := create(TempPathOptions{BaseDir: root})
+			require.NoError(t, err)
+
+			destination := root.JoinStrings("moved")
+			require.NoError(t, Move(p, destination))
+
+			require.NoError(t, dispose())
+			requireLExists(t, true, destination, "the moved path is kept")
+		})
+	}
 }
 
 func TestDisposeFunc_IsNoOpOnError(t *testing.T) {

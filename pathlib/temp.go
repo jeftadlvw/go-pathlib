@@ -7,7 +7,8 @@ import (
 )
 
 // DisposeFunc removes a temporary path created by [CreateTempFile] or
-// [CreateTempDir]. Calling it again is a no-op.
+// [CreateTempDir]. A missing path is no error, so calling it again, or after
+// the path was moved away, is a no-op.
 //
 // It is returned next to the path, so the creator alone can remove the path,
 // and the code the path is passed to cannot. A symlink that replaced the
@@ -61,7 +62,7 @@ func CreateTempFileWithOptions(options TempPathOptions) (*Path, DisposeFunc, err
 
 	// The DisposeFunc uses its own Path, independent of the returned one.
 	dispose := func() error {
-		return Remove(NewPath(pathName))
+		return RemoveWithOptions(NewPath(pathName), RemoveOptions{MissingOk: true})
 	}
 
 	return NewPath(pathName), dispose, nil

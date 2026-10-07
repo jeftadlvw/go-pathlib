@@ -118,7 +118,7 @@ func TestRemove(t *testing.T) {
 		Setup func(*testing.T, *Path) *Path
 	}
 
-	cases := []TestCase[Input, any]{
+	cases := []TestCase[Input, *PathlibError]{
 		{
 			Name: "Remove existing file",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
@@ -138,14 +138,15 @@ func TestRemove(t *testing.T) {
 			Error: false,
 		},
 		{
-			Name: "Remove non-existent path (no-op)",
+			Name: "Remove non-existent path",
 			Input: Input{Setup: func(_ *testing.T, root *Path) *Path {
 				return root.JoinStrings("nonexistent")
 			}},
-			Error: false,
+			Expect: ErrNotExist,
+			Error:  true,
 		},
 		{
-			Name: "Remove non-empty directory (should error)",
+			Name: "Remove non-empty directory",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
 				t.Helper()
 
@@ -153,24 +154,121 @@ func TestRemove(t *testing.T) {
 				writeTempFile(t, dir, "file.txt", "")
 				return dir
 			}},
-			Error: true,
+			Expect: ErrNotEmptyDir,
+			Error:  true,
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, _ any, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, expect *PathlibError, expectError bool) {
 		t.Helper()
 
 		root := setupTempDir(t)
 		p := input.Setup(t, root)
 		err := Remove(p)
 		if expectError {
-			require.ErrorIs(t, err, ErrPathlib)
-			require.True(t, p.Exists())
+			require.ErrorIs(t, err, expect)
 			return
 		}
 		require.NoError(t, err)
 		require.False(t, p.Exists())
 	})
+}
+
+func TestRemoveWithOptions(t *testing.T) {
+	t.Parallel()
+
+	type Input struct {
+		Setup   func(*testing.T, *Path) *Path
+		Options RemoveOptions
+	}
+
+	missing := func(_ *testing.T, root *Path) *Path {
+		return root.JoinStrings("missing")
+	}
+	nonEmptyDir := func(t *testing.T, root *Path) *Path {
+		t.Helper()
+
+		dir := createTempDir(t, root, "dir")
+		writeTempFile(t, dir, "sub/file.txt", "")
+		return dir
+	}
+	brokenSymlink := func(t *testing.T, root *Path) *Path {
+		t.Helper()
+
+		return createTempSymlinkAbs(t, root, "missing", "link")
+	}
+
+	cases := []TestCase[Input, *PathlibError]{
+		{
+			Name:   "Missing path is refused by the zero value",
+			Input:  Input{Setup: missing, Options: RemoveOptions{}},
+			Expect: ErrNotExist,
+			Error:  true,
+		},
+		{
+			Name:  "Missing path is accepted with MissingOk",
+			Input: Input{Setup: missing, Options: RemoveOptions{MissingOk: true}},
+			Error: false,
+		},
+		{
+			Name:   "Missing path is refused with Recursive alone",
+			Input:  Input{Setup: missing, Options: RemoveOptions{Recursive: true}},
+			Expect: ErrNotExist,
+			Error:  true,
+		},
+		{
+			Name:   "Non-empty directory is refused without Recursive",
+			Input:  Input{Setup: nonEmptyDir, Options: RemoveOptions{MissingOk: true}},
+			Expect: ErrNotEmptyDir,
+			Error:  true,
+		},
+		{
+			Name:  "Non-empty directory is removed with Recursive",
+			Input: Input{Setup: nonEmptyDir, Options: RemoveOptions{Recursive: true}},
+			Error: false,
+		},
+		{
+			Name:  "Broken symlink exists for the zero value",
+			Input: Input{Setup: brokenSymlink, Options: RemoveOptions{}},
+			Error: false,
+		},
+	}
+
+	runForResultsE(t, cases, func(t *testing.T, input Input, expect *PathlibError, expectError bool) {
+		t.Helper()
+
+		root := setupTempDir(t)
+		p := input.Setup(t, root)
+		existed := p.LExists()
+
+		err := RemoveWithOptions(p, input.Options)
+		if expectError {
+			require.ErrorIs(t, err, expect)
+			requireLExists(t, existed, p, "a refused path is left untouched")
+			return
+		}
+		require.NoError(t, err)
+		requireLExists(t, false, p)
+	})
+}
+
+func TestRemoveWithOptions_NotEmptyDirMatchesExist(t *testing.T) {
+	t.Parallel()
+
+	root := setupTempDir(t)
+	dir := createTempDir(t, root, "dir")
+	writeTempFile(t, dir, "file.txt", "")
+
+	err := Remove(dir)
+	require.ErrorIs(t, err, ErrNotEmptyDir)
+	require.ErrorIs(t, err, ErrExist)
+	require.ErrorIs(t, err, fs.ErrExist)
+}
+
+func TestDefaultRemoveOptions(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, RemoveOptions{}, DefaultRemoveOptions())
 }
 
 func TestRemoveAll_SymlinkToDirectoryRemovesOnlyLink(t *testing.T) {
@@ -215,13 +313,13 @@ func TestRemove_Symlinks(t *testing.T) {
 	})
 }
 
-func TestRemove_PathBelowFileIsNoop(t *testing.T) {
+func TestRemove_PathBelowFileIsMissing(t *testing.T) {
 	t.Parallel()
 
 	root := setupTempDir(t)
 	file := writeTempFile(t, root, "file.txt", "")
 
-	require.NoError(t, Remove(file.JoinStrings("child")))
+	require.ErrorIs(t, Remove(file.JoinStrings("child")), ErrNotExist)
 	require.NoError(t, RemoveAll(file.JoinStrings("child")))
 	require.True(t, file.IsFile())
 }
@@ -235,7 +333,8 @@ func TestRemove_UncheckablePathIsAnError(t *testing.T) {
 	subdir := createTempDir(t, dir, "subdir")
 	lockDir(t, dir)
 
-	// Before, both silently returned nil and left the paths in place.
+	// A path that cannot be checked is no missing path, so even RemoveAll,
+	// which accepts a missing path, returns the error.
 	err := Remove(file)
 	require.ErrorIs(t, err, ErrPermissionDenied)
 	require.ErrorIs(t, err, fs.ErrPermission)

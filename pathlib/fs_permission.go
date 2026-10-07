@@ -53,8 +53,8 @@ func DefaultDirMode() fs.FileMode {
 	return effectiveDirMode(posixDefaultDirMode)
 }
 
-// SetPermission sets the permission of path to mode. It wraps [os.Chmod], and
-// the setuid and setgid bits are set reliably.
+// SetPermission sets the permission of path to mode. It wraps [os.Chmod] and
+// follows symlinks. The setuid and setgid bits are set reliably.
 //
 // A mode with bits outside [PermissionBits] returns [ErrInvalidPermission]. A
 // missing path returns [ErrNotExist], and denied access returns
