@@ -30,13 +30,13 @@ func TestCreateFileWithOptions(t *testing.T) {
 		},
 		{
 			Name:   "ExistOk=true, file exists",
-			Input:  Input{"existing_file.txt", FileOptions{ExistOk: true, Mode: DefaultFileMode()}},
+			Input:  Input{"existing_file.txt", FileOptions{ExistOk: true, CreateMode: DefaultFileMode()}},
 			Expect: Expect{Created: false, Content: "original content"},
 			Error:  false,
 		},
 		{
 			Name:   "ExistOk=false, file exists",
-			Input:  Input{"existing_file.txt", FileOptions{ExistOk: false, Mode: DefaultFileMode()}},
+			Input:  Input{"existing_file.txt", FileOptions{ExistOk: false, CreateMode: DefaultFileMode()}},
 			Expect: Expect{Created: false},
 			Error:  true,
 		},
@@ -59,8 +59,8 @@ func TestCreateFileWithOptions(t *testing.T) {
 			Error:  true,
 		},
 		{
-			Name:   "Mode=0 should default to DefaultFileMode",
-			Input:  Input{"file_with_mode0.txt", FileOptions{ExistOk: false, Mode: 0}},
+			Name:   "CreateMode=0 should default to DefaultFileMode",
+			Input:  Input{"file_with_mode0.txt", FileOptions{ExistOk: false, CreateMode: 0}},
 			Expect: Expect{Created: true},
 			Error:  false,
 		},
@@ -98,7 +98,7 @@ func TestCreateFileWithOptions(t *testing.T) {
 		info, err := targetPath.Stat()
 		require.NoError(t, err)
 
-		expectedMode := input.Options.Mode
+		expectedMode := input.Options.CreateMode
 		if expectedMode == 0 {
 			expectedMode = DefaultFileMode()
 		}
@@ -241,13 +241,13 @@ func TestMkDirWithOptions(t *testing.T) {
 		},
 		{
 			Name:   "ExistOk=true, directory exists",
-			Input:  Input{"existing_dir", DirOptions{ExistOk: true, Mode: DefaultDirMode()}},
+			Input:  Input{"existing_dir", DirOptions{ExistOk: true, CreateMode: DefaultDirMode()}},
 			Expect: Expect{Created: false},
 			Error:  false,
 		},
 		{
 			Name:   "ExistOk=false, directory exists",
-			Input:  Input{"existing_dir", DirOptions{ExistOk: false, Mode: DefaultDirMode()}},
+			Input:  Input{"existing_dir", DirOptions{ExistOk: false, CreateMode: DefaultDirMode()}},
 			Expect: Expect{Created: false},
 			Error:  true,
 		},
@@ -265,13 +265,13 @@ func TestMkDirWithOptions(t *testing.T) {
 		},
 		{
 			Name:   "CreateAll=true, parent directory does not exist",
-			Input:  Input{"nested/deeply/created_dir", DirOptions{CreateAll: true, Mode: DefaultDirMode()}},
+			Input:  Input{"nested/deeply/created_dir", DirOptions{CreateAll: true, CreateMode: DefaultDirMode()}},
 			Expect: Expect{Created: true},
 			Error:  false,
 		},
 		{
-			Name:   "Mode=0 should default to DefaultDirMode",
-			Input:  Input{"dir_with_mode0", DirOptions{ExistOk: false, Mode: 0}},
+			Name:   "CreateMode=0 should default to DefaultDirMode",
+			Input:  Input{"dir_with_mode0", DirOptions{ExistOk: false, CreateMode: 0}},
 			Expect: Expect{Created: true},
 			Error:  false,
 		},
@@ -303,7 +303,7 @@ func TestMkDirWithOptions(t *testing.T) {
 
 			info, err := targetPath.Stat()
 			require.NoError(t, err)
-			expectedMode := input.Options.Mode
+			expectedMode := input.Options.CreateMode
 			if expectedMode == 0 {
 				expectedMode = DefaultDirMode()
 			}

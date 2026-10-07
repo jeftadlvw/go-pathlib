@@ -145,8 +145,8 @@ PATHLIB                          ErrPathlib
 │  │  └─ MALFORMED               ErrBadPattern
 │  ├─ NOT_ABSOLUTE               ErrNotAbsolute
 │  ├─ FILTER                     ErrInvalidFilter
-│  ├─ PERMISSION                 ErrInvalidPermission  (*PermissionError)
-│  └─ MODE                       ErrInvalidMode        (*PermissionError)
+│  ├─ FILE_MODE                  ErrInvalidFileMode    (*FileModeError)
+│  └─ OPEN_MODE                  ErrInvalidOpenMode    (*OpenModeError)
 ├─ REL_IMPOSSIBLE                ErrRelImpossible
 │  └─ ANCHOR_MISMATCH            ErrAnchorMismatch
 ├─ NOT_EXIST                     ErrNotExist
@@ -174,7 +174,7 @@ PATHLIB                          ErrPathlib
 │  ├─ WRITE                      ErrWrite
 │  ├─ COPY                       ErrCopy
 │  ├─ REMOVE                     ErrRemove
-│  ├─ SET_PERMISSION             ErrSetPermission
+│  ├─ SET_MODE                   ErrSetMode
 │  └─ SET_TIMES                  ErrSetTimes
 └─ WALK                          ErrWalk
 ```
@@ -191,7 +191,7 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 **Checking errors**
 - Errors of the operating system stay in the error chain (see [Handling errors](#handling-errors)). `os.IsNotExist`, `os.IsExist` and `os.IsPermission` do not unwrap errors, so existing checks keep compiling but never match.
 - Use `errors.Is(err, pathlib.ErrNotExist)`, `pathlib.ErrExist` and `pathlib.ErrPermissionDenied` instead. The error of the operating system stays wrapped, so `fs.ErrNotExist` and the other `fs` sentinels match as well.
-- `pathlib.ErrInvalidPermission` and `pathlib.ErrInvalidMode` reject permission and open-mode values passed to the library. Access denied by the operating system is `pathlib.ErrPermissionDenied`.
+- `pathlib.ErrInvalidFileMode` and `pathlib.ErrInvalidOpenMode` reject a `FileMode` and an `OpenMode` passed to the library. Access denied by the operating system is `pathlib.ErrPermissionDenied`.
 
 **Converting paths**
 - Pass `String()` to OS APIs and subprocess working directories. It is platform-native.
@@ -204,8 +204,10 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | --- | --- | --- |
 | `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
 | `os.WriteFile` | `WriteBytes`, `WriteString` | Creates the file with `DefaultFileMode`. Use `WriteBytesWithOptions` for another mode, or to refuse an existing file. A broken symlink returns `ErrNotFile` instead of creating its target. |
-| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetPermission`, ... | A permission may only contain `PermissionBits`: `ModePerm` (`0777`) plus `ModeSetuid`, `ModeSetgid` and `ModeSticky`. Other bits return `ErrInvalidPermission`, including the Unix octal form `0o4755`, which `os` silently drops. Mask a mode from `Stat` with `PermissionBits` before passing it on. |
+| `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetMode`, ... | A mode passed to the library may only contain `ModePerm` (`0o777`) and `ModeSpecial` (`ModeSetuid`, `ModeSetgid` and `ModeSticky`) bits. Other bits return `ErrInvalidFileMode`, including the Unix octal form `0o4755`, which `os` silently drops. Write `ModeSetuid\|0o755` instead. Mask a mode from `Stat` with `ModePerm\|ModeSpecial` before passing it on. |
+| `os.OpenFile` flags | `OpenOptions.OpenMode` | An `OpenMode` constant replaces the flags, such as `OpenReadWrite` for `os.O_RDWR`. A mode that empties the file says so in its name, such as `OpenReadWriteTruncate` for `os.O_RDWR\|os.O_TRUNC`. |
 | `os.Stat`, `os.Lstat` | `Path.Stat`, `Path.Lstat` | Return a `*pathlib.FileInfo`, which implements `fs.FileInfo`. `Size` is 0 for every entry that is no regular file, such as a directory. `os.SameFile` reports false for a `FileInfo`. Use `FileInfo.SameFile` or `EqualsFS` instead. |
+| `filepath.IsLocal` | `Path.IsLocal` | Applies the Windows rules on every platform, so a backslash separates names and Windows device names such as `NUL` are not local. A device name with an extension, such as `nul.txt`, is not local either. The empty string becomes `.`, which is local. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
 
@@ -220,6 +222,7 @@ The creation functions differ in what they do with an existing entry:
 | `CreateFileWithOptions`, `MkDirWithOptions` with `ExistOk` and `UpdateTimes` | Sets its access and modification times to the current time, as the `touch` command does. |
 | `WriteBytes`, `WriteString` | Truncates the file and writes it. |
 | `OpenFile` | Truncates the file, as `os.Create` does. |
+| `OpenFileWithOptions` with the zero `OpenOptions` | Opens the file for reading alone, as `os.Open` does. |
 
 `SetTimes` sets the times of any existing path, as `os.Chtimes` does.
 
@@ -230,6 +233,8 @@ The creation functions differ in what they do with an existing entry:
 **File modes**
 
 `pathlib.FileMode` is an alias of `fs.FileMode`, and `pathlib.ModeDir` and the other `Mode` constants are the constants of `io/fs`. Modes pass between pathlib, `io/fs` and `os` without a conversion, so code that works with modes needs no import of `io/fs`.
+
+A `FileMode` holds three groups of bits, each with a mask: the type bits (`ModeType`), the permission bits (`ModePerm`, read, write and execute for the owner, the group and others) and the special mode bits (`ModeSpecial`: `ModeSetuid`, `ModeSetgid` and `ModeSticky`). A mode the library takes, such as `CreateMode` or the mode of `SetMode`, may only contain permission bits and special mode bits. An `OpenMode` is a different thing: it says how a file is opened, such as `OpenRead` or `OpenAppend`.
 
 ## Contributing
 Feel free to open issues and pull requests. Any help or feedback is highly appreciated!

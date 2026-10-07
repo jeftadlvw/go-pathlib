@@ -62,7 +62,7 @@ differ from the model.
 | --- | --- |
 | Kind type | `PathlibError`, with the root `ErrPathlib` |
 | Kinds | the `Err*` values in `core_error_kinds.go`, `fs_error_kinds.go`, and `io_error_kinds.go` |
-| Causes | `PathError` for most kinds, `PatternError` below `ErrInvalidPattern`, `PermissionError` for `ErrInvalidPermission` and `ErrInvalidMode`, and the `os` error for `ErrLookup` |
+| Causes | `PathError` for most kinds, `PatternError` below `ErrInvalidPattern`, `FileModeError` for `ErrInvalidFileMode`, `OpenModeError` for `ErrInvalidOpenMode`, and the `os` error for `ErrLookup` |
 | Failure | the unexported `wrappedError`, created by `wrapError` |
 
 Code creates failures through the helpers built on `wrapError`:
@@ -77,8 +77,8 @@ Code creates failures through the helpers built on `wrapError`:
   is not an error of the operating system, such as an error of a walk
   callback.
 - `patternErr(kind, pattern, cause, paths...)` for a rejected pattern.
-- `permRangeErr` and `permModeErr` for `ErrInvalidPermission` and
-  `ErrInvalidMode`.
+- `fileModeErr(fileMode, paths...)` for a rejected file mode, and
+  `openModeErr(openMode, paths...)` for a rejected open mode.
 - `raiseError(ErrLookup, err)` for a failed lookup of a well-known directory.
 
 A kind is never returned as an error on its own. Every failure is created

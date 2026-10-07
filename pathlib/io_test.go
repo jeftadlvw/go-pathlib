@@ -7,7 +7,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,8 +17,29 @@ func TestDefaultOpenOptions(t *testing.T) {
 
 	options := DefaultOpenOptions()
 	require.True(t, options.CreateIfNotExists, "default creation mismatch")
-	require.Equal(t, FileMode(0644), options.Permission, "default open permission mismatch")
-	require.Equal(t, "rw", options.Mode, "default open mode mismatch")
+	require.Equal(t, FileMode(0o644), options.CreateMode, "default create mode mismatch")
+	require.Equal(t, OpenReadWriteTruncate, options.OpenMode, "default open mode mismatch")
+}
+
+func TestOpenFileWithOptions_ZeroValueIsReadOnly(t *testing.T) {
+	t.Parallel()
+
+	root := setupTempDir(t)
+	p := writeTempFile(t, root, "file.txt", "content")
+
+	file, err := OpenFileWithOptions(p, OpenOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = file.Close() })
+
+	_, err = file.WriteString("new")
+	require.Error(t, err, "the file is opened for reading alone")
+
+	content, err := os.ReadFile(p.String())
+	require.NoError(t, err)
+	require.Equal(t, "content", string(content), "the file is not truncated")
+
+	_, err = OpenFileWithOptions(root.JoinStrings("missing"), OpenOptions{})
+	require.ErrorIs(t, err, ErrNotExist, "no file is created")
 }
 
 func TestOpenFile(t *testing.T) {
@@ -36,7 +56,7 @@ func TestOpenFile(t *testing.T) {
 		defer func() { _ = file.Close() }()
 
 		require.Equal(t, filePath.String(), file.Name(), "file name is not correct")
-		requireDefaultOpenPermission(t, file)
+		requireDefaultCreateMode(t, file)
 		requireWritable(t, file)
 	})
 
@@ -61,7 +81,7 @@ func TestOpenFile(t *testing.T) {
 		defer func() { _ = file.Close() }()
 
 		require.Equal(t, filePath.String(), file.Name(), "file name is not correct")
-		requireDefaultOpenPermission(t, file)
+		requireDefaultCreateMode(t, file)
 
 		content, err := os.ReadFile(filePath.String())
 		require.NoError(t, err)
@@ -87,14 +107,14 @@ func TestOpenFile(t *testing.T) {
 	})
 }
 
-// requireDefaultOpenPermission asserts that file has the default permission of
+// requireDefaultCreateMode asserts that file has the default create mode of
 // OpenFile.
-func requireDefaultOpenPermission(t *testing.T, file *os.File) {
+func requireDefaultCreateMode(t *testing.T, file *os.File) {
 	t.Helper()
 
 	stats, err := file.Stat()
 	require.NoError(t, err, "could not call stat()")
-	require.Equal(t, effectiveFileMode(DefaultOpenOptions().Permission).Perm(), stats.Mode().Perm(), "file permission mismatch")
+	require.Equal(t, effectiveFileMode(DefaultOpenOptions().CreateMode).Perm(), stats.Mode().Perm(), "file permission mismatch")
 }
 
 // requireWritable asserts that file can be written to.
@@ -115,58 +135,47 @@ func TestOpenFileWithOptions(t *testing.T) {
 		true,
 	}
 
-	// these are expected to work
-	permissionCases := []FileMode{
-		000, // first value is the default
-		DefaultOpenOptions().Permission,
-		0600,
-		0400,
-		0440,
-		0444,
-		0744,
-		0700,
-		0000,
-		744,
-		700,
-		378,
-		211,
+	// the last two cases have bits outside ModePerm and ModeSpecial, every
+	// other case is expected to work
+	modeCases := []FileMode{
+		0o000, // first value is the default
+		DefaultOpenOptions().CreateMode,
+		0o600,
+		0o400,
+		0o440,
+		0o444,
+		0o744,
+		0o700,
+		0o1644,
+		ModeDir | 0o644,
 	}
 
-	modeCases := []struct {
-		Value string
-		Ok    bool
-	}{
-		{Ok: true}, // first value is the default
-		{"", true},
-		{"r", true},
-		{"w", true},
-		{"rw", true},
-		{"wa", true},
-		{"rwa", true},
-		{"a", false},
-		{"ra", false},
-		{"aa", false},
-		{"rr", false},
-		{"wr", false},
-		{"awr", false},
-		{"raw", false},
+	// the first value is the zero value, the last two are invalid
+	openModeCases := []OpenMode{
+		OpenRead,
+		OpenWrite,
+		OpenWriteTruncate,
+		OpenReadWrite,
+		OpenReadWriteTruncate,
+		OpenAppend,
+		OpenReadAppend,
+		OpenMode(-1),
+		OpenMode(99),
 	}
 
 	for createIfNotExistIdx, createIfNotExist := range createIfNotExistCases {
-		for permissionIdx, permission := range permissionCases {
-			for modeIdx, mode := range modeCases {
+		for modeIdx, mode := range modeCases {
+			for _, openMode := range openModeCases {
 				c := openFileCase{
 					options: OpenOptions{
 						CreateIfNotExists: createIfNotExist,
-						Permission:        permission,
-						Mode:              mode.Value,
+						CreateMode:        mode,
+						OpenMode:          openMode,
 					},
-					modeOk:     mode.Ok,
-					mode:       cmp.Or(mode.Value, DefaultOpenOptions().Mode),
-					permission: cmp.Or(permission, DefaultOpenOptions().Permission),
+					mode: cmp.Or(mode, DefaultOpenOptions().CreateMode),
 				}
 
-				t.Run(fmt.Sprintf("icreate:%d-iperm:%d-imode:%d", createIfNotExistIdx, permissionIdx, modeIdx), func(t *testing.T) {
+				t.Run(fmt.Sprintf("icreate:%d-imode:%d-%s", createIfNotExistIdx, modeIdx, openMode), func(t *testing.T) {
 					t.Parallel()
 
 					runOpenFileCase(t, c)
@@ -180,12 +189,50 @@ func TestOpenFileWithOptions(t *testing.T) {
 type openFileCase struct {
 	// options are passed to OpenFileWithOptions.
 	options OpenOptions
-	// modeOk is whether options.Mode is supported.
-	modeOk bool
-	// mode is the open mode that applies, with the default filled in.
-	mode string
-	// permission is the permission that applies, with the default filled in.
-	permission FileMode
+	// mode is the create mode that applies, with the default filled in.
+	mode FileMode
+}
+
+// openModeTraits describes what an open mode does with a file.
+type openModeTraits struct {
+	// valid reports whether the open mode is an OpenMode constant.
+	valid bool
+	// reads reports whether the file can be read.
+	reads bool
+	// writes reports whether the file can be written.
+	writes bool
+	// appends reports whether every write appends to the end of the file.
+	appends bool
+	// truncates reports whether opening empties the file.
+	truncates bool
+}
+
+// traitsOf returns what openMode does with a file, independent of the
+// implementation. An invalid open mode does nothing.
+func traitsOf(openMode OpenMode) openModeTraits {
+	switch openMode {
+	case OpenRead:
+		return openModeTraits{valid: true, reads: true}
+	case OpenWrite:
+		return openModeTraits{valid: true, writes: true}
+	case OpenWriteTruncate:
+		return openModeTraits{valid: true, writes: true, truncates: true}
+	case OpenReadWrite:
+		return openModeTraits{valid: true, reads: true, writes: true}
+	case OpenReadWriteTruncate:
+		return openModeTraits{valid: true, reads: true, writes: true, truncates: true}
+	case OpenAppend:
+		return openModeTraits{valid: true, writes: true, appends: true}
+	case OpenReadAppend:
+		return openModeTraits{valid: true, reads: true, writes: true, appends: true}
+	default:
+		return openModeTraits{}
+	}
+}
+
+// traits returns what the open mode of the case does with a file.
+func (c openFileCase) traits() openModeTraits {
+	return traitsOf(c.options.OpenMode)
 }
 
 // openFileRun is the state of one run of an openFileCase. Its steps run in
@@ -222,12 +269,10 @@ func runOpenFileCase(t *testing.T, c openFileCase) {
 	var err error
 	r.file, err = OpenFileWithOptions(r.filePath, r.options)
 
-	// Decimal cases like 744 (0o1350) set the Unix octal sticky bit,
-	// which is not ModeSticky and lies outside PermissionBits.
-	permissionOutOfBounds := r.permission&^PermissionBits != 0
+	modeOutOfBounds := r.mode&^(ModePerm|ModeSpecial) != 0
 
 	t.Run("file did not exist", func(t *testing.T) {
-		if r.options.CreateIfNotExists && r.modeOk && !permissionOutOfBounds {
+		if r.options.CreateIfNotExists && r.traits().valid && !modeOutOfBounds {
 			r.requireOpened(t, err)
 			return
 		}
@@ -236,9 +281,9 @@ func runOpenFileCase(t *testing.T, c openFileCase) {
 		require.Nil(t, r.file, "called function must return nil")
 	})
 
-	// stop test if mode is not okay or permissions out of bounds
+	// stop test if open mode is not okay or mode out of bounds
 	// file and err tested in "file did not exist" test
-	if !r.modeOk || permissionOutOfBounds {
+	if !r.traits().valid || modeOutOfBounds {
 		return
 	}
 
@@ -278,10 +323,9 @@ func (r *openFileRun) checkExisting(t *testing.T, err error) {
 
 	r.requireOpened(t, err)
 
-	if r.modeOk && isMode(r.mode, "w") && r.permission >= 0400 {
-		// file is truncated after reopening
-		// can only be tested if write mode is set and
-		// permissions allow read-access to check the file contents
+	if r.traits().writes && effectiveFileMode(r.mode)&0o400 != 0 {
+		// the content after reopening can only be checked if the open mode
+		// writes and the mode allows reading the file
 		t.Run("file contents truncated or appended", r.checkTruncatedOrAppended)
 	}
 
@@ -296,11 +340,11 @@ func (r *openFileRun) checkExisting(t *testing.T, err error) {
 // expectPermissionError reports whether opening the existing file fails,
 // because its permission does not allow the open mode.
 func (r *openFileRun) expectPermissionError() bool {
-	effectivePerm := effectiveFileMode(r.permission)
-	return r.modeOk &&
-		((isMode(r.mode, "r") && effectivePerm&0400 == 0) ||
-			(isMode(r.mode, "w") && effectivePerm&0200 == 0) ||
-			(isMode(r.mode, "rw") && effectivePerm&0600 != 0600))
+	effectiveMode := effectiveFileMode(r.mode)
+	traits := r.traits()
+	return traits.valid &&
+		((traits.reads && effectiveMode&0o400 == 0) ||
+			(traits.writes && effectiveMode&0o200 == 0))
 }
 
 // requireOpened checks that the file was opened without the error err, and that
@@ -315,7 +359,7 @@ func (r *openFileRun) requireOpened(t *testing.T, err error) {
 
 	t.Run("file writable", func(t *testing.T) {
 		_, err := r.file.WriteString(r.contents)
-		if r.modeOk && isMode(r.mode, "w") {
+		if r.traits().writes {
 			require.NoError(t, err, "file should b writable")
 		} else {
 			require.Error(t, err, "file should not be writable")
@@ -323,7 +367,7 @@ func (r *openFileRun) requireOpened(t *testing.T, err error) {
 	})
 }
 
-// createFile creates the file with the permission and open mode of the case.
+// createFile creates the file with the mode and open mode of the case.
 func (r *openFileRun) createFile(t *testing.T) {
 	t.Helper()
 
@@ -336,9 +380,10 @@ func (r *openFileRun) createFile(t *testing.T) {
 	require.NoError(t, createdFile.Close())
 }
 
-// checkTruncatedOrAppended recreates the file, writes to it twice, and checks
-// that the second write truncated or appended the content as the open mode
-// says. It leaves the file of the run open again.
+// checkTruncatedOrAppended recreates the file, writes the content of the run
+// and then "x" to it, and checks that the second write truncated, overwrote,
+// or appended to the content as the open mode says. It leaves the file of the
+// run open again.
 func (r *openFileRun) checkTruncatedOrAppended(t *testing.T) {
 	require.NoError(t, r.file.Close(), "could not close file")
 
@@ -346,13 +391,12 @@ func (r *openFileRun) checkTruncatedOrAppended(t *testing.T) {
 	require.NoError(t, os.Remove(r.filePath.String()), "could not remove file")
 	r.createFile(t)
 
-	// write initial content twice
-	for range 2 {
+	for _, data := range []string{r.contents, "x"} {
 		localFile, err := OpenFileWithOptions(r.filePath, r.options)
 		require.NoError(t, err)
 		require.NotNil(t, localFile)
 
-		_, err = localFile.WriteString(r.contents)
+		_, err = localFile.WriteString(data)
 		require.NoError(t, err)
 
 		require.NoError(t, localFile.Close(), "could not close file")
@@ -361,10 +405,14 @@ func (r *openFileRun) checkTruncatedOrAppended(t *testing.T) {
 	readFileContents, err := os.ReadFile(r.filePath.String())
 	require.NoError(t, err)
 
-	if isMode(r.mode, "a") {
-		require.Equal(t, r.contents+r.contents, string(readFileContents))
-	} else {
-		require.Equal(t, r.contents, string(readFileContents))
+	traits := r.traits()
+	switch {
+	case traits.appends:
+		require.Equal(t, r.contents+"x", string(readFileContents), "appended")
+	case traits.truncates:
+		require.Equal(t, "x", string(readFileContents), "truncated")
+	default:
+		require.Equal(t, "x"+r.contents[1:], string(readFileContents), "overwritten from the start")
 	}
 
 	// restore previously closed file
@@ -486,10 +534,6 @@ func TestReadWriteAppendOperations(t *testing.T) {
 	}
 }
 
-func isMode(modeStr, requiredMode string) bool {
-	return strings.Contains(modeStr, requiredMode)
-}
-
 func TestIOErrorsAreWrapped(t *testing.T) {
 	t.Parallel()
 
@@ -502,7 +546,7 @@ func TestIOErrorsAreWrapped(t *testing.T) {
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	require.ErrorAs(t, err, new(*PathlibError))
 
-	_, err = OpenFileWithOptions(missing, OpenOptions{Mode: "r"})
+	_, err = OpenFileWithOptions(missing, OpenOptions{OpenMode: OpenRead})
 	require.ErrorIs(t, err, ErrNotExist)
 	require.NotErrorIs(t, err, ErrOpen, "the most specific kind replaces the operation")
 	require.ErrorIs(t, err, fs.ErrNotExist)
@@ -600,30 +644,30 @@ func TestWrite_NonFilePathIsRefused(t *testing.T) {
 func TestWriteBytesWithOptions(t *testing.T) {
 	t.Parallel()
 
-	t.Run("Mode applies to a created file", func(t *testing.T) {
+	t.Run("CreateMode applies to a created file", func(t *testing.T) {
 		t.Parallel()
 
 		file := setupTempDir(t).JoinStrings("new.txt")
 
-		_, err := WriteBytesWithOptions(file, []byte("content"), FileOptions{Mode: 0600})
+		_, err := WriteBytesWithOptions(file, []byte("content"), FileOptions{CreateMode: 0o600})
 		require.NoError(t, err)
 
 		info, err := file.Stat()
 		require.NoError(t, err)
-		require.Equal(t, effectiveFileMode(0600).Perm(), info.Mode().Perm())
+		require.Equal(t, effectiveFileMode(0o600).Perm(), info.Mode().Perm())
 	})
 
-	t.Run("Mode does not change an existing file", func(t *testing.T) {
+	t.Run("CreateMode does not change an existing file", func(t *testing.T) {
 		t.Parallel()
 
 		file := writeTempFile(t, setupTempDir(t), "file.txt", "old")
 
-		_, err := WriteBytesWithOptions(file, []byte("new"), FileOptions{ExistOk: true, Mode: 0600})
+		_, err := WriteBytesWithOptions(file, []byte("new"), FileOptions{ExistOk: true, CreateMode: 0o600})
 		require.NoError(t, err)
 
 		info, err := file.Stat()
 		require.NoError(t, err)
-		require.Equal(t, effectiveFileMode(0644).Perm(), info.Mode().Perm())
+		require.Equal(t, effectiveFileMode(0o644).Perm(), info.Mode().Perm())
 	})
 
 	t.Run("ExistOk=true truncates an existing file", func(t *testing.T) {

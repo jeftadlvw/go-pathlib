@@ -22,10 +22,11 @@ type FileOptions struct {
 	// because writing sets the modification time.
 	UpdateTimes bool
 
-	// Mode is the permission of a created file. It may only contain
-	// PermissionBits. Zero selects DefaultFileMode, because the operating
-	// system refuses a file without permissions.
-	Mode FileMode
+	// CreateMode is the mode of a created file. An existing file keeps its
+	// mode. It may only contain ModePerm and ModeSpecial bits. Zero selects
+	// DefaultFileMode, because the operating system refuses a file without
+	// permissions.
+	CreateMode FileMode
 }
 
 // DirOptions configures the creation of a directory. The zero value creates a
@@ -40,10 +41,11 @@ type DirOptions struct {
 	// does. Without ExistOk it has no effect.
 	UpdateTimes bool
 
-	// Mode is the permission of a created directory. It may only contain
-	// PermissionBits. Zero selects DefaultDirMode, because the operating
-	// system refuses a directory without permissions.
-	Mode FileMode
+	// CreateMode is the mode of a created directory. An existing directory
+	// keeps its mode. It may only contain ModePerm and ModeSpecial bits. Zero
+	// selects DefaultDirMode, because the operating system refuses a directory
+	// without permissions.
+	CreateMode FileMode
 
 	// CreateAll creates missing parent directories as well.
 	CreateAll bool
@@ -55,7 +57,7 @@ func DefaultFileOptions() FileOptions {
 	return FileOptions{
 		ExistOk:     false,
 		UpdateTimes: false,
-		Mode:        DefaultFileMode(),
+		CreateMode:  DefaultFileMode(),
 	}
 }
 
@@ -65,13 +67,13 @@ func DefaultDirOptions() DirOptions {
 	return DirOptions{
 		ExistOk:     false,
 		UpdateTimes: false,
-		Mode:        DefaultDirMode(),
+		CreateMode:  DefaultDirMode(),
 		CreateAll:   false,
 	}
 }
 
-// CreateFile creates an empty file at path with [DefaultFileMode]. The parent
-// directory must exist.
+// CreateFile creates an empty file at path with [DefaultFileMode]. The
+// parent directory must exist.
 //
 // CreateFile never truncates. An existing file returns [ErrFileExist] and is
 // left untouched. [CreateFileWithOptions] accepts an existing file with
@@ -94,14 +96,14 @@ func CreateFile(path *Path) error {
 // current time, as [SetTimes] does. An existing path that is no file returns
 // [ErrNotFile]. This includes a broken symlink, whose target is never created.
 //
-// A FileOptions.Mode with bits outside [PermissionBits] returns
-// [ErrInvalidPermission]. A missing parent directory returns
+// A FileOptions.CreateMode with bits outside [ModePerm] and [ModeSpecial]
+// returns [ErrInvalidFileMode]. A missing parent directory returns
 // [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
-// other failure to check the path returns [ErrStat], any other failed
-// creation returns [ErrCreate], and any other failed update of the times
-// returns [ErrSetTimes].
+// other failure to check the path returns [ErrStat], any other failed creation
+// returns [ErrCreate], and any other failed update of the times returns
+// [ErrSetTimes].
 func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
-	err := checkPermission(options.Mode, path)
+	err := checkModeBits(options.CreateMode, path)
 	if err != nil {
 		return false, err
 	}
@@ -115,13 +117,13 @@ func CreateFileWithOptions(path *Path, options FileOptions) (bool, error) {
 		return false, err
 	}
 
-	if options.Mode == 0 {
-		options.Mode = DefaultFileMode()
+	if options.CreateMode == 0 {
+		options.CreateMode = DefaultFileMode()
 	}
 
 	// O_EXCL refuses a path created since the check, symlinks included, so an
 	// existing file is never truncated and no symlink target is created.
-	file, err := os.OpenFile(path.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, options.Mode)
+	file, err := os.OpenFile(path.String(), os.O_RDWR|os.O_CREATE|os.O_EXCL, options.CreateMode)
 	if err != nil {
 		// Another process may have created the path since the check. Checking
 		// again returns the same error as an existing path before the call.
@@ -161,14 +163,14 @@ func MkDir(path *Path) error {
 // the current time, as [SetTimes] does. An existing path that is no directory
 // returns [ErrNotDir]. This includes a broken symlink.
 //
-// A DirOptions.Mode with bits outside [PermissionBits] returns
-// [ErrInvalidPermission]. A missing parent directory returns
+// A DirOptions.CreateMode with bits outside [ModePerm] and [ModeSpecial]
+// returns [ErrInvalidFileMode]. A missing parent directory returns
 // [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
-// other failure to check the path returns [ErrStat], any other failed
-// creation returns [ErrCreate], and any other failed update of the times
-// returns [ErrSetTimes].
+// other failure to check the path returns [ErrStat], any other failed creation
+// returns [ErrCreate], and any other failed update of the times returns
+// [ErrSetTimes].
 func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
-	err := checkPermission(options.Mode, path)
+	err := checkModeBits(options.CreateMode, path)
 	if err != nil {
 		return false, err
 	}
@@ -182,14 +184,14 @@ func MkDirWithOptions(path *Path, options DirOptions) (bool, error) {
 		return false, err
 	}
 
-	if options.Mode == 0 {
-		options.Mode = DefaultDirMode()
+	if options.CreateMode == 0 {
+		options.CreateMode = DefaultDirMode()
 	}
 
 	if options.CreateAll {
-		err = os.MkdirAll(path.String(), options.Mode)
+		err = os.MkdirAll(path.String(), options.CreateMode)
 	} else {
-		err = os.Mkdir(path.String(), options.Mode)
+		err = os.Mkdir(path.String(), options.CreateMode)
 	}
 
 	if err != nil {

@@ -18,10 +18,11 @@ var (
 	// value. It is a member of the [ErrInvalid] group.
 	ErrInvalidFilter = defineError(ErrInvalid, "FILTER", "invalid glob filter option")
 
-	// ErrInvalidPermission is returned when a permission has bits outside
-	// [PermissionBits]. It is a member of the ErrInvalid group. Its cause is a
-	// *[PermissionError].
-	ErrInvalidPermission = defineError(ErrInvalid, "PERMISSION", "permission has bits outside PermissionBits")
+	// ErrInvalidFileMode is returned when a [FileMode] passed to the library
+	// has bits outside [ModePerm] and [ModeSpecial], such as a CreateMode or
+	// the mode of [SetMode]. It is a member of the ErrInvalid group. Its cause
+	// is a *[FileModeError].
+	ErrInvalidFileMode = defineError(ErrInvalid, "FILE_MODE", "file mode has bits outside ModePerm and ModeSpecial")
 
 	// ErrNotExist is returned when a required path does not exist, whether a
 	// check of the library or the operating system found it. Match it with
@@ -118,9 +119,9 @@ var (
 	// of the ErrOperation group.
 	ErrRemove = defineError(ErrOperation, "REMOVE", "could not remove path")
 
-	// ErrSetPermission is returned when the permission of a path could not be
-	// changed. It is a member of the ErrOperation group.
-	ErrSetPermission = defineError(ErrOperation, "SET_PERMISSION", "could not set permission")
+	// ErrSetMode is returned when the mode of a path could not be changed. It
+	// is a member of the ErrOperation group.
+	ErrSetMode = defineError(ErrOperation, "SET_MODE", "could not set mode")
 
 	// ErrSetTimes is returned when the access and modification times of a
 	// path could not be changed. It is a member of the ErrOperation group.

@@ -6,9 +6,10 @@ package pathlib
 // Kinds returned by the io group. Their cause is a *[PathError], unless a kind
 // names another.
 var (
-	// ErrInvalidMode is returned when an open mode is not supported. It is a
-	// member of the [ErrInvalid] group. Its cause is a *[PermissionError].
-	ErrInvalidMode = defineError(ErrInvalid, "MODE", "invalid open mode")
+	// ErrInvalidOpenMode is returned when the open mode of [OpenOptions] is
+	// no [OpenMode] constant. It is a member of the [ErrInvalid] group. Its
+	// cause is an *[OpenModeError].
+	ErrInvalidOpenMode = defineError(ErrInvalid, "OPEN_MODE", "invalid open mode")
 
 	// ErrRead is returned when a file could not be read. It is a member of the
 	// [ErrOperation] group.

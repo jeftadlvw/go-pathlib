@@ -8,46 +8,38 @@ import (
 	"os"
 )
 
-const (
-	// defaultOpenPermission is the permission of a file OpenFileWithOptions
-	// creates without OpenOptions.Permission.
-	defaultOpenPermission = 0644
-
-	// defaultOpenMode is the open mode of OpenFileWithOptions without
-	// OpenOptions.Mode.
-	defaultOpenMode = "rw"
-)
+// defaultOpenCreateMode is the mode of a file OpenFileWithOptions creates
+// without OpenOptions.CreateMode.
+const defaultOpenCreateMode FileMode = 0o644
 
 // OpenOptions configures the opening of a file. The zero value opens an
-// existing file for reading and writing, truncates it, and creates no file.
+// existing file for reading alone and creates no file.
 type OpenOptions struct {
 	// CreateIfNotExists creates a missing file.
 	CreateIfNotExists bool
 
-	// Permission is the permission of a created file. It may only contain
-	// PermissionBits. Zero selects 0644.
-	Permission FileMode
+	// CreateMode is the mode of a created file. An existing file keeps its
+	// mode. It may only contain ModePerm and ModeSpecial bits. Zero selects
+	// 0o644.
+	CreateMode FileMode
 
-	// Mode is the open mode, made of "r" (read), "w" (write), and "a"
-	// (append) in this order. "a" needs "w", and "w" without "a" truncates
-	// the file. The supported modes are "r", "w", "rw", "wa", and "rwa". The
-	// empty string selects "rw".
-	Mode string
+	// OpenMode is the mode the file is opened in. The zero value is OpenRead.
+	OpenMode OpenMode
 }
 
-// DefaultOpenOptions returns the options [OpenFile] uses. They open a file for
-// reading and writing, create it with permission 0644, and truncate it.
+// DefaultOpenOptions returns the options [OpenFile] uses. They open a file
+// with [OpenReadWriteTruncate] and create a missing one with mode 0o644.
 func DefaultOpenOptions() OpenOptions {
 	return OpenOptions{
 		CreateIfNotExists: true,
-		Permission:        defaultOpenPermission,
-		Mode:              defaultOpenMode,
+		CreateMode:        defaultOpenCreateMode,
+		OpenMode:          OpenReadWriteTruncate,
 	}
 }
 
 // OpenFile opens the file at path for reading and writing, as
 // [OpenFileWithOptions] does with [DefaultOpenOptions]. A missing file is
-// created with permission 0644, and an existing file is truncated. The caller
+// created with mode 0o644, and an existing file is truncated. The caller
 // closes the returned file.
 //
 // The errors of OpenFileWithOptions apply.
@@ -58,48 +50,44 @@ func OpenFile(path *Path) (*os.File, error) {
 // OpenFileWithOptions opens the file at path with options. The caller closes
 // the returned file.
 //
-// An OpenOptions.Permission with bits outside [PermissionBits] returns
-// [ErrInvalidPermission], and an unsupported OpenOptions.Mode returns
-// [ErrInvalidMode]. A directory returns [ErrNotFile]. A missing file returns
-// [ErrNotExist], or [ErrParentNotExist] for a missing parent directory with
-// OpenOptions.CreateIfNotExists. Denied access returns [ErrPermissionDenied].
-// Any other failure to open the file returns [ErrOpen], to create it
-// [ErrCreate], and to check it [ErrStat].
+// An OpenOptions.CreateMode with bits outside [ModePerm] and [ModeSpecial]
+// returns [ErrInvalidFileMode], and an OpenOptions.OpenMode that is no
+// [OpenMode] constant returns [ErrInvalidOpenMode]. A directory returns
+// [ErrNotFile]. A missing file returns [ErrNotExist], or [ErrParentNotExist]
+// for a missing parent directory with OpenOptions.CreateIfNotExists. Denied
+// access returns [ErrPermissionDenied]. Any other failure to open the file
+// returns [ErrOpen], to create it [ErrCreate], and to check it [ErrStat].
 func OpenFileWithOptions(path *Path, options OpenOptions) (*os.File, error) {
-	err := checkPermission(options.Permission, path)
+	err := checkModeBits(options.CreateMode, path)
 	if err != nil {
 		return nil, err
 	}
 
-	if options.Permission == 0 {
-		options.Permission = defaultOpenPermission
+	if options.CreateMode == 0 {
+		options.CreateMode = defaultOpenCreateMode
 	}
 
-	if len(options.Mode) == 0 {
-		options.Mode = defaultOpenMode
-	}
-
-	fileOpenMode, err := openModeFlags(options.Mode, path)
-	if err != nil {
-		return nil, err
+	flags, ok := options.OpenMode.flags()
+	if !ok {
+		return nil, openModeErr(options.OpenMode, *path)
 	}
 
 	if options.CreateIfNotExists {
-		if fileOpenMode == os.O_RDONLY && runningOnWindows {
+		if flags == os.O_RDONLY && runningOnWindows {
 			// On Windows, O_CREATE|O_RDONLY either fails for existing read-only
 			// files (O_CREATE requires write access) or returns a writable
 			// handle for new files. Separate creation from opening to guarantee
 			// a read-only handle.
-			err = createIfMissing(path, options.Permission)
+			err = createIfMissing(path, options.CreateMode)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			fileOpenMode |= os.O_CREATE
+			flags |= os.O_CREATE
 		}
 	}
 
-	return openNonDir(path, fileOpenMode, options.Permission)
+	return openNonDir(path, flags, options.CreateMode)
 }
 
 // ReadFile returns the content of the file at path. It wraps [os.ReadFile].
@@ -124,10 +112,10 @@ func ReadFileToString(path *Path) (string, error) {
 	return string(bytes), err
 }
 
-// WriteBytes writes data to the file at path and returns the number of
-// written bytes, as [os.WriteFile] does. A missing file is created with
-// [DefaultFileMode], and an existing file is truncated. The parent directory
-// must exist.
+// WriteBytes writes data to the file at path and returns the number of written
+// bytes, as [os.WriteFile] does. A missing file is created with
+// [DefaultFileMode], and an existing file is truncated. The parent
+// directory must exist.
 //
 // It writes as [WriteBytesWithOptions] does with FileOptions{ExistOk: true},
 // and the errors of WriteBytesWithOptions apply.
@@ -145,17 +133,17 @@ func WriteString(path *Path, data string) (int, error) {
 // WriteBytesWithOptions writes data to the file at path with options and
 // returns the number of written bytes. The parent directory must exist.
 //
-// A missing file is created with FileOptions.Mode. The mode applies to a
-// created file alone, and an existing file keeps its permission. An existing
-// file is truncated if FileOptions.ExistOk is set. Otherwise it returns
-// [ErrFileExist] and is left untouched, as in [CreateFileWithOptions].
+// A missing file is created with FileOptions.CreateMode, and an existing file
+// keeps its mode. An existing file is truncated if
+// FileOptions.ExistOk is set. Otherwise it returns [ErrFileExist] and is left
+// untouched, as in [CreateFileWithOptions].
 //
 // A symlink to a file is written through. An existing path that is no file
 // returns [ErrNotFile]. This includes a broken symlink, whose target is never
 // created.
 //
-// A FileOptions.Mode with bits outside [PermissionBits] returns
-// [ErrInvalidPermission]. A missing parent directory returns
+// A FileOptions.CreateMode with bits outside [ModePerm] and [ModeSpecial]
+// returns [ErrInvalidFileMode]. A missing parent directory returns
 // [ErrParentNotExist], and denied access returns [ErrPermissionDenied]. Any
 // other failure to check the path returns [ErrStat], to open the file
 // [ErrOpen], and to write [ErrWrite].
@@ -172,8 +160,8 @@ func WriteStringWithOptions(path *Path, data string, options FileOptions) (int, 
 }
 
 // AppendBytes appends data to the file at path and returns the number of
-// written bytes. A missing file is created with [DefaultFileMode]. The parent
-// directory must exist.
+// written bytes. A missing file is created with [DefaultFileMode]. The
+// parent directory must exist.
 //
 // A symlink to a file is written through. An existing path that is no file
 // returns [ErrNotFile]. This includes a broken symlink, whose target is never
@@ -197,7 +185,7 @@ func AppendString(path *Path, data string) (int, error) {
 // additional flag, which is os.O_TRUNC or os.O_APPEND. A missing file is
 // created, and options apply as [WriteBytesWithOptions] describes.
 func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, error) {
-	err := checkPermission(options.Mode, path)
+	err := checkModeBits(options.CreateMode, path)
 	if err != nil {
 		return 0, err
 	}
@@ -207,8 +195,8 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 		return 0, err
 	}
 
-	if options.Mode == 0 {
-		options.Mode = DefaultFileMode()
+	if options.CreateMode == 0 {
+		options.CreateMode = DefaultFileMode()
 	}
 
 	flag |= os.O_WRONLY | os.O_CREATE
@@ -217,7 +205,7 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 		flag |= os.O_EXCL
 	}
 
-	file, err := os.OpenFile(path.String(), flag, options.Mode)
+	file, err := os.OpenFile(path.String(), flag, options.CreateMode)
 	if err != nil {
 		// Another process may have created the path since the check. Checking
 		// again returns the same error as an existing path before the call.
@@ -243,26 +231,6 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 	}
 
 	return n, nil
-}
-
-// openModeFlags returns the flags for [os.OpenFile] that implement mode, an
-// open mode of [OpenOptions]. An unsupported mode returns
-// [ErrInvalidMode].
-func openModeFlags(mode string, path *Path) (int, error) {
-	switch mode {
-	case "r":
-		return os.O_RDONLY, nil
-	case "w":
-		return os.O_WRONLY | os.O_TRUNC, nil
-	case "rw":
-		return os.O_RDWR | os.O_TRUNC, nil
-	case "wa":
-		return os.O_WRONLY | os.O_APPEND, nil
-	case "rwa":
-		return os.O_RDWR | os.O_APPEND, nil
-	default:
-		return 0, permModeErr(mode, *path)
-	}
 }
 
 // createIfMissing creates an empty file with permission perm at path if

@@ -17,14 +17,14 @@ func allKinds() []*PathlibError {
 	return []*PathlibError{
 		ErrPathlib,
 		ErrInvalid, ErrInvalidPattern, ErrEmptyPattern, ErrBadPattern, ErrNotAbsolute,
-		ErrInvalidFilter, ErrInvalidPermission, ErrInvalidMode,
+		ErrInvalidFilter, ErrInvalidFileMode, ErrInvalidOpenMode,
 		ErrRelImpossible, ErrAnchorMismatch,
 		ErrNotExist, ErrParentNotExist,
 		ErrExist, ErrFileExist, ErrDirExist, ErrNotEmptyDir,
 		ErrPermissionDenied,
 		ErrWrongType, ErrNotFile, ErrNotDir, ErrNotSymlink, ErrTypeMismatch, ErrUnsupportedType,
 		ErrOperation, ErrLookup, ErrStat, ErrOpen, ErrRead, ErrReadDir, ErrReadSymlink, ErrResolve,
-		ErrCreate, ErrWrite, ErrCopy, ErrRemove, ErrSetPermission, ErrSetTimes,
+		ErrCreate, ErrWrite, ErrCopy, ErrRemove, ErrSetMode, ErrSetTimes,
 		ErrWalk,
 	}
 }
@@ -58,7 +58,7 @@ func TestPathlibError(t *testing.T) {
 		require.Equal(t, "PATHLIB.EXIST.FILE", ErrFileExist.Code())
 		require.Equal(t, "PATHLIB.OPERATION.READ_DIR", ErrReadDir.Code())
 		require.Equal(t, "PATHLIB.INVALID.PATTERN.MALFORMED", ErrBadPattern.Code())
-		require.Equal(t, "PATHLIB.INVALID.MODE", ErrInvalidMode.Code())
+		require.Equal(t, "PATHLIB.INVALID.OPEN_MODE", ErrInvalidOpenMode.Code())
 	})
 
 	t.Run("Error shows the message and the code", func(t *testing.T) {
@@ -163,10 +163,10 @@ func TestRaisedError_Error(t *testing.T) {
 		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other (PATHLIB.REL_IMPOSSIBLE): [" + p.String() + ", " + o.String() + "]"},
 		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path (PATHLIB.OPERATION.OPEN): " + p.String() + ": permission denied"},
 		{"Cause without path", wrapError(ErrLookup, fs.ErrPermission), "could not look up directory (PATHLIB.OPERATION.LOOKUP): permission denied"},
-		{"Permission value", permRangeErr(0o1000, p), "permission has bits outside PermissionBits (PATHLIB.INVALID.PERMISSION): " + p.String() + " (perm 01000)"},
+		{"File mode value", fileModeErr(0o1000, p), "file mode has bits outside ModePerm and ModeSpecial (PATHLIB.INVALID.FILE_MODE): " + p.String() + " (file mode 01000)"},
 		{"Empty pattern", patternErr(ErrEmptyPattern, "", nil, p), "pattern may not be empty (PATHLIB.INVALID.PATTERN.EMPTY): " + p.String() + ` (pattern "")`},
 		{"Bad pattern", patternErr(ErrBadPattern, "a/[", path.ErrBadPattern, p), "malformed pattern (PATHLIB.INVALID.PATTERN.MALFORMED): " + p.String() + ` (pattern "a/["): syntax error in pattern`},
-		{"Empty mode", permModeErr("", p), "invalid open mode (PATHLIB.INVALID.MODE): " + p.String() + ` (mode "")`},
+		{"Invalid open mode", openModeErr(OpenMode(99), p), "invalid open mode (PATHLIB.INVALID.OPEN_MODE): " + p.String() + " (open mode OpenMode(99))"},
 	}
 
 	for _, c := range cases {
@@ -202,16 +202,16 @@ func TestRaisedError_MarshalJSON(t *testing.T) {
 		require.JSONEq(t, expect, string(encoded))
 	})
 
-	t.Run("Permission error", func(t *testing.T) {
+	t.Run("File mode and open mode errors", func(t *testing.T) {
 		t.Parallel()
 
-		encoded, jsonErr := json.Marshal(permModeErr("x", p))
+		encoded, jsonErr := json.Marshal(openModeErr(OpenMode(99), p))
 		require.NoError(t, jsonErr)
-		require.Contains(t, string(encoded), `"details":{"paths":["a/b"],"mode":"x"}`)
+		require.Contains(t, string(encoded), `"details":{"paths":["a/b"],"openMode":"OpenMode(99)"}`)
 
-		encoded, jsonErr = json.Marshal(permRangeErr(0o1000, p))
+		encoded, jsonErr = json.Marshal(fileModeErr(0o1000, p))
 		require.NoError(t, jsonErr)
-		require.Contains(t, string(encoded), `"details":{"paths":["a/b"],"perm":512}`)
+		require.Contains(t, string(encoded), `"details":{"paths":["a/b"],"fileMode":512}`)
 	})
 }
 

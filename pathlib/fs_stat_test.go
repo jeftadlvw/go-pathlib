@@ -580,7 +580,7 @@ func TestFSErrorsAreWrapped(t *testing.T) {
 	_, err = missing.Lstat()
 	require.ErrorIs(t, err, ErrNotExist)
 
-	err = SetPermission(missing, 0644)
+	err = SetMode(missing, 0644)
 	require.ErrorIs(t, err, ErrNotExist)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 

@@ -107,15 +107,15 @@ func TestErrNotExist_OperatingSystem(t *testing.T) {
 			return err
 		}},
 		{"OpenFileWithOptions", func(_ *testing.T, root *Path) error {
-			_, err := OpenFileWithOptions(root.JoinStrings("missing"), OpenOptions{Mode: "r"})
+			_, err := OpenFileWithOptions(root.JoinStrings("missing"), OpenOptions{OpenMode: OpenRead})
 			return err
 		}},
 		{"Stat", func(_ *testing.T, root *Path) error {
 			_, err := root.JoinStrings("missing").Stat()
 			return err
 		}},
-		{"SetPermission", func(_ *testing.T, root *Path) error {
-			return SetPermission(root.JoinStrings("missing"), 0644)
+		{"SetMode", func(_ *testing.T, root *Path) error {
+			return SetMode(root.JoinStrings("missing"), 0644)
 		}},
 	}
 
@@ -157,7 +157,7 @@ func TestErrParentNotExist(t *testing.T) {
 		}},
 		{"OpenFileWithOptions read-only", func(_ *testing.T, root *Path) error {
 			_, err := OpenFileWithOptions(
-				root.JoinStrings("missing", "file.txt"), OpenOptions{CreateIfNotExists: true, Mode: "r"},
+				root.JoinStrings("missing", "file.txt"), OpenOptions{CreateIfNotExists: true, OpenMode: OpenRead},
 			)
 			return err
 		}},
