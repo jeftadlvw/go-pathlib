@@ -18,7 +18,7 @@ func TestDefaultOpenOptions(t *testing.T) {
 	options := DefaultOpenOptions()
 	require.True(t, options.CreateIfNotExists, "default creation mismatch")
 	require.Equal(t, FileMode(0o644), options.CreateMode, "default create mode mismatch")
-	require.Equal(t, OpenReadWriteTruncate, options.OpenMode, "default open mode mismatch")
+	require.Equal(t, OpenReadWrite, options.OpenMode, "default open mode mismatch")
 }
 
 func TestOpenFileWithOptions_ZeroValueIsReadOnly(t *testing.T) {
@@ -70,7 +70,7 @@ func TestOpenFile(t *testing.T) {
 		require.Nil(t, file)
 	})
 
-	t.Run("existing file is truncated", func(t *testing.T) {
+	t.Run("existing file keeps its content", func(t *testing.T) {
 		t.Parallel()
 
 		filePath := writeTempFile(t, setupTempDir(t), "file.txt", "content")
@@ -85,7 +85,7 @@ func TestOpenFile(t *testing.T) {
 
 		content, err := os.ReadFile(filePath.String())
 		require.NoError(t, err)
-		require.Empty(t, content)
+		require.Equal(t, "content", string(content), "content is not kept")
 
 		requireWritable(t, file)
 	})

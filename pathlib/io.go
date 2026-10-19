@@ -28,19 +28,24 @@ type OpenOptions struct {
 }
 
 // DefaultOpenOptions returns the options [OpenFile] uses. They open a file
-// with [OpenReadWriteTruncate] and create a missing one with mode 0o644.
+// with [OpenReadWrite], which keeps its content, and create a missing one with
+// mode 0o644.
 func DefaultOpenOptions() OpenOptions {
 	return OpenOptions{
 		CreateIfNotExists: true,
 		CreateMode:        defaultOpenCreateMode,
-		OpenMode:          OpenReadWriteTruncate,
+		OpenMode:          OpenReadWrite,
 	}
 }
 
 // OpenFile opens the file at path for reading and writing, as
 // [OpenFileWithOptions] does with [DefaultOpenOptions]. A missing file is
-// created with mode 0o644, and an existing file is truncated. The caller
+// created with mode 0o644, and an existing file keeps its content. The caller
 // closes the returned file.
+//
+// Unlike [os.Create], OpenFile never truncates a file. Pass
+// [OpenReadWriteTruncate] to OpenFileWithOptions to empty it, or write the
+// whole content with [WriteBytes].
 //
 // The errors of OpenFileWithOptions apply.
 func OpenFile(path *Path) (*os.File, error) {
