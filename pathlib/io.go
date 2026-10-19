@@ -258,7 +258,7 @@ func createIfMissing(path *Path, perm FileMode) error {
 
 // openNonDir opens the file at path with flag and perm as [os.OpenFile] does.
 // A file that cannot be opened returns the error of osErr for [ErrOpen], or of
-// osCreateErr if flag creates the file. A failed check of the opened path
+// osCreateErr if flag creates the file. A failed check of the opened file
 // returns [ErrStat], and a directory returns [ErrNotFile].
 func openNonDir(path *Path, flag int, perm FileMode) (*os.File, error) {
 	file, err := os.OpenFile(path.String(), flag, perm)
@@ -269,8 +269,10 @@ func openNonDir(path *Path, flag int, perm FileMode) (*os.File, error) {
 		return nil, osErr(ErrOpen, err, *path)
 	}
 
-	// Unix opens a directory read-only, and the library refuses it.
-	stat, err := os.Stat(path.String())
+	// Unix opens a directory read-only, and the library refuses it. The open
+	// file is checked, not the path, so the check describes the opened entry
+	// even if the path was replaced since.
+	stat, err := file.Stat()
 	if err != nil {
 		_ = file.Close()
 		return nil, osErr(ErrStat, err, *path)
