@@ -67,6 +67,14 @@ type causeJSON struct {
 
 	// Details is the JSON form of the cause, if its type has one.
 	Details json.RawMessage `json:"details,omitempty"`
+
+	// Cause is the error the cause wraps, if the cause has no JSON form and an
+	// error below has one.
+	Cause *causeJSON `json:"cause,omitempty"`
+
+	// Errors are the errors the cause joins, if the cause has no JSON form and
+	// an error below has one.
+	Errors []causeJSON `json:"errors,omitempty"`
 }
 
 // defineError declares a kind below parent. The code of the kind is the code of
@@ -93,7 +101,9 @@ func wrapError(kind *PathlibError, cause error) error {
 }
 
 // newCauseJSON describes cause by its text, and by its own JSON when its type
-// has one.
+// has one. A cause without a JSON form, such as one of [fmt.Errorf] or
+// [errors.Join], adds the error it wraps as Cause, or the errors it joins as
+// Errors, when an error below has a JSON form.
 func newCauseJSON(cause error) causeJSON {
 	encoded := causeJSON{Message: cause.Error()}
 	marshaler, ok := cause.(json.Marshaler)
@@ -102,6 +112,26 @@ func newCauseJSON(cause error) causeJSON {
 		if err == nil {
 			encoded.Details = details
 		}
+
+		return encoded
+	}
+
+	// The errors below are described only when one of them describes itself.
+	var described json.Marshaler
+	if !errors.As(cause, &described) {
+		return encoded
+	}
+
+	below, joined := causesBelow(cause)
+	switch {
+	case joined:
+		encoded.Errors = make([]causeJSON, 0, len(below))
+		for _, member := range below {
+			encoded.Errors = append(encoded.Errors, newCauseJSON(member))
+		}
+	case len(below) == 1:
+		inner := newCauseJSON(below[0])
+		encoded.Cause = &inner
 	}
 
 	return encoded
@@ -185,13 +215,62 @@ func (e *wrappedError) MarshalJSON() ([]byte, error) {
 }
 
 // causeLogValue describes cause by its text, and by its own description when
-// its type has one.
+// its type has one. A cause without a description, such as one of
+// [fmt.Errorf] or [errors.Join], adds the error it wraps as cause, or the
+// errors it joins as errors keyed by their index, when an error below has a
+// description.
 func causeLogValue(cause error) slog.Value {
 	attrs := []slog.Attr{slog.String("message", cause.Error())}
 	valuer, ok := cause.(slog.LogValuer)
 	if ok {
-		attrs = append(attrs, slog.Any("details", valuer))
+		return slog.GroupValue(append(attrs, slog.Any("details", valuer))...)
+	}
+
+	// The errors below are described only when one of them describes itself.
+	var described slog.LogValuer
+	if !errors.As(cause, &described) {
+		return slog.GroupValue(attrs...)
+	}
+
+	below, joined := causesBelow(cause)
+	switch {
+	case joined:
+		members := make([]slog.Attr, 0, len(below))
+		for i, member := range below {
+			members = append(members, slog.Attr{Key: strconv.Itoa(i), Value: causeLogValue(member)})
+		}
+		attrs = append(attrs, slog.Attr{Key: "errors", Value: slog.GroupValue(members...)})
+	case len(below) == 1:
+		attrs = append(attrs, slog.Attr{Key: causeKey, Value: causeLogValue(below[0])})
 	}
 
 	return slog.GroupValue(attrs...)
+}
+
+// causesBelow returns the errors cause wraps and reports whether cause joins
+// them, as [errors.Join] does. A cause that wraps a single error, as
+// [fmt.Errorf] with one %w does, returns it alone. Nil errors are left out.
+func causesBelow(cause error) ([]error, bool) {
+	joiner, ok := cause.(interface{ Unwrap() []error })
+	if ok {
+		joined := joiner.Unwrap()
+		members := make([]error, 0, len(joined))
+		for _, member := range joined {
+			if member != nil {
+				members = append(members, member)
+			}
+		}
+
+		return members, true
+	}
+
+	wrapper, ok := cause.(interface{ Unwrap() error })
+	if ok {
+		inner := wrapper.Unwrap()
+		if inner != nil {
+			return []error{inner}, false
+		}
+	}
+
+	return nil, false
 }

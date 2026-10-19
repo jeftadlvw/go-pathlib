@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"path"
@@ -237,6 +238,116 @@ func TestRaisedError_LogValue(t *testing.T) {
 	require.Contains(t, out, "err.cause.details.paths=[a/b]")
 	require.Contains(t, out, "err.cause.details.cause.details.code=PATHLIB.OPERATION.OPEN")
 	require.Contains(t, out, "err.cause.details.cause.details.cause.details.cause.message=\"permission denied\"")
+}
+
+func TestCauseJSON_Below(t *testing.T) {
+	t.Parallel()
+
+	p := *NewPathFromPosix("a/b")
+	inner := wrapErr(ErrOpen, fs.ErrPermission, p)
+
+	t.Run("Wrapped failure", func(t *testing.T) {
+		t.Parallel()
+
+		cause := fmt.Errorf("index: %w", inner)
+		encoded, err := json.Marshal(newCauseJSON(cause))
+		require.NoError(t, err)
+
+		expect := `{"message":` + jsonString(t, cause.Error()) + `,` +
+			`"cause":{"message":` + jsonString(t, inner.Error()) + `,"details":` + jsonDetails(t, inner) + `}}`
+		require.JSONEq(t, expect, string(encoded))
+	})
+
+	t.Run("Joined errors", func(t *testing.T) {
+		t.Parallel()
+
+		cause := errors.Join(inner, nil, errSimulated)
+		encoded, err := json.Marshal(newCauseJSON(cause))
+		require.NoError(t, err)
+
+		expect := `{"message":` + jsonString(t, cause.Error()) + `,"errors":[` +
+			`{"message":` + jsonString(t, inner.Error()) + `,"details":` + jsonDetails(t, inner) + `},` +
+			`{"message":` + jsonString(t, errSimulated.Error()) + `}]}`
+		require.JSONEq(t, expect, string(encoded))
+	})
+
+	t.Run("Nothing below describes itself", func(t *testing.T) {
+		t.Parallel()
+
+		cause := fmt.Errorf("index: %w", errors.Join(errSimulated, fs.ErrPermission))
+		encoded, err := json.Marshal(newCauseJSON(cause))
+		require.NoError(t, err)
+		require.JSONEq(t, `{"message":`+jsonString(t, cause.Error())+`}`, string(encoded))
+	})
+
+	t.Run("Failure in the cause of a failure", func(t *testing.T) {
+		t.Parallel()
+
+		encoded, err := json.Marshal(wrapErr(ErrWalk, fmt.Errorf("index: %w", inner), p))
+		require.NoError(t, err)
+		require.Contains(t, string(encoded), `"code":"PATHLIB.OPERATION.OPEN"`)
+	})
+}
+
+func TestCauseLogValue_Below(t *testing.T) {
+	t.Parallel()
+
+	p := *NewPathFromPosix("a/b")
+	inner := wrapErr(ErrOpen, fs.ErrPermission, p)
+
+	t.Run("Wrapped failure", func(t *testing.T) {
+		t.Parallel()
+
+		out := logText(t, wrapErr(ErrWalk, fmt.Errorf("index: %w", inner), p))
+		require.Contains(t, out, "err.cause.details.cause.message=")
+		require.Contains(t, out, "err.cause.details.cause.cause.details.code=PATHLIB.OPERATION.OPEN")
+		require.Contains(t, out, "err.cause.details.cause.cause.details.cause.details.paths=[a/b]")
+	})
+
+	t.Run("Joined errors", func(t *testing.T) {
+		t.Parallel()
+
+		out := logText(t, wrapErr(ErrWalk, errors.Join(inner, nil, errSimulated), p))
+		require.Contains(t, out, "err.cause.details.cause.errors.0.details.code=PATHLIB.OPERATION.OPEN")
+		require.Contains(t, out, "err.cause.details.cause.errors.1.message=\"simulated error\"")
+		require.NotContains(t, out, "errors.2")
+	})
+
+	t.Run("Nothing below describes itself", func(t *testing.T) {
+		t.Parallel()
+
+		out := logText(t, wrapErr(ErrWalk, fmt.Errorf("index: %w", errSimulated), p))
+		require.Contains(t, out, "err.cause.details.cause.message=")
+		require.NotContains(t, out, "err.cause.details.cause.cause")
+	})
+}
+
+// logText returns the text a logger writes for err under the key "err",
+// without time, level, and message.
+func logText(t *testing.T, err error) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey || a.Key == slog.LevelKey || a.Key == slog.MessageKey {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}))
+	logger.Info("", "err", err)
+
+	return buf.String()
+}
+
+// jsonDetails returns the JSON form of err.
+func jsonDetails(t *testing.T, err error) string {
+	t.Helper()
+
+	encoded, jsonErr := json.Marshal(err)
+	require.NoError(t, jsonErr)
+	return string(encoded)
 }
 
 func jsonString(t *testing.T, s string) string {
