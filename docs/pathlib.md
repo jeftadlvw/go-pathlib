@@ -218,6 +218,7 @@ missing.txt
   - [func \(p \*Path\) Extension\(\) string](<#Path.Extension>)
   - [func \(p \*Path\) ExtensionCount\(\) int](<#Path.ExtensionCount>)
   - [func \(p \*Path\) ExtensionParts\(\) \[\]string](<#Path.ExtensionParts>)
+  - [func \(p \*Path\) FS\(\) fs.FS](<#Path.FS>)
   - [func \(p \*Path\) Glob\(pattern string\) \(\[\]\*Path, error\)](<#Path.Glob>)
   - [func \(p \*Path\) GlobContext\(ctx context.Context, pattern string\) \(\[\]\*Path, error\)](<#Path.GlobContext>)
   - [func \(p \*Path\) GlobWithOptions\(pattern string, options GlobOptions\) \(\[\]\*Path, error\)](<#Path.GlobWithOptions>)
@@ -1828,6 +1829,21 @@ func (p *Path) ExtensionParts() []string
 ```
 
 ExtensionParts returns the extensions of this Path without their dots, such as "tar" and "gz". See [Path.Extension](<#Path.Extension>).
+
+<a name="Path.FS"></a>
+### func \(\*Path\) [FS](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_dirfs.go#L25>)
+
+```go
+func (p *Path) FS() fs.FS
+```
+
+FS returns the directory tree at this Path as an \[fs.FS\]. It wraps [os.DirFS](<https://pkg.go.dev/os/#DirFS>), and the file system implements the interfaces os.DirFS implements, such as \[fs.ReadFileFS\] and \[fs.StatFS\].
+
+The file system takes names in the form \[fs.ValidPath\] requires. A name is slash\-separated and relative to this Path, such as "a/b.txt". It has no leading slash and no ".." names. [Path.RelativeTo](<#Path.RelativeTo>) and [Path.ToPosix](<#Path.ToPosix>) turn a Path below this Path into such a name.
+
+FS does not check this Path. A missing path or a non\-directory is reported when the file system is used. A relative Path is resolved against the working directory at every access.
+
+The file system follows symlinks, including those that lead outside this Path. It is no boundary for untrusted names.
 
 <a name="Path.Glob"></a>
 ### func \(\*Path\) [Glob](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L72>)
