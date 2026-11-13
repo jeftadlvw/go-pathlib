@@ -96,9 +96,10 @@ A function that needs section comments is split instead.
   standard library of that version (`slices`, `maps`, `min`, `max`,
   `for range n`) over hand-written equivalents.
 - CI rejects the forbidden characters from section 1 in Go and Markdown
-  files. `make check-chars` runs the same check.
+  files. `just check-chars` runs the same check.
 
-The Makefile wraps every tool. `make install-dev-tools` installs them.
+The `Justfile` wraps every tool. gomarkdoc runs through `go run` at a pinned
+version, and just and golangci-lint are installed once.
 
 ## 4. Naming
 

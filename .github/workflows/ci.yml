@@ -34,7 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: make check-chars
+      # The same check as `just check-chars`.
+      - run: "! LC_ALL=C git grep --untracked -nP '\\xE2\\x80[\\x93\\x94\\x98\\x99\\x9C\\x9D\\xA6]' -- '*.go' '*.md'"
 
   bundle:
     name: Generate and compile bundles

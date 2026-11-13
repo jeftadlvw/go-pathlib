@@ -37,13 +37,15 @@ The library ships in two forms:
 
 - Read `CONVENTIONS.md` for code style, naming, testing, and commit
   conventions.
-- Run `make install-dev-tools` once to install golangci-lint and gomarkdoc.
-- Before opening a pull request, run `make fmt`, `make lint`,
-  `make check-chars`, and `make test`.
+- Install [just](https://just.systems) and
+  [golangci-lint](https://golangci-lint.run). `just` lists the recipes of the
+  `Justfile`.
+- Before opening a pull request, run `just fmt`, `just lint`,
+  `just check-chars`, and `just test`.
 - A change to the groups or to the code a group uses is verified with
-  `make bundle` followed by `go build ./dist/...`.
-- A change to a doc comment is followed by `make generate-docs`, which
-  updates `docs/pathlib.md`.
+  `just bundle`, which writes the bundles and compiles them.
+- A change to a doc comment is followed by `just docs`, which updates
+  `docs/pathlib.md`.
 - CI runs the tests on Linux, macOS, and Windows with Go 1.22 and the latest
   stable Go. A change passes on all of them.
 - Code converts a `Path` to a string only at the call that requires one. It

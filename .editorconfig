@@ -10,8 +10,8 @@ insert_final_newline = true             # Ensure files have a trailing newline
 indent_style = space                    # Set indent style to spaces
 indent_size = 4                         # Set indent size to 4 spaces
 
-# golang and Makefile
-[{go.mod,go.sum,*.go,Makefile}]
+# golang
+[{go.mod,go.sum,*.go}]
 indent_style = tab
 
 # yml

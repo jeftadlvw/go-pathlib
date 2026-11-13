@@ -61,7 +61,7 @@ go.work.sum
 # Compiled bundler binary (use `go run ./tools/bundle`)
 /bundle
 
-# Generated single-file bundles (build on demand via `make bundle`)
+# Generated single-file bundles (build on demand via `just bundle`)
 /dist/
 
 # Temporary directories of tests that need relative paths
