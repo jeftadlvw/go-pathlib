@@ -544,13 +544,13 @@ func TestIOErrorsAreWrapped(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotExist)
 	require.NotErrorIs(t, err, ErrRead, "the most specific kind replaces the operation")
 	require.ErrorIs(t, err, fs.ErrNotExist)
-	require.ErrorAs(t, err, new(*PathlibError))
+	require.ErrorAs(t, err, new(*ErrorKind))
 
 	_, err = OpenFileWithOptions(missing, OpenOptions{OpenMode: OpenRead})
 	require.ErrorIs(t, err, ErrNotExist)
 	require.NotErrorIs(t, err, ErrOpen, "the most specific kind replaces the operation")
 	require.ErrorIs(t, err, fs.ErrNotExist)
-	require.ErrorAs(t, err, new(*PathlibError))
+	require.ErrorAs(t, err, new(*ErrorKind))
 }
 
 // writeFuncs returns all write functions with the behavior they share: writing

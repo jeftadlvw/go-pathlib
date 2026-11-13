@@ -14,8 +14,8 @@ import (
 )
 
 // allKinds returns every exported kind of the package.
-func allKinds() []*PathlibError {
-	return []*PathlibError{
+func allKinds() []*ErrorKind {
+	return []*ErrorKind{
 		ErrPathlib,
 		ErrInvalid, ErrInvalidPattern, ErrEmptyPattern, ErrBadPattern, ErrNotAbsolute,
 		ErrInvalidFilter, ErrInvalidFileMode, ErrInvalidOpenMode,
@@ -30,7 +30,7 @@ func allKinds() []*PathlibError {
 	}
 }
 
-func TestPathlibError(t *testing.T) {
+func TestErrorKind(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Codes are unique", func(t *testing.T) {
@@ -54,25 +54,25 @@ func TestPathlibError(t *testing.T) {
 	t.Run("Code joins the names from the root", func(t *testing.T) {
 		t.Parallel()
 
-		require.Equal(t, "PATHLIB", ErrPathlib.Code())
-		require.Equal(t, "PATHLIB.NOT_EXIST", ErrNotExist.Code())
-		require.Equal(t, "PATHLIB.EXIST.FILE", ErrFileExist.Code())
-		require.Equal(t, "PATHLIB.OPERATION.READ_DIR", ErrReadDir.Code())
-		require.Equal(t, "PATHLIB.INVALID.PATTERN.MALFORMED", ErrBadPattern.Code())
-		require.Equal(t, "PATHLIB.INVALID.OPEN_MODE", ErrInvalidOpenMode.Code())
+		require.Equal(t, "pathlib", ErrPathlib.Code())
+		require.Equal(t, "pathlib.not_exist", ErrNotExist.Code())
+		require.Equal(t, "pathlib.exist.file", ErrFileExist.Code())
+		require.Equal(t, "pathlib.operation.read_dir", ErrReadDir.Code())
+		require.Equal(t, "pathlib.invalid.pattern.malformed", ErrBadPattern.Code())
+		require.Equal(t, "pathlib.invalid.open_mode", ErrInvalidOpenMode.Code())
 	})
 
 	t.Run("Error shows the message and the code", func(t *testing.T) {
 		t.Parallel()
 
 		require.Equal(t, "file already exists", ErrFileExist.Message())
-		require.Equal(t, "file already exists (PATHLIB.EXIST.FILE)", ErrFileExist.Error())
+		require.Equal(t, "file already exists (pathlib.exist.file)", ErrFileExist.Error())
 	})
 
 	t.Run("Malformed code panics", func(t *testing.T) {
 		t.Parallel()
 
-		for _, code := range []string{"", "lower", "Mixed", "A.B", "A__B", "_A", "A_", "A1"} {
+		for _, code := range []string{"", "UPPER", "Mixed", "a.b", "a__b", "_a", "a_", "a1"} {
 			require.Panics(t, func() { _ = defineError(ErrPathlib, code, "message") }, code)
 		}
 	})
@@ -110,7 +110,7 @@ func TestRaisedError(t *testing.T) {
 		o := *NewPath("c")
 		err := pathErr(ErrRelImpossible, p, o)
 
-		var kind *PathlibError
+		var kind *ErrorKind
 		require.ErrorAs(t, err, &kind)
 		require.Equal(t, ErrRelImpossible, kind)
 
@@ -159,15 +159,15 @@ func TestRaisedError_Error(t *testing.T) {
 		Err    error
 		Expect string
 	}{
-		{"Kind without cause", wrapError(ErrNotDir, nil), "path is not a directory (PATHLIB.WRONG_TYPE.NOT_DIR)"},
-		{"One path", pathErr(ErrNotDir, p), "path is not a directory (PATHLIB.WRONG_TYPE.NOT_DIR): " + p.String()},
-		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other (PATHLIB.REL_IMPOSSIBLE): [" + p.String() + ", " + o.String() + "]"},
-		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path (PATHLIB.OPERATION.OPEN): " + p.String() + ": permission denied"},
-		{"Cause without path", wrapError(ErrLookup, fs.ErrPermission), "could not look up directory (PATHLIB.OPERATION.LOOKUP): permission denied"},
-		{"File mode value", fileModeErr(0o1000, p), "file mode has bits outside ModePerm and ModeSpecial (PATHLIB.INVALID.FILE_MODE): " + p.String() + " (file mode 01000)"},
-		{"Empty pattern", patternErr(ErrEmptyPattern, "", nil, p), "pattern may not be empty (PATHLIB.INVALID.PATTERN.EMPTY): " + p.String() + ` (pattern "")`},
-		{"Bad pattern", patternErr(ErrBadPattern, "a/[", path.ErrBadPattern, p), "malformed pattern (PATHLIB.INVALID.PATTERN.MALFORMED): " + p.String() + ` (pattern "a/["): syntax error in pattern`},
-		{"Invalid open mode", openModeErr(OpenMode(99), p), "invalid open mode (PATHLIB.INVALID.OPEN_MODE): " + p.String() + " (open mode OpenMode(99))"},
+		{"Kind without cause", wrapError(ErrNotDir, nil), "path is not a directory (pathlib.wrong_type.not_dir)"},
+		{"One path", pathErr(ErrNotDir, p), "path is not a directory (pathlib.wrong_type.not_dir): " + p.String()},
+		{"Several paths", pathErr(ErrRelImpossible, p, o), "cannot make path relative to the other (pathlib.rel_impossible): [" + p.String() + ", " + o.String() + "]"},
+		{"Path and cause", wrapErr(ErrOpen, fs.ErrPermission, p), "could not open path (pathlib.operation.open): " + p.String() + ": permission denied"},
+		{"Cause without path", wrapError(ErrLookup, fs.ErrPermission), "could not look up directory (pathlib.operation.lookup): permission denied"},
+		{"File mode value", fileModeErr(0o1000, p), "file mode has bits outside ModePerm and ModeSpecial (pathlib.invalid.file_mode): " + p.String() + " (file mode 01000)"},
+		{"Empty pattern", patternErr(ErrEmptyPattern, "", nil, p), "pattern may not be empty (pathlib.invalid.pattern.empty): " + p.String() + ` (pattern "")`},
+		{"Bad pattern", patternErr(ErrBadPattern, "a/[", path.ErrBadPattern, p), "malformed pattern (pathlib.invalid.pattern.malformed): " + p.String() + ` (pattern "a/["): syntax error in pattern`},
+		{"Invalid open mode", openModeErr(OpenMode(99), p), "invalid open mode (pathlib.invalid.open_mode): " + p.String() + " (open mode OpenMode(99))"},
 	}
 
 	for _, c := range cases {
@@ -193,11 +193,11 @@ func TestRaisedError_MarshalJSON(t *testing.T) {
 		encoded, jsonErr := json.Marshal(err)
 		require.NoError(t, jsonErr)
 
-		expect := `{"kind":"error walking path","code":"PATHLIB.WALK","cause":{` +
+		expect := `{"kind":"error walking path","code":"pathlib.walk","cause":{` +
 			`"message":` + jsonString(t, errors.Unwrap(err).Error()) + `,` +
 			`"details":{"paths":["a/b"],"cause":{` +
 			`"message":` + jsonString(t, inner.Error()) + `,` +
-			`"details":{"kind":"could not open path","code":"PATHLIB.OPERATION.OPEN","cause":{` +
+			`"details":{"kind":"could not open path","code":"pathlib.operation.open","cause":{` +
 			`"message":` + jsonString(t, errors.Unwrap(inner).Error()) + `,` +
 			`"details":{"paths":["a/b"],"cause":{"message":"permission denied"}}}}}}}}`
 		require.JSONEq(t, expect, string(encoded))
@@ -234,9 +234,9 @@ func TestRaisedError_LogValue(t *testing.T) {
 	logger.Info("", "err", err)
 
 	out := buf.String()
-	require.Contains(t, out, "err.kind=\"error walking path\" err.code=PATHLIB.WALK")
+	require.Contains(t, out, "err.kind=\"error walking path\" err.code=pathlib.walk")
 	require.Contains(t, out, "err.cause.details.paths=[a/b]")
-	require.Contains(t, out, "err.cause.details.cause.details.code=PATHLIB.OPERATION.OPEN")
+	require.Contains(t, out, "err.cause.details.cause.details.code=pathlib.operation.open")
 	require.Contains(t, out, "err.cause.details.cause.details.cause.details.cause.message=\"permission denied\"")
 }
 
@@ -285,7 +285,7 @@ func TestCauseJSON_Below(t *testing.T) {
 
 		encoded, err := json.Marshal(wrapErr(ErrWalk, fmt.Errorf("index: %w", inner), p))
 		require.NoError(t, err)
-		require.Contains(t, string(encoded), `"code":"PATHLIB.OPERATION.OPEN"`)
+		require.Contains(t, string(encoded), `"code":"pathlib.operation.open"`)
 	})
 }
 
@@ -300,7 +300,7 @@ func TestCauseLogValue_Below(t *testing.T) {
 
 		out := logText(t, wrapErr(ErrWalk, fmt.Errorf("index: %w", inner), p))
 		require.Contains(t, out, "err.cause.details.cause.message=")
-		require.Contains(t, out, "err.cause.details.cause.cause.details.code=PATHLIB.OPERATION.OPEN")
+		require.Contains(t, out, "err.cause.details.cause.cause.details.code=pathlib.operation.open")
 		require.Contains(t, out, "err.cause.details.cause.cause.details.cause.details.paths=[a/b]")
 	})
 
@@ -308,7 +308,7 @@ func TestCauseLogValue_Below(t *testing.T) {
 		t.Parallel()
 
 		out := logText(t, wrapErr(ErrWalk, errors.Join(inner, nil, errSimulated), p))
-		require.Contains(t, out, "err.cause.details.cause.errors.0.details.code=PATHLIB.OPERATION.OPEN")
+		require.Contains(t, out, "err.cause.details.cause.errors.0.details.code=pathlib.operation.open")
 		require.Contains(t, out, "err.cause.details.cause.errors.1.message=\"simulated error\"")
 		require.NotContains(t, out, "errors.2")
 	})

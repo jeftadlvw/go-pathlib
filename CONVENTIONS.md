@@ -245,7 +245,7 @@ Types that are built once and only read afterwards.
 
 - Use `github.com/stretchr/testify/require`, never `assert`. A failed check
   stops the test.
-- Check errors with `require.ErrorIs` against kinds, such as `ErrNotExist`.
+- Check errors with `require.ErrorIs` against error kinds, such as `ErrNotExist`.
   Never compare error strings. Tests of rendering are the exception.
 - Tests are table-driven with named cases run through `t.Run`. A table that
   maps inputs to expected results uses `TestCase` and `runForResults`.

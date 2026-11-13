@@ -25,7 +25,7 @@ func Example_errorHandling() {
 	fmt.Println(errors.Is(err, pathlib.ErrNotExist))
 	fmt.Println(errors.Is(err, fs.ErrNotExist))
 
-	var kind *pathlib.PathlibError
+	var kind *pathlib.ErrorKind
 	if errors.As(err, &kind) {
 		fmt.Println(kind.Code())
 	}
@@ -39,7 +39,7 @@ func Example_errorHandling() {
 	// true
 	// true
 	// true
-	// PATHLIB.NOT_EXIST
+	// pathlib.not_exist
 	// missing.txt
 }
 

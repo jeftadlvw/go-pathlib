@@ -1,4 +1,4 @@
-// core_error_path.go holds PathError, the cause of every failure that concerns
+// core_error_path.go holds PathError, the cause of every error that concerns
 // paths.
 
 package pathlib
@@ -12,9 +12,10 @@ import (
 	"strings"
 )
 
-// PathError is the cause of every failure below [ErrPathlib], unless the
-// documentation of its kind names another cause. It holds the paths the failure
-// concerns and the error that caused it, such as an error of the os package.
+// PathError is the cause of every error below [ErrPathlib], unless the
+// documentation of its error kind names another cause. It holds the paths the
+// error concerns and the error that caused it, such as an error of the os
+// package.
 //
 // Read it with [errors.As]:
 //
@@ -23,7 +24,7 @@ import (
 //
 // A PathError is immutable.
 type PathError struct {
-	// paths are the paths the failure concerns, in an order documented per
+	// paths are the paths the error concerns, in an order documented per
 	// operation (e.g. RelativeTo reports [this, other]). May be empty.
 	paths []Path
 
@@ -31,7 +32,7 @@ type PathError struct {
 	err error
 }
 
-// Paths returns a copy of the paths the failure concerns, in an order
+// Paths returns a copy of the paths the error concerns, in an order
 // documented per operation (e.g. [Path.RelativeTo] reports [this, other]). It
 // may be empty.
 func (e *PathError) Paths() []Path {
@@ -95,7 +96,7 @@ func (e *PathError) MarshalJSON() ([]byte, error) {
 // error renders as its own text.
 func (e *PathError) causeText() string {
 	// The underlying error itself is checked, not its chain, because a wrapped
-	// error such as a nested failure renders its own paths.
+	// error such as a nested error renders its own paths.
 	switch err := e.err.(type) { //nolint:errorlint // The chain must not be searched.
 	case *fs.PathError:
 		if len(e.paths) == 1 && err.Path == e.paths[0].String() {
@@ -152,12 +153,13 @@ func posixPaths(paths []Path) []string {
 	return posix
 }
 
-// pathErr returns a failure of kind that concerns paths.
-func pathErr(kind *PathlibError, paths ...Path) error {
+// pathErr returns an error of kind kind that concerns paths.
+func pathErr(kind *ErrorKind, paths ...Path) error {
 	return wrapError(kind, &PathError{paths: slices.Clone(paths)})
 }
 
-// wrapErr returns a failure of kind that concerns paths and is caused by cause.
-func wrapErr(kind *PathlibError, cause error, paths ...Path) error {
+// wrapErr returns an error of kind kind that concerns paths and is caused by
+// cause.
+func wrapErr(kind *ErrorKind, cause error, paths ...Path) error {
 	return wrapError(kind, &PathError{paths: slices.Clone(paths), err: cause})
 }

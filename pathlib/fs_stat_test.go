@@ -575,7 +575,7 @@ func TestFSErrorsAreWrapped(t *testing.T) {
 	_, err := missing.Stat()
 	require.ErrorIs(t, err, ErrNotExist)
 	require.ErrorIs(t, err, fs.ErrNotExist)
-	require.ErrorAs(t, err, new(*PathlibError))
+	require.ErrorAs(t, err, new(*ErrorKind))
 
 	_, err = missing.Lstat()
 	require.ErrorIs(t, err, ErrNotExist)
@@ -587,7 +587,7 @@ func TestFSErrorsAreWrapped(t *testing.T) {
 	_, err = MkDirWithOptions(root.JoinStrings("a", "b"), DirOptions{})
 	require.ErrorIs(t, err, ErrNotExist)
 	require.ErrorIs(t, err, fs.ErrNotExist)
-	require.ErrorAs(t, err, new(*PathlibError))
+	require.ErrorAs(t, err, new(*ErrorKind))
 }
 
 func TestPath_LExists(t *testing.T) {
@@ -827,7 +827,7 @@ func TestRequireDir(t *testing.T) {
 	missing := root.JoinStrings("missing")
 
 	err := requireDir(missing)
-	var kind *PathlibError
+	var kind *ErrorKind
 	require.ErrorAs(t, err, &kind)
 	require.Equal(t, ErrNotExist, kind)
 

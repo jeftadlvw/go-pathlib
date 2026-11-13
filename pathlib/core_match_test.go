@@ -72,5 +72,5 @@ func TestPath_MatchesPatternE_BadPattern(t *testing.T) {
 	_, err := NewPath("a/b").MatchesPatternE("a/[")
 	require.ErrorIs(t, err, ErrBadPattern)
 	require.ErrorIs(t, err, path.ErrBadPattern)
-	require.ErrorAs(t, err, new(*PathlibError))
+	require.ErrorAs(t, err, new(*ErrorKind))
 }

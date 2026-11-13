@@ -261,7 +261,7 @@ func (p *Path) SymlinkTo(linkPath *Path) error {
 // set. A path that cannot be checked returns the error of [lexists], and times
 // that cannot be set return the errors of [SetTimes].
 func checkCreateTarget(
-	path *Path, isKind func() bool, existOk, updateTimes bool, notKind, exist *PathlibError,
+	path *Path, isKind func() bool, existOk, updateTimes bool, notKind, exist *ErrorKind,
 ) (bool, error) {
 	exists, err := lexists(path)
 	if err != nil {

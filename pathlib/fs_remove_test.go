@@ -118,7 +118,7 @@ func TestRemove(t *testing.T) {
 		Setup func(*testing.T, *Path) *Path
 	}
 
-	cases := []TestCase[Input, *PathlibError]{
+	cases := []TestCase[Input, *ErrorKind]{
 		{
 			Name: "Remove existing file",
 			Input: Input{Setup: func(t *testing.T, root *Path) *Path {
@@ -159,7 +159,7 @@ func TestRemove(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect *PathlibError, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, expect *ErrorKind, expectError bool) {
 		t.Helper()
 
 		root := setupTempDir(t)
@@ -198,7 +198,7 @@ func TestRemoveWithOptions(t *testing.T) {
 		return createTempSymlinkAbs(t, root, "missing", "link")
 	}
 
-	cases := []TestCase[Input, *PathlibError]{
+	cases := []TestCase[Input, *ErrorKind]{
 		{
 			Name:   "Missing path is refused by the zero value",
 			Input:  Input{Setup: missing, Options: RemoveOptions{}},
@@ -234,7 +234,7 @@ func TestRemoveWithOptions(t *testing.T) {
 		},
 	}
 
-	runForResultsE(t, cases, func(t *testing.T, input Input, expect *PathlibError, expectError bool) {
+	runForResultsE(t, cases, func(t *testing.T, input Input, expect *ErrorKind, expectError bool) {
 		t.Helper()
 
 		root := setupTempDir(t)

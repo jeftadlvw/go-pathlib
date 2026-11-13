@@ -20,7 +20,7 @@ func TestFileModeError(t *testing.T) {
 		require.NotErrorIs(t, err, ErrInvalidOpenMode)
 		require.NotErrorIs(t, err, ErrPermissionDenied)
 		require.ErrorIs(t, err, ErrPathlib)
-		require.ErrorAs(t, err, new(*PathlibError))
+		require.ErrorAs(t, err, new(*ErrorKind))
 		require.NotErrorAs(t, err, new(*PathError))
 		require.NotErrorAs(t, err, new(*OpenModeError))
 	})

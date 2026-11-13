@@ -84,7 +84,7 @@ func TestPathError_Error(t *testing.T) {
 		t.Parallel()
 
 		err := osErr(ErrOpen, &fs.PathError{Op: "open", Path: p.String(), Err: fs.ErrNotExist}, p)
-		require.Equal(t, "path does not exist (PATHLIB.NOT_EXIST): "+p.String()+": open: file does not exist", err.Error())
+		require.Equal(t, "path does not exist (pathlib.not_exist): "+p.String()+": open: file does not exist", err.Error())
 		require.ErrorIs(t, err, fs.ErrNotExist)
 
 		var osPathErr *fs.PathError

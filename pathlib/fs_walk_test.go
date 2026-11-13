@@ -642,7 +642,7 @@ func TestWalkR_CallbackErrors(t *testing.T) {
 		})
 		require.ErrorIs(t, err, ErrWalk)
 		require.ErrorIs(t, err, errSimulated)
-		require.ErrorAs(t, err, new(*PathlibError))
+		require.ErrorAs(t, err, new(*ErrorKind))
 	})
 
 	t.Run("unchanged localDirError is returned as is", func(t *testing.T) {

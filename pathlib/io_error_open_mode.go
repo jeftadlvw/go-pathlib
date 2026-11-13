@@ -1,4 +1,4 @@
-// io_error_open_mode.go holds OpenModeError, the cause of the failures of
+// io_error_open_mode.go holds OpenModeError, the cause of the errors of
 // ErrInvalidOpenMode.
 
 package pathlib
@@ -9,8 +9,8 @@ import (
 	"slices"
 )
 
-// OpenModeError is the cause of the failures of [ErrInvalidOpenMode]. It holds
-// the rejected [OpenMode] and the paths the failure concerns.
+// OpenModeError is the cause of the errors of [ErrInvalidOpenMode]. It holds
+// the rejected [OpenMode] and the paths the error concerns.
 //
 // Read it with [errors.As]:
 //
@@ -19,14 +19,14 @@ import (
 //
 // An OpenModeError is immutable.
 type OpenModeError struct {
-	// paths are the paths the failure concerns. May be empty.
+	// paths are the paths the error concerns. May be empty.
 	paths []Path
 
 	// openMode is the rejected open mode, as the caller passed it.
 	openMode OpenMode
 }
 
-// Paths returns a copy of the paths the failure concerns. It may be empty.
+// Paths returns a copy of the paths the error concerns. It may be empty.
 func (e *OpenModeError) Paths() []Path {
 	return slices.Clone(e.paths)
 }

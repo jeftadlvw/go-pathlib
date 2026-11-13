@@ -125,7 +125,7 @@ type updateTimesInput struct {
 // existing entry in the UpdateTimes tests.
 type updateTimesExpect struct {
 	// Err is the expected error kind, or nil for success.
-	Err *PathlibError
+	Err *ErrorKind
 
 	// Updated reports whether the modification time is set to the current
 	// time.
@@ -139,7 +139,7 @@ func runUpdateTimesCases(
 	t *testing.T,
 	setup func(*testing.T, *Path) *Path,
 	create func(*Path, updateTimesInput) (bool, error),
-	existErr *PathlibError,
+	existErr *ErrorKind,
 ) {
 	t.Helper()
 
@@ -618,7 +618,7 @@ func TestCreate_BrokenSymlinks(t *testing.T) {
 		link := createTempSymlinkAbs(t, root, "missing", "link")
 
 		err := CreateSymlink(root, link)
-		var kind *PathlibError
+		var kind *ErrorKind
 		require.ErrorAs(t, err, &kind)
 		require.Equal(t, ErrExist, kind, "raised by the existence check, not by os.Symlink")
 	})

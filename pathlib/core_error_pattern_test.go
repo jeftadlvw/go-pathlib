@@ -11,7 +11,7 @@ func TestPatternError(t *testing.T) {
 	t.Parallel()
 
 	type Expect struct {
-		Kind    *PathlibError
+		Kind    *ErrorKind
 		Pattern string
 	}
 

@@ -109,6 +109,11 @@ linters:
       - path: example_test\.go
         linters:
           - forbidigo
+      # The error kind type is named ErrorKind, as the error model of go-errkit
+      # defines it, so it does not end in Error
+      - linters:
+          - errname
+        text: "`ErrorKind`"
   settings:
     # https://golangci-lint.run/docs/linters/configuration/#depguard
     depguard:

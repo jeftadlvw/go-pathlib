@@ -1,5 +1,5 @@
-// core_error.go holds the error model: the kind type PathlibError, the failure
-// type raisedError that pairs a kind with its cause, and their descriptions for
+// core_error.go holds the error model: the error kind type ErrorKind,
+// wrappedError that gives a cause an error kind, and their descriptions for
 // logs and JSON.
 
 package pathlib
@@ -12,51 +12,51 @@ import (
 	"strconv"
 )
 
-// causeKey is the key of the cause in the log description of a failure and of
+// causeKey is the key of the cause in the log description of an error and of
 // a cause.
 const causeKey = "cause"
 
-// codePattern is the format of one name in a code, such as NOT_EXIST.
-var codePattern = regexp.MustCompile(`^[A-Z]+(_[A-Z]+)*$`)
+// codePattern is the format of one name in a code, such as not_exist.
+var codePattern = regexp.MustCompile(`^[a-z]+(_[a-z]+)*$`)
 
-// PathlibError classifies a failure. Its values are kinds, such as
-// [ErrNotAbsolute], and kinds form a tree rooted at [ErrPathlib].
+// ErrorKind classifies an error. Its values are error kinds, such as
+// [ErrNotAbsolute], and error kinds form a tree rooted at [ErrPathlib].
 //
-// Every error the library returns has a kind. [errors.Is] matches a kind and
-// every one of its ancestors, so errors.Is(err, ErrPathlib) catches every error
-// of the library. [errors.As] with a *PathlibError target returns the kind of a
-// failure. The data of a failure, such as its paths, lives in its cause, such
-// as a [PathError].
+// Every error the library returns has an error kind. [errors.Is] matches an
+// error kind and every one of its ancestors, so errors.Is(err, ErrPathlib)
+// catches every error of the library. [errors.As] with a *ErrorKind target
+// returns the error kind of an error. The data of an error, such as its paths,
+// lives in its cause, such as a [PathError].
 //
-// A failure has the most specific kind the library knows. A kind that names a
-// condition, such as a missing path, wins over the kind of the failed
-// operation. The error of the operating system stays in the cause, so errors.Is
-// also matches standard library sentinels such as [fs.ErrNotExist].
+// An error has the most specific error kind the library knows. An error kind
+// that names a condition, such as a missing path, wins over the error kind of
+// the failed operation. The error of the operating system stays in the cause,
+// so errors.Is also matches standard library sentinels such as
+// [fs.ErrNotExist].
 //
-// Each kind has a code, such as "PATHLIB.EXIST.FILE", that stays stable when
-// its message changes. Logs, metrics, and alerts key on it.
+// Each error kind has a code, such as "pathlib.exist.file", that stays stable
+// when its message changes. Logs, metrics, and alerts key on it.
 //
-// Kinds are package-level values and are immutable.
-//
-//nolint:revive // The name is part of the published API.
-type PathlibError struct {
-	// parent is the group the kind belongs to, or nil for the root.
-	parent *PathlibError
+// Error kinds are package-level values and are immutable.
+type ErrorKind struct {
+	// parent is the error kind group the error kind belongs to, or nil for
+	// the root error kind.
+	parent *ErrorKind
 
-	// code joins the names of the kind and its ancestors with dots.
+	// code joins the names of the error kind and its ancestors with dots.
 	code string
 
-	// message describes the failure.
+	// message describes the error.
 	message string
 }
 
-// wrappedError is the only error type the package returns. It pairs a kind with
-// the cause of one failure.
+// wrappedError is the only error type the package returns. It gives the cause
+// of one error an error kind.
 type wrappedError struct {
-	// kind classifies the failure. It is never nil.
-	kind *PathlibError
+	// kind classifies the error. It is never nil.
+	kind *ErrorKind
 
-	// cause holds the data of the failure, or is nil.
+	// cause holds the data of the error, or is nil.
 	cause error
 }
 
@@ -77,11 +77,11 @@ type causeJSON struct {
 	Errors []causeJSON `json:"errors,omitempty"`
 }
 
-// defineError declares a kind below parent. The code of the kind is the code of
-// parent and code, joined by a dot.
-func defineError(parent *PathlibError, code, message string) *PathlibError {
-	// Kinds are defined during package initialization, so a malformed code
-	// panics before any caller runs.
+// defineError declares an error kind below parent. The code of the error kind
+// is the code of parent and code, joined by a dot.
+func defineError(parent *ErrorKind, code, message string) *ErrorKind {
+	// Error kinds are defined during package initialization, so a malformed
+	// code panics before any caller runs.
 	if !codePattern.MatchString(code) {
 		panic("pathlib.defineError: code must match " + codePattern.String() + ", got " + strconv.Quote(code))
 	}
@@ -91,12 +91,13 @@ func defineError(parent *PathlibError, code, message string) *PathlibError {
 		definedCode = parent.code + "." + definedCode
 	}
 
-	return &PathlibError{parent: parent, code: definedCode, message: message}
+	return &ErrorKind{parent: parent, code: definedCode, message: message}
 }
 
-// wrapError returns a failure of kind caused by cause. It is the only way the
-// package creates errors.
-func wrapError(kind *PathlibError, cause error) error {
+// wrapError returns an error of kind kind, caused by cause. A nil cause returns
+// an error of kind kind alone. wrapError is the only way the package creates
+// errors.
+func wrapError(kind *ErrorKind, cause error) error {
 	return &wrappedError{kind: kind, cause: cause}
 }
 
@@ -137,24 +138,25 @@ func newCauseJSON(cause error) causeJSON {
 	return encoded
 }
 
-// Code returns the stable identifier of the kind, such as "PATHLIB.EXIST.FILE".
-func (k *PathlibError) Code() string {
+// Code returns the stable identifier of the error kind, such as
+// "pathlib.exist.file".
+func (k *ErrorKind) Code() string {
 	return k.code
 }
 
-// Message returns the description of the kind.
-func (k *PathlibError) Message() string {
+// Message returns the description of the error kind.
+func (k *ErrorKind) Message() string {
 	return k.message
 }
 
 // Error returns the message followed by the code in parentheses.
-func (k *PathlibError) Error() string {
+func (k *ErrorKind) Error() string {
 	return k.message + " (" + k.code + ")"
 }
 
-// Unwrap returns the parent kind, or nil for the root, so [errors.Is] matches
-// every ancestor of the kind.
-func (k *PathlibError) Unwrap() error {
+// Unwrap returns the parent error kind, or nil for the root error kind, so
+// [errors.Is] matches every ancestor of the error kind.
+func (k *ErrorKind) Unwrap() error {
 	if k.parent == nil {
 		return nil
 	}
@@ -162,7 +164,7 @@ func (k *PathlibError) Unwrap() error {
 	return k.parent
 }
 
-// Error returns the text of the kind followed by the text of the cause.
+// Error returns the text of the error kind followed by the text of the cause.
 func (e *wrappedError) Error() string {
 	if e.cause == nil {
 		return e.kind.Error()
@@ -176,17 +178,17 @@ func (e *wrappedError) Unwrap() error {
 	return e.cause
 }
 
-// Is matches the kind and its ancestors.
+// Is matches the error kind and its ancestors.
 func (e *wrappedError) Is(target error) bool {
 	return errors.Is(e.kind, target)
 }
 
-// As reaches the kind and its ancestors.
+// As reaches the error kind and its ancestors.
 func (e *wrappedError) As(target any) bool {
 	return errors.As(e.kind, target)
 }
 
-// LogValue describes the kind, the code, and the cause.
+// LogValue describes the error kind, the code, and the cause.
 func (e *wrappedError) LogValue() slog.Value {
 	attrs := []slog.Attr{
 		slog.String("kind", e.kind.message),
@@ -199,7 +201,7 @@ func (e *wrappedError) LogValue() slog.Value {
 	return slog.GroupValue(attrs...)
 }
 
-// MarshalJSON describes the kind, the code, and the cause.
+// MarshalJSON describes the error kind, the code, and the cause.
 func (e *wrappedError) MarshalJSON() ([]byte, error) {
 	var cause *causeJSON
 	if e.cause != nil {

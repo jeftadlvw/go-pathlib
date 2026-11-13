@@ -1,4 +1,4 @@
-// fs_error_file_mode.go holds FileModeError, the cause of the failures of
+// fs_error_file_mode.go holds FileModeError, the cause of the errors of
 // ErrInvalidFileMode.
 
 package pathlib
@@ -10,8 +10,8 @@ import (
 	"slices"
 )
 
-// FileModeError is the cause of the failures of [ErrInvalidFileMode]. It holds
-// the rejected [FileMode] and the paths the failure concerns. The file mode is
+// FileModeError is the cause of the errors of [ErrInvalidFileMode]. It holds
+// the rejected [FileMode] and the paths the error concerns. The file mode is
 // the value passed where the library accepts one, such as
 // FileOptions.CreateMode or the mode of [SetMode].
 //
@@ -22,14 +22,14 @@ import (
 //
 // A FileModeError is immutable.
 type FileModeError struct {
-	// paths are the paths the failure concerns. May be empty.
+	// paths are the paths the error concerns. May be empty.
 	paths []Path
 
 	// fileMode is the rejected file mode, as the caller passed it.
 	fileMode FileMode
 }
 
-// Paths returns a copy of the paths the failure concerns. It may be empty.
+// Paths returns a copy of the paths the error concerns. It may be empty.
 func (e *FileModeError) Paths() []Path {
 	return slices.Clone(e.paths)
 }

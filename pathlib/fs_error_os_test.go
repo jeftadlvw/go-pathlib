@@ -14,7 +14,7 @@ func TestOsErr(t *testing.T) {
 	cases := []struct {
 		Name   string
 		Err    error
-		Expect *PathlibError
+		Expect *ErrorKind
 	}{
 		{"Missing path", &fs.PathError{Op: "open", Path: "a", Err: fs.ErrNotExist}, ErrNotExist},
 		{"Existing path", &fs.PathError{Op: "open", Path: "a", Err: fs.ErrExist}, ErrExist},
@@ -28,7 +28,7 @@ func TestOsErr(t *testing.T) {
 
 			err := osErr(ErrRead, c.Err, *NewPath("a"))
 
-			var kind *PathlibError
+			var kind *ErrorKind
 			require.ErrorAs(t, err, &kind)
 			require.Equal(t, c.Expect, kind, "the most specific kind")
 			require.ErrorIs(t, err, c.Err, "the error of the operating system stays wrapped")
@@ -51,7 +51,7 @@ func TestOsCreateErr(t *testing.T) {
 	cases := []struct {
 		Name   string
 		Err    error
-		Expect *PathlibError
+		Expect *ErrorKind
 	}{
 		{"Missing parent directory", &fs.PathError{Op: "open", Path: "a/b", Err: fs.ErrNotExist}, ErrParentNotExist},
 		{"Existing path", &fs.PathError{Op: "open", Path: "a/b", Err: fs.ErrExist}, ErrExist},
@@ -65,7 +65,7 @@ func TestOsCreateErr(t *testing.T) {
 
 			err := osCreateErr(ErrCreate, c.Err, p)
 
-			var kind *PathlibError
+			var kind *ErrorKind
 			require.ErrorAs(t, err, &kind)
 			require.Equal(t, c.Expect, kind, "the most specific kind")
 			require.ErrorIs(t, err, c.Err, "the error of the operating system stays wrapped")

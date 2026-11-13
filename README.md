@@ -132,51 +132,55 @@ pathlib returns the most specific error it knows. An error also matches every va
 Each error prints a stable code in parentheses, so logs and metrics can rely on it:
 
 ```
-path does not exist (PATHLIB.NOT_EXIST): a/b: open a/b: no such file or directory
+path does not exist (pathlib.not_exist): a/b: open: no such file or directory
 ```
+
+The text names every path once. The error of the `os` package below keeps its operation and its reason, and `errors.As` still returns it with its path.
+
+`errors.As` with a `*pathlib.ErrorKind` target returns the error kind of an error, and its `Code` method returns the code, such as for a metric.
 
 All errors with their codes. Most carry their paths in a `*pathlib.PathError`, which `errors.As` reads. The marked ones carry other details:
 
 ```
-PATHLIB                          ErrPathlib
-├─ INVALID                       ErrInvalid
-│  ├─ PATTERN                    ErrInvalidPattern     (*PatternError)
-│  │  ├─ EMPTY                   ErrEmptyPattern
-│  │  └─ MALFORMED               ErrBadPattern
-│  ├─ NOT_ABSOLUTE               ErrNotAbsolute
-│  ├─ FILTER                     ErrInvalidFilter
-│  ├─ FILE_MODE                  ErrInvalidFileMode    (*FileModeError)
-│  └─ OPEN_MODE                  ErrInvalidOpenMode    (*OpenModeError)
-├─ REL_IMPOSSIBLE                ErrRelImpossible
-│  └─ ANCHOR_MISMATCH            ErrAnchorMismatch
-├─ NOT_EXIST                     ErrNotExist
-│  └─ PARENT                     ErrParentNotExist
-├─ EXIST                         ErrExist
-│  ├─ FILE                       ErrFileExist
-│  ├─ DIR                        ErrDirExist
-│  └─ NOT_EMPTY_DIR              ErrNotEmptyDir
-├─ PERMISSION_DENIED             ErrPermissionDenied
-├─ WRONG_TYPE                    ErrWrongType
-│  ├─ NOT_FILE                   ErrNotFile
-│  ├─ NOT_DIR                    ErrNotDir
-│  ├─ NOT_SYMLINK                ErrNotSymlink
-│  ├─ MISMATCH                   ErrTypeMismatch
-│  └─ UNSUPPORTED                ErrUnsupportedType
-├─ OPERATION                     ErrOperation
-│  ├─ LOOKUP                     ErrLookup             (os error only)
-│  ├─ STAT                       ErrStat
-│  ├─ OPEN                       ErrOpen
-│  ├─ READ                       ErrRead
-│  ├─ READ_DIR                   ErrReadDir
-│  ├─ READ_SYMLINK               ErrReadSymlink
-│  ├─ RESOLVE                    ErrResolve
-│  ├─ CREATE                     ErrCreate
-│  ├─ WRITE                      ErrWrite
-│  ├─ COPY                       ErrCopy
-│  ├─ REMOVE                     ErrRemove
-│  ├─ SET_MODE                   ErrSetMode
-│  └─ SET_TIMES                  ErrSetTimes
-└─ WALK                          ErrWalk
+pathlib                          ErrPathlib
+├─ invalid                       ErrInvalid
+│  ├─ pattern                    ErrInvalidPattern     (*PatternError)
+│  │  ├─ empty                   ErrEmptyPattern
+│  │  └─ malformed               ErrBadPattern
+│  ├─ not_absolute               ErrNotAbsolute
+│  ├─ filter                     ErrInvalidFilter
+│  ├─ file_mode                  ErrInvalidFileMode    (*FileModeError)
+│  └─ open_mode                  ErrInvalidOpenMode    (*OpenModeError)
+├─ rel_impossible                ErrRelImpossible
+│  └─ anchor_mismatch            ErrAnchorMismatch
+├─ not_exist                     ErrNotExist
+│  └─ parent                     ErrParentNotExist
+├─ exist                         ErrExist
+│  ├─ file                       ErrFileExist
+│  ├─ dir                        ErrDirExist
+│  └─ not_empty_dir              ErrNotEmptyDir
+├─ permission_denied             ErrPermissionDenied
+├─ wrong_type                    ErrWrongType
+│  ├─ not_file                   ErrNotFile
+│  ├─ not_dir                    ErrNotDir
+│  ├─ not_symlink                ErrNotSymlink
+│  ├─ mismatch                   ErrTypeMismatch
+│  └─ unsupported                ErrUnsupportedType
+├─ operation                     ErrOperation
+│  ├─ lookup                     ErrLookup             (os error only)
+│  ├─ stat                       ErrStat
+│  ├─ open                       ErrOpen
+│  ├─ read                       ErrRead
+│  ├─ read_dir                   ErrReadDir
+│  ├─ read_symlink               ErrReadSymlink
+│  ├─ resolve                    ErrResolve
+│  ├─ create                     ErrCreate
+│  ├─ write                      ErrWrite
+│  ├─ copy                       ErrCopy
+│  ├─ remove                     ErrRemove
+│  ├─ set_mode                   ErrSetMode
+│  └─ set_times                  ErrSetTimes
+└─ walk                          ErrWalk
 ```
 
 The `core` bundle contains `ErrPathlib`, `ErrInvalid`, `ErrInvalidPattern` with its members, `ErrNotAbsolute`, `ErrRelImpossible`, `ErrAnchorMismatch`, `ErrOperation`, and `ErrLookup`.

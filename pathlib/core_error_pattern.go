@@ -1,4 +1,4 @@
-// core_error_pattern.go holds PatternError, the cause of every failure below
+// core_error_pattern.go holds PatternError, the cause of every error below
 // ErrInvalidPattern.
 
 package pathlib
@@ -10,8 +10,8 @@ import (
 	"strconv"
 )
 
-// PatternError is the cause of every failure below [ErrInvalidPattern]. It
-// holds the rejected pattern, the paths the failure concerns, and the error
+// PatternError is the cause of every error below [ErrInvalidPattern]. It
+// holds the rejected pattern, the paths the error concerns, and the error
 // that caused it, such as [path.ErrBadPattern].
 //
 // Read it with [errors.As]:
@@ -21,7 +21,7 @@ import (
 //
 // A PatternError is immutable.
 type PatternError struct {
-	// paths are the paths the failure concerns, the matched path or the
+	// paths are the paths the error concerns, the matched path or the
 	// directory a glob starts in. May be empty.
 	paths []Path
 
@@ -32,7 +32,7 @@ type PatternError struct {
 	err error
 }
 
-// Paths returns a copy of the paths the failure concerns. It may be empty.
+// Paths returns a copy of the paths the error concerns. It may be empty.
 func (e *PatternError) Paths() []Path {
 	return slices.Clone(e.paths)
 }
@@ -93,8 +93,8 @@ func (e *PatternError) MarshalJSON() ([]byte, error) {
 	}{Paths: posixPaths(e.paths), Pattern: e.pattern, Cause: cause})
 }
 
-// patternErr returns a failure of kind for pattern, caused by cause, which may
-// be nil.
-func patternErr(kind *PathlibError, pattern string, cause error, paths ...Path) error {
+// patternErr returns an error of kind kind for pattern, caused by cause, which
+// may be nil.
+func patternErr(kind *ErrorKind, pattern string, cause error, paths ...Path) error {
 	return wrapError(kind, &PatternError{paths: slices.Clone(paths), pattern: pattern, err: cause})
 }

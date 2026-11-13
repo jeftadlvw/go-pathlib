@@ -2,11 +2,56 @@
 // A Path holds a path in a canonical Posix form and converts it to the native
 // form of the platform at the boundary to the operating system.
 //
-// Every error the package returns pairs a kind with a cause. A kind is a
-// *[PathlibError] below [ErrPathlib], such as [ErrNotAbsolute], and is matched
-// with [errors.Is]. A cause holds the data of the failure, such as its paths,
-// and is read with [errors.As]. It is a *[PathError], unless the kind names
-// another.
+// Every error the package returns has an error kind and a cause. An error kind
+// is a *[ErrorKind] below [ErrPathlib], such as [ErrNotAbsolute], and is
+// matched with [errors.Is]. A cause holds the data of the error, such as its
+// paths, and is read with [errors.As]. It is a *[PathError], unless the doc
+// comment of the error kind names another.
+//
+// The error kinds form a tree. Each line shows the last name of the code and
+// the error kind, and the marked ones carry another cause. The codes join the
+// names from the root, such as "pathlib.exist.file". A bundle holds the error
+// kinds of its groups alone.
+//
+//	pathlib                          ErrPathlib
+//	├─ invalid                       ErrInvalid
+//	│  ├─ pattern                    ErrInvalidPattern     (*PatternError)
+//	│  │  ├─ empty                   ErrEmptyPattern
+//	│  │  └─ malformed               ErrBadPattern
+//	│  ├─ not_absolute               ErrNotAbsolute
+//	│  ├─ filter                     ErrInvalidFilter
+//	│  ├─ file_mode                  ErrInvalidFileMode    (*FileModeError)
+//	│  └─ open_mode                  ErrInvalidOpenMode    (*OpenModeError)
+//	├─ rel_impossible                ErrRelImpossible
+//	│  └─ anchor_mismatch            ErrAnchorMismatch
+//	├─ not_exist                     ErrNotExist
+//	│  └─ parent                     ErrParentNotExist
+//	├─ exist                         ErrExist
+//	│  ├─ file                       ErrFileExist
+//	│  ├─ dir                        ErrDirExist
+//	│  └─ not_empty_dir              ErrNotEmptyDir
+//	├─ permission_denied             ErrPermissionDenied
+//	├─ wrong_type                    ErrWrongType
+//	│  ├─ not_file                   ErrNotFile
+//	│  ├─ not_dir                    ErrNotDir
+//	│  ├─ not_symlink                ErrNotSymlink
+//	│  ├─ mismatch                   ErrTypeMismatch
+//	│  └─ unsupported                ErrUnsupportedType
+//	├─ operation                     ErrOperation
+//	│  ├─ lookup                     ErrLookup             (os error only)
+//	│  ├─ stat                       ErrStat
+//	│  ├─ open                       ErrOpen
+//	│  ├─ read                       ErrRead
+//	│  ├─ read_dir                   ErrReadDir
+//	│  ├─ read_symlink               ErrReadSymlink
+//	│  ├─ resolve                    ErrResolve
+//	│  ├─ create                     ErrCreate
+//	│  ├─ write                      ErrWrite
+//	│  ├─ copy                       ErrCopy
+//	│  ├─ remove                     ErrRemove
+//	│  ├─ set_mode                   ErrSetMode
+//	│  └─ set_times                  ErrSetTimes
+//	└─ walk                          ErrWalk
 package pathlib
 
 import (
