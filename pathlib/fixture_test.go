@@ -53,7 +53,8 @@ func setupTempDir(t *testing.T) *Path {
 func setupRelativeTempDir(t *testing.T) *Path {
 	t.Helper()
 
-	//nolint:usetesting // t.TempDir is absolute, and the directory must be relative.
+	// t.TempDir is absolute, and the directory must be relative.
+	//nolint:usetesting // A relative directory is needed.
 	dir, err := os.MkdirTemp(".", "_tmp-")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })

@@ -108,9 +108,9 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 }
 
 // GlobWithOptionsContext returns the entries below this Path that match
-// pattern, as [Path.GlobWithOptions] does. A done ctx stops the glob, which
-// returns the entries matched until then and ctx.Err() as the cause of
-// [ErrWalk].
+// pattern, as [Path.GlobWithOptions] does. A done ctx interrupts the glob,
+// which returns the entries matched until then and ctx.Err() as the cause of
+// [ErrWalkInterrupted].
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
 	err := validateGlob(p, pattern, options)
 	if err != nil {

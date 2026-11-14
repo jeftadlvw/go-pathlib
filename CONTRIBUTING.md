@@ -66,7 +66,7 @@ package of go-errkit.
 | Error kind type | `ErrorKind`, with the root error kind `ErrPathlib` |
 | Error kinds | the `Err*` values in `core_error_kinds.go`, `fs_error_kinds.go`, and `io_error_kinds.go` |
 | `wrapError` | gives a cause an error kind and returns the unexported `wrappedError` |
-| Causes | the cause types `PathError` for most error kinds, `PatternError` below `ErrInvalidPattern`, `FileModeError` for `ErrInvalidFileMode`, and `OpenModeError` for `ErrInvalidOpenMode`, and the `os` error for `ErrLookup` |
+| Causes | the cause types `PathError` for most error kinds, `PatternError` below `ErrInvalidPattern`, `FileModeError` for `ErrInvalidFileMode`, and `OpenModeError` for `ErrInvalidOpenMode`, the `os` error for `ErrLookup`, and the error of the walk callback or the context for `ErrWalkInterrupted` |
 | Descriptions | `slog.LogValuer` and `json.Marshaler` of `wrappedError` and of each cause type |
 
 The cause types follow "Give a Cause a Type of Its Own" of the model. Most
@@ -81,13 +81,17 @@ Code creates errors through the helpers built on `wrapError`:
 - `osCreateErr(operation, err, path)` for a failed call to the operating
   system that creates `path`. A missing path then is its missing parent
   directory, so it returns `ErrParentNotExist`.
-- `wrapErr(kind, cause, paths...)` for an error caused by another error that
-  is not an error of the operating system, such as an error of a walk
-  callback.
+- `wrapErr(kind, cause, paths...)` for an error that concerns paths and is
+  caused by another error, such as a check that finds a missing path with
+  `wrapErr(ErrNotExist, fs.ErrNotExist, p)`.
 - `patternErr(kind, pattern, cause, paths...)` for a rejected pattern.
 - `fileModeErr(fileMode, paths...)` for a rejected file mode, and
   `openModeErr(openMode, paths...)` for a rejected open mode.
 - `wrapError(ErrLookup, err)` for a failed lookup of a well-known directory.
+- `wrapError(ErrWalkInterrupted, err)` for a walk that an error of its
+  callback or a done context interrupts. Only `Walk` and `WalkR` wrap an
+  error of the callback. The internal walk returns it unchanged, so a glob
+  returns its own errors with their error kinds.
 
 An error kind is never returned as an error on its own. Every error is
 created through `wrapError` or one of the helpers above. An unexported

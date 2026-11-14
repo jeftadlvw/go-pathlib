@@ -528,7 +528,8 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 			return nil
 		})
 
-		require.ErrorIs(t, err, context.Canceled)
+		require.ErrorIs(t, err, ErrWalkInterrupted)
+		require.Same(t, context.Canceled, errors.Unwrap(err))
 		require.Zero(t, visited, "no entries should be visited after cancellation")
 	})
 
@@ -543,7 +544,8 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 			return nil
 		})
 
-		require.ErrorIs(t, err, context.Canceled)
+		require.ErrorIs(t, err, ErrWalkInterrupted)
+		require.Same(t, context.Canceled, errors.Unwrap(err))
 	})
 
 	t.Run("WalkRContext canceled mid-walk stops early", func(t *testing.T) {
@@ -571,6 +573,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		cancel()
 
 		matches, err := dir.GlobContext(ctx, "*.txt")
+		require.ErrorIs(t, err, ErrWalkInterrupted)
 		require.ErrorIs(t, err, context.Canceled)
 		require.Empty(t, matches)
 	})
@@ -630,7 +633,7 @@ func TestWalk_DirAccessErrorGrouping(t *testing.T) {
 func TestWalkR_CallbackErrors(t *testing.T) {
 	t.Parallel()
 
-	t.Run("callback error is wrapped as ErrWalk", func(t *testing.T) {
+	t.Run("callback error is wrapped as ErrWalkInterrupted", func(t *testing.T) {
 		t.Parallel()
 
 		root := setupTempDir(t)
@@ -640,9 +643,45 @@ func TestWalkR_CallbackErrors(t *testing.T) {
 		err := dir.WalkR(func(_ *Path, _ error) error {
 			return errSimulated
 		})
-		require.ErrorIs(t, err, ErrWalk)
-		require.ErrorIs(t, err, errSimulated)
-		require.ErrorAs(t, err, new(*ErrorKind))
+		require.ErrorIs(t, err, ErrWalkInterrupted)
+		require.Same(t, errSimulated, errors.Unwrap(err), "the cause is the callback error")
+		require.Equal(t, "walk interrupted (pathlib.walk_interrupted): simulated error", err.Error())
+	})
+
+	t.Run("callback failure of the library is the cause", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		dir := createTempDir(t, root, "root")
+		writeTempFile(t, dir, "file.txt", "")
+		missing := dir.JoinStrings("missing.txt")
+
+		var readErr error
+		err := dir.WalkR(func(_ *Path, _ error) error {
+			_, readErr = ReadFile(missing)
+			return readErr
+		})
+		require.ErrorIs(t, err, ErrWalkInterrupted)
+		require.ErrorIs(t, err, ErrNotExist)
+		require.Same(t, readErr, errors.Unwrap(err))
+
+		var pathErr *PathError
+		require.ErrorAs(t, err, &pathErr)
+		require.Equal(t, []Path{*missing}, pathErr.Paths(), "the PathError is the one of ReadFile")
+	})
+
+	t.Run("Walk returns the callback error as the cause", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		dir := createTempDir(t, root, "root")
+		writeTempFile(t, dir, "file.txt", "")
+
+		err := dir.Walk(func(_ *Path) error {
+			return errSimulated
+		})
+		require.ErrorIs(t, err, ErrWalkInterrupted)
+		require.Same(t, errSimulated, errors.Unwrap(err))
 	})
 
 	t.Run("unchanged localDirError is returned as is", func(t *testing.T) {
@@ -661,7 +700,7 @@ func TestWalkR_CallbackErrors(t *testing.T) {
 			return localDirError
 		})
 		require.Same(t, captured, err)
-		require.NotErrorIs(t, err, ErrWalk)
+		require.NotErrorIs(t, err, ErrWalkInterrupted)
 	})
 }
 

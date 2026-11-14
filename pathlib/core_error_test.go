@@ -26,7 +26,7 @@ func allKinds() []*ErrorKind {
 		ErrWrongType, ErrNotFile, ErrNotDir, ErrNotSymlink, ErrTypeMismatch, ErrUnsupportedType,
 		ErrOperation, ErrLookup, ErrStat, ErrOpen, ErrRead, ErrReadDir, ErrReadSymlink, ErrResolve,
 		ErrCreate, ErrWrite, ErrCopy, ErrRemove, ErrSetMode, ErrSetTimes,
-		ErrWalk,
+		ErrWalkInterrupted,
 	}
 }
 
@@ -133,7 +133,7 @@ func TestRaisedError(t *testing.T) {
 
 		// A cause of kind ErrOpen is in the ErrOperation group, but that does
 		// not make the error an ErrReadDir.
-		err := wrapErr(ErrWalk, pathErr(ErrOpen, p), p)
+		err := wrapError(ErrWalkInterrupted, pathErr(ErrOpen, p))
 		require.ErrorIs(t, err, ErrOpen)
 		require.ErrorIs(t, err, ErrOperation)
 		require.NotErrorIs(t, err, ErrReadDir)
@@ -188,18 +188,16 @@ func TestRaisedError_MarshalJSON(t *testing.T) {
 		t.Parallel()
 
 		inner := wrapErr(ErrOpen, fs.ErrPermission, p)
-		err := wrapErr(ErrWalk, inner, p)
+		err := wrapError(ErrWalkInterrupted, inner)
 
 		encoded, jsonErr := json.Marshal(err)
 		require.NoError(t, jsonErr)
 
-		expect := `{"kind":"error walking path","code":"pathlib.walk","cause":{` +
-			`"message":` + jsonString(t, errors.Unwrap(err).Error()) + `,` +
-			`"details":{"paths":["a/b"],"cause":{` +
+		expect := `{"kind":"walk interrupted","code":"pathlib.walk_interrupted","cause":{` +
 			`"message":` + jsonString(t, inner.Error()) + `,` +
 			`"details":{"kind":"could not open path","code":"pathlib.operation.open","cause":{` +
 			`"message":` + jsonString(t, errors.Unwrap(inner).Error()) + `,` +
-			`"details":{"paths":["a/b"],"cause":{"message":"permission denied"}}}}}}}}`
+			`"details":{"paths":["a/b"],"cause":{"message":"permission denied"}}}}}}`
 		require.JSONEq(t, expect, string(encoded))
 	})
 
@@ -220,7 +218,7 @@ func TestRaisedError_LogValue(t *testing.T) {
 	t.Parallel()
 
 	p := *NewPathFromPosix("a/b")
-	err := wrapErr(ErrWalk, wrapErr(ErrOpen, fs.ErrPermission, p), p)
+	err := wrapError(ErrWalkInterrupted, wrapErr(ErrOpen, fs.ErrPermission, p))
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
@@ -234,10 +232,10 @@ func TestRaisedError_LogValue(t *testing.T) {
 	logger.Info("", "err", err)
 
 	out := buf.String()
-	require.Contains(t, out, "err.kind=\"error walking path\" err.code=pathlib.walk")
-	require.Contains(t, out, "err.cause.details.paths=[a/b]")
-	require.Contains(t, out, "err.cause.details.cause.details.code=pathlib.operation.open")
-	require.Contains(t, out, "err.cause.details.cause.details.cause.details.cause.message=\"permission denied\"")
+	require.Contains(t, out, "err.kind=\"walk interrupted\" err.code=pathlib.walk_interrupted")
+	require.Contains(t, out, "err.cause.details.code=pathlib.operation.open")
+	require.Contains(t, out, "err.cause.details.cause.details.paths=[a/b]")
+	require.Contains(t, out, "err.cause.details.cause.details.cause.message=\"permission denied\"")
 }
 
 func TestCauseJSON_Below(t *testing.T) {
@@ -283,7 +281,7 @@ func TestCauseJSON_Below(t *testing.T) {
 	t.Run("Failure in the cause of a failure", func(t *testing.T) {
 		t.Parallel()
 
-		encoded, err := json.Marshal(wrapErr(ErrWalk, fmt.Errorf("index: %w", inner), p))
+		encoded, err := json.Marshal(wrapError(ErrWalkInterrupted, fmt.Errorf("index: %w", inner)))
 		require.NoError(t, err)
 		require.Contains(t, string(encoded), `"code":"pathlib.operation.open"`)
 	})
@@ -298,27 +296,27 @@ func TestCauseLogValue_Below(t *testing.T) {
 	t.Run("Wrapped failure", func(t *testing.T) {
 		t.Parallel()
 
-		out := logText(t, wrapErr(ErrWalk, fmt.Errorf("index: %w", inner), p))
-		require.Contains(t, out, "err.cause.details.cause.message=")
-		require.Contains(t, out, "err.cause.details.cause.cause.details.code=pathlib.operation.open")
-		require.Contains(t, out, "err.cause.details.cause.cause.details.cause.details.paths=[a/b]")
+		out := logText(t, wrapError(ErrWalkInterrupted, fmt.Errorf("index: %w", inner)))
+		require.Contains(t, out, "err.cause.message=")
+		require.Contains(t, out, "err.cause.cause.details.code=pathlib.operation.open")
+		require.Contains(t, out, "err.cause.cause.details.cause.details.paths=[a/b]")
 	})
 
 	t.Run("Joined errors", func(t *testing.T) {
 		t.Parallel()
 
-		out := logText(t, wrapErr(ErrWalk, errors.Join(inner, nil, errSimulated), p))
-		require.Contains(t, out, "err.cause.details.cause.errors.0.details.code=pathlib.operation.open")
-		require.Contains(t, out, "err.cause.details.cause.errors.1.message=\"simulated error\"")
+		out := logText(t, wrapError(ErrWalkInterrupted, errors.Join(inner, nil, errSimulated)))
+		require.Contains(t, out, "err.cause.errors.0.details.code=pathlib.operation.open")
+		require.Contains(t, out, "err.cause.errors.1.message=\"simulated error\"")
 		require.NotContains(t, out, "errors.2")
 	})
 
 	t.Run("Nothing below describes itself", func(t *testing.T) {
 		t.Parallel()
 
-		out := logText(t, wrapErr(ErrWalk, fmt.Errorf("index: %w", errSimulated), p))
-		require.Contains(t, out, "err.cause.details.cause.message=")
-		require.NotContains(t, out, "err.cause.details.cause.cause")
+		out := logText(t, wrapError(ErrWalkInterrupted, fmt.Errorf("index: %w", errSimulated)))
+		require.Contains(t, out, "err.cause.message=")
+		require.NotContains(t, out, "err.cause.cause")
 	})
 }
 

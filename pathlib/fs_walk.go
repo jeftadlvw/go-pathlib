@@ -16,7 +16,7 @@ import (
 // returns. They are the signals of the standard library, so they work with its
 // walk functions too.
 //
-//nolint:errname,gochecknoglobals // The sentinels alias the io/fs ones by name and value.
+//nolint:errname,gochecknoglobals // Variables alias the io/fs sentinels.
 var (
 	// SkipDir skips the contents of the directory it is returned for. For any
 	// other entry, it skips the remaining entries of the directory that holds
@@ -30,8 +30,8 @@ var (
 // WalkFunc is called by [Path.Walk] for every entry, with the path of the
 // entry joined to the walked directory.
 //
-// [SkipDir] and [SkipAll] both end the walk successfully. Any other error stops
-// the walk, which returns it as the cause of [ErrWalk].
+// [SkipDir] and [SkipAll] both end the walk successfully. Any other error
+// interrupts the walk, which returns it as the cause of [ErrWalkInterrupted].
 type WalkFunc func(p *Path) error
 
 // WalkRFunc is called by [Path.WalkR] for every entry, with the path of the
@@ -47,7 +47,7 @@ type WalkFunc func(p *Path) error
 // remaining entries of the directory that holds it. [SkipAll] ends the walk
 // successfully. For a localDirError, nil and SkipDir skip the directory, and
 // the unchanged localDirError makes WalkR return it as is. Any other error
-// stops the walk, which returns it as the cause of [ErrWalk].
+// interrupts the walk, which returns it as the cause of [ErrWalkInterrupted].
 //
 // localDirError is [ErrPermissionDenied] for a directory whose access is
 // denied, and [ErrNotExist] for a directory removed during the walk. Any other
@@ -68,14 +68,14 @@ type walkEntryFunc func(p *Path, entry fs.DirEntry, localDirError error) error
 // [ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
 // failure to check the path returns [ErrStat], and any other failure to open
 // or read the directory returns [ErrOpen] or [ErrReadDir]. An error of walkFunc
-// is returned as the cause of [ErrWalk].
+// is returned as the cause of [ErrWalkInterrupted].
 func (p *Path) Walk(walkFunc WalkFunc) error {
 	return p.WalkContext(context.Background(), walkFunc)
 }
 
 // WalkContext calls walkFunc for every entry of this directory, as [Path.Walk]
-// does. It checks ctx before each entry, and a done ctx stops the walk, which
-// returns ctx.Err() as the cause of [ErrWalk].
+// does. It checks ctx before each entry, and a done ctx interrupts the walk,
+// which returns ctx.Err() as the cause of [ErrWalkInterrupted].
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	err := requireDir(p)
 	if err != nil {
@@ -90,7 +90,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 	for _, entry := range entries {
 		err := ctx.Err()
 		if err != nil {
-			return wrapErr(ErrWalk, err, *p)
+			return wrapError(ErrWalkInterrupted, err)
 		}
 
 		entryPath := p.JoinStrings(entry.Name())
@@ -101,7 +101,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 			if errors.Is(walkErr, SkipAll) || errors.Is(walkErr, SkipDir) {
 				break
 			}
-			return wrapErr(ErrWalk, walkErr, *entryPath)
+			return wrapError(ErrWalkInterrupted, walkErr)
 		}
 	}
 
@@ -119,8 +119,8 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 //
 // A missing path returns [ErrNotExist], an existing non-directory returns
 // [ErrNotDir], and denied access returns [ErrPermissionDenied]. Any other
-// failure to check the path returns [ErrStat]. An error of walkFunc is
-// returned as the cause of [ErrWalk], and an unchanged localDirError is
+// failure to check the path returns [ErrStat]. An error of walkFunc is returned
+// as the cause of [ErrWalkInterrupted], and an unchanged localDirError is
 // returned as is.
 func (p *Path) WalkR(walkFunc WalkRFunc) error {
 	return p.WalkRContext(context.Background(), walkFunc)
@@ -128,14 +128,18 @@ func (p *Path) WalkR(walkFunc WalkRFunc) error {
 
 // WalkRContext calls walkFunc for every entry below this directory, as
 // [Path.WalkR] does. It checks ctx before each directory and each entry, and a
-// done ctx stops the walk, which returns ctx.Err() as the cause of [ErrWalk].
+// done ctx interrupts the walk, which returns ctx.Err() as the cause of
+// [ErrWalkInterrupted].
 func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error {
 	return p.walkRContext(ctx, func(entryPath *Path, _ fs.DirEntry, localDirError error) error {
-		return walkFunc(entryPath, localDirError)
+		return callbackErr(walkFunc(entryPath, localDirError), localDirError)
 	})
 }
 
-// walkRContext walks as [Path.WalkRContext] does, with a walkEntryFunc.
+// walkRContext walks as [Path.WalkRContext] does, with a walkEntryFunc. It
+// returns an error of walkFunc unchanged, so its caller decides on the error
+// kind. Path.WalkRContext gives it ErrWalkInterrupted, and a glob returns its
+// own errors as they are.
 func (p *Path) walkRContext(ctx context.Context, walkFunc walkEntryFunc) error {
 	err := requireDir(p)
 	if err != nil {
@@ -194,7 +198,7 @@ func readDirSorted(dir *Path) ([]os.DirEntry, error) {
 func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEntryFunc) error {
 	err := ctx.Err()
 	if err != nil {
-		return wrapErr(ErrWalk, err, *dir)
+		return wrapError(ErrWalkInterrupted, err)
 	}
 
 	// The root is checked by walkRContext, and subdirectories come from
@@ -210,7 +214,7 @@ func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEn
 	for _, entry := range entries {
 		err := ctx.Err()
 		if err != nil {
-			return wrapErr(ErrWalk, err, *dir)
+			return wrapError(ErrWalkInterrupted, err)
 		}
 
 		entryPath := dir.JoinStrings(entry.Name())
@@ -218,7 +222,7 @@ func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEn
 		walkErr := walkFunc(entryPath, entry, nil)
 		if walkErr != nil {
 			if !errors.Is(walkErr, SkipDir) {
-				return callbackErr(walkErr, entryPath)
+				return walkErr
 			}
 
 			// SkipDir skips the contents of a directory, or for any other entry
@@ -244,7 +248,7 @@ func walkR(ctx context.Context, dir *Path, dirEntry fs.DirEntry, walkFunc walkEn
 
 // handleDirErr hands a failure to open or read dir to walkFunc. A nil or
 // SkipDir result skips the directory. The unchanged dirErr is returned as is,
-// and any other error is returned as the cause of ErrWalk.
+// and any other error is returned unchanged as well.
 func handleDirErr(dir *Path, dirEntry fs.DirEntry, dirErr error, walkFunc walkEntryFunc) error {
 	handled := walkFunc(dir, dirEntry, dirErr)
 	if handled == nil || errors.Is(handled, SkipDir) {
@@ -253,14 +257,19 @@ func handleDirErr(dir *Path, dirEntry fs.DirEntry, dirErr error, walkFunc walkEn
 	if errors.Is(handled, dirErr) {
 		return dirErr
 	}
-	return callbackErr(handled, dir)
+	return handled
 }
 
-// callbackErr returns err, an error of a walkEntryFunc for p, as the cause of
-// ErrWalk. SkipAll passes unchanged, so the walk can end successfully.
-func callbackErr(err error, p *Path) error {
-	if errors.Is(err, SkipAll) {
+// callbackErr returns err, the result of a WalkRFunc that was passed
+// localDirError, as the cause of ErrWalkInterrupted. Nil, SkipDir, SkipAll,
+// and the unchanged localDirError pass as they are, so the walk handles them.
+func callbackErr(err, localDirError error) error {
+	switch {
+	case err == nil, errors.Is(err, SkipDir), errors.Is(err, SkipAll):
 		return err
+	case localDirError != nil && errors.Is(err, localDirError):
+		return err
+	default:
+		return wrapError(ErrWalkInterrupted, err)
 	}
-	return wrapErr(ErrWalk, err, *p)
 }

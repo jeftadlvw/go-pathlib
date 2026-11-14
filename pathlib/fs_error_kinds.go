@@ -127,10 +127,10 @@ var (
 	// path could not be changed. It is a member of the ErrOperation group.
 	ErrSetTimes = defineError(ErrOperation, "set_times", "could not set times")
 
-	// ErrWalk is returned when a walk is stopped by an error of the walk
-	// callback or by a done context. The underlying error is the error of the
-	// callback or of the context. An error of the callback can hold another
-	// error of the library, which errors.Is and [errors.As] then search as
-	// well.
-	ErrWalk = defineError(ErrPathlib, "walk", "error walking path")
+	// ErrWalkInterrupted is returned when an error of the walk callback or a
+	// done context interrupts a walk. Its cause is that error, unchanged, so
+	// [errors.Unwrap] returns it. An error of the callback can hold another
+	// error of the library. errors.Is and [errors.As] then search it as well
+	// and return the outermost match, ErrWalkInterrupted, first.
+	ErrWalkInterrupted = defineError(ErrPathlib, "walk_interrupted", "walk interrupted")
 )

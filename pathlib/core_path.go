@@ -51,7 +51,7 @@
 //	│  ├─ remove                     ErrRemove
 //	│  ├─ set_mode                   ErrSetMode
 //	│  └─ set_times                  ErrSetTimes
-//	└─ walk                          ErrWalk
+//	└─ walk_interrupted              ErrWalkInterrupted
 package pathlib
 
 import (

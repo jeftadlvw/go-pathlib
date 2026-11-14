@@ -831,8 +831,8 @@ func TestGlob_DepthPruning(t *testing.T) {
 func TestGlob_DepthPruningKeepsSymlinkSiblings(t *testing.T) {
 	t.Parallel()
 
-	// A symlink to a directory is no directory for the walk, so its contents are
-	// never visited. Returning SkipDir for it would skip the rest of its
+	// A symlink to a directory is no directory for the walk, so its contents
+	// are never visited. Returning SkipDir for it would skip the rest of its
 	// directory.
 	root := setupTempDir(t)
 	createTempDir(t, root, "target")
