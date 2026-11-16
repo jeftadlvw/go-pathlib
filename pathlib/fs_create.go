@@ -25,7 +25,9 @@ type FileOptions struct {
 	// CreateMode is the mode of a created file. An existing file keeps its
 	// mode. It may only contain ModePerm and ModeSpecial bits. Zero selects
 	// DefaultFileMode, because the operating system refuses a file without
-	// permissions.
+	// permissions. On Unix, the umask of the process removes bits from it, as
+	// for [os.OpenFile], so a umask of 0o077 creates 0o644 as 0o600.
+	// [SetMode] sets an exact mode.
 	CreateMode FileMode
 }
 
@@ -44,7 +46,9 @@ type DirOptions struct {
 	// CreateMode is the mode of a created directory. An existing directory
 	// keeps its mode. It may only contain ModePerm and ModeSpecial bits. Zero
 	// selects DefaultDirMode, because the operating system refuses a directory
-	// without permissions.
+	// without permissions. On Unix, the umask of the process removes bits from
+	// it, as for [os.Mkdir], so a umask of 0o077 creates 0o755 as 0o700.
+	// [SetMode] sets an exact mode.
 	CreateMode FileMode
 
 	// CreateAll creates missing parent directories as well.

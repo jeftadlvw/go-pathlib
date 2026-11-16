@@ -26,13 +26,16 @@ const (
 
 // DefaultFileMode returns the default mode of a file. It is 0o644 (rw-r--r--)
 // on Unix and 0o666 on Windows, which only knows writable and read-only files.
+// On Unix, the umask of the process removes bits from it when a file is
+// created.
 func DefaultFileMode() FileMode {
 	return effectiveFileMode(posixDefaultFileMode)
 }
 
 // DefaultDirMode returns the default mode of a directory. It is 0o755
 // (rwxr-xr-x) on Unix and 0o777 on Windows, which applies 0o777 to every
-// directory.
+// directory. On Unix, the umask of the process removes bits from it when a
+// directory is created.
 func DefaultDirMode() FileMode {
 	return effectiveDirMode(posixDefaultDirMode)
 }
@@ -58,8 +61,8 @@ func SetMode(path *Path, mode FileMode) error {
 }
 
 // effectiveFileMode returns the mode the operating system applies to a file
-// created with mode. Windows knows writable (0o666) and read-only (0o444)
-// files alone.
+// created with mode, before the umask on Unix. Windows knows writable (0o666)
+// and read-only (0o444) files alone.
 func effectiveFileMode(mode FileMode) FileMode {
 	if !runningOnWindows {
 		return mode
@@ -71,7 +74,8 @@ func effectiveFileMode(mode FileMode) FileMode {
 }
 
 // effectiveDirMode returns the mode the operating system applies to a
-// directory created with mode. Windows applies 0o777 to every directory.
+// directory created with mode, before the umask on Unix. Windows applies 0o777
+// to every directory.
 func effectiveDirMode(mode FileMode) FileMode {
 	if !runningOnWindows {
 		return mode
