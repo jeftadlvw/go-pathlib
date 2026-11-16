@@ -56,10 +56,17 @@ func Copy(source, destination *Path) error {
 	}
 }
 
-// Move moves the entry at source to destination. It renames the entry with
-// [os.Rename], and copies and removes it where renaming fails, such as across
-// filesystems. A symlink is moved as a symlink, and this includes a broken
-// symlink.
+// Move moves the entry at source to destination. A symlink is moved as a
+// symlink, this includes a broken symlink.
+//
+// Move never replaces an entry at destination, also not one created after its
+// check. A directory is renamed with [os.Rename], which replaces at most an
+// empty directory. A file gets its new name as a hard link with [os.Link], and
+// a symlink is created anew with the same target. Both fail for an existing
+// destination, and source is removed afterwards. Where this fails for another
+// reason, such as across filesystems, the entry is copied and removed. A
+// symlink that cannot be created, such as on Windows without the privilege, is
+// renamed instead.
 //
 // The parent directory of destination must exist. destination must not
 // exist, unless source is a directory and destination an empty directory. A
@@ -67,18 +74,16 @@ func Copy(source, destination *Path) error {
 //
 // A missing source returns [ErrNotExist], and an existing destination returns
 // [ErrExist]. Denied access returns [ErrPermissionDenied], and any other
-// failure to check a path returns [ErrStat]. The errors of [Copy] and
-// [RemoveAll] apply.
+// failure to check a path returns [ErrStat]. A failed read of a symlink
+// returns [ErrReadSymlink]. The errors of [Copy], [Remove], and [RemoveAll]
+// apply.
 func Move(source, destination *Path) error {
-	sourceExists, err := lexists(source)
+	sourceInfo, err := os.Lstat(source.String())
 	if err != nil {
-		return err
-	}
-	if !sourceExists {
-		return wrapErr(ErrNotExist, fs.ErrNotExist, *source)
+		return osErr(ErrStat, err, *source)
 	}
 
-	if !source.IsDir() || !destination.IsEmptyDir() {
+	if !sourceInfo.IsDir() || !destination.IsEmptyDir() {
 		destinationExists, err := lexists(destination)
 		if err != nil {
 			return err
@@ -88,9 +93,9 @@ func Move(source, destination *Path) error {
 		}
 	}
 
-	err = os.Rename(source.String(), destination.String())
-	if err == nil {
-		return nil
+	moved, err := moveInPlace(source, destination, sourceInfo)
+	if moved || err != nil {
+		return err
 	}
 
 	err = Copy(source, destination)
@@ -105,6 +110,75 @@ func Move(source, destination *Path) error {
 // does. The errors of Move apply.
 func Rename(source *Path, name string) error {
 	return Move(source, source.Parent().JoinStrings(name))
+}
+
+// moveInPlace gives the entry at source the name destination without copying
+// it. A directory is renamed, and every other entry is moved by moveEntry. It
+// reports false with a nil error where the entry has to be copied, such as
+// across filesystems.
+func moveInPlace(source, destination *Path, sourceInfo fs.FileInfo) (bool, error) {
+	if sourceInfo.IsDir() {
+		err := os.Rename(source.String(), destination.String())
+		return err == nil, nil
+	}
+
+	return moveEntry(source, destination, sourceInfo)
+}
+
+// moveEntry gives the entry at source, which is no directory, the name
+// destination without replacing an entry there, and removes source. A symlink
+// is created anew with its target, and every other entry is hard linked, since
+// a hard link of a symlink follows it on some systems. An existing destination
+// returns [ErrExist]. moveEntry reports false with a nil error where the
+// filesystem cannot give the name, such as across filesystems, so the caller
+// copies the entry. A symlink that cannot be created is renamed instead.
+func moveEntry(source, destination *Path, sourceInfo fs.FileInfo) (bool, error) {
+	var err error
+	isSymlink := sourceInfo.Mode()&fs.ModeSymlink != 0
+	if isSymlink {
+		target, readErr := os.Readlink(source.String())
+		if readErr != nil {
+			return false, osErr(ErrReadSymlink, readErr, *source)
+		}
+		err = os.Symlink(target, destination.String())
+	} else {
+		err = os.Link(source.String(), destination.String())
+	}
+
+	switch {
+	case err == nil:
+		err = removeMovedSource(source, destination, sourceInfo)
+		return err == nil, err
+	case errors.Is(err, fs.ErrExist):
+		return false, osErr(ErrCreate, err, *destination)
+	case isSymlink:
+		// Windows creates symlinks with a privilege alone. A rename needs none,
+		// but it replaces an entry created at destination since the check.
+		err = os.Rename(source.String(), destination.String())
+		return err == nil, nil
+	default:
+		return false, nil
+	}
+}
+
+// removeMovedSource removes source after moveEntry gave its entry the name
+// destination. If source cannot be removed, the new name is removed again, so
+// the move changes nothing.
+func removeMovedSource(source, destination *Path, sourceInfo fs.FileInfo) error {
+	err := Remove(source)
+	if err != nil {
+		_ = os.Remove(destination.String())
+		return err
+	}
+
+	// Windows clears the read-only attribute of a file to remove it, and a
+	// hard link shares the attribute, so it is set again.
+	readOnly := sourceInfo.Mode().Perm() == windowsReadOnlyFileMode
+	if runningOnWindows && sourceInfo.Mode().IsRegular() && readOnly {
+		return SetMode(destination, windowsReadOnlyFileMode)
+	}
+
+	return nil
 }
 
 // copyFile copies the file at source to destination, whose parent directory

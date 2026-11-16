@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"os"
 	"slices"
 	"testing"
 
@@ -719,5 +720,134 @@ func TestMove_BrokenSymlinks(t *testing.T) {
 		require.ErrorIs(t, Move(src, link), ErrExist)
 		require.True(t, src.IsFile(), "the source is left in place")
 		require.True(t, link.IsSymlink(), "the link is not replaced")
+	})
+}
+
+func TestMoveEntry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("file keeps its content and mode", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		src := writeTempFile(t, root, "src.txt", "content")
+		dst := root.JoinStrings("dst.txt")
+		info, err := os.Lstat(src.String())
+		require.NoError(t, err)
+
+		moved, err := moveEntry(src, dst, info)
+		require.NoError(t, err)
+		require.True(t, moved)
+		requireLExists(t, false, src)
+
+		content, err := os.ReadFile(dst.String())
+		require.NoError(t, err)
+		require.Equal(t, "content", string(content))
+
+		dstInfo, err := os.Lstat(dst.String())
+		require.NoError(t, err)
+		require.Equal(t, info.Mode(), dstInfo.Mode())
+	})
+
+	t.Run("read-only file stays read-only", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		src := writeTempFile(t, root, "src.txt", "content")
+		require.NoError(t, SetMode(src, 0o444))
+		dst := root.JoinStrings("dst.txt")
+		info, err := os.Lstat(src.String())
+		require.NoError(t, err)
+
+		moved, err := moveEntry(src, dst, info)
+		require.NoError(t, err)
+		require.True(t, moved)
+
+		dstInfo, err := os.Lstat(dst.String())
+		require.NoError(t, err)
+		require.Equal(t, info.Mode().Perm(), dstInfo.Mode().Perm())
+	})
+
+	t.Run("symlink keeps its target", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		src := createTempSymlinkRel(t, root, "missing", "link")
+		dst := root.JoinStrings("moved")
+		info, err := os.Lstat(src.String())
+		require.NoError(t, err)
+
+		moved, err := moveEntry(src, dst, info)
+		require.NoError(t, err)
+		require.True(t, moved)
+		requireLExists(t, false, src)
+
+		target, err := os.Readlink(dst.String())
+		require.NoError(t, err)
+		require.Equal(t, NewPath("missing").String(), target)
+	})
+
+	t.Run("file created at the destination after the check is kept", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		src := writeTempFile(t, root, "src.txt", "new")
+		info, err := os.Lstat(src.String())
+		require.NoError(t, err)
+
+		// Move checks the destination before moveEntry runs, so a file that
+		// appears in between reaches moveEntry.
+		dst := writeTempFile(t, root, "dst.txt", "old")
+
+		moved, err := moveEntry(src, dst, info)
+		require.ErrorIs(t, err, ErrExist)
+		require.False(t, moved)
+		require.True(t, src.IsFile(), "the source is left in place")
+
+		content, err := os.ReadFile(dst.String())
+		require.NoError(t, err)
+		require.Equal(t, "old", string(content), "the destination is not replaced")
+	})
+
+	t.Run("symlink is not created over a destination created after the check", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		src := createTempSymlinkRel(t, root, "missing", "link")
+		info, err := os.Lstat(src.String())
+		require.NoError(t, err)
+		dst := writeTempFile(t, root, "dst.txt", "old")
+
+		moved, err := moveEntry(src, dst, info)
+		require.ErrorIs(t, err, ErrExist)
+		require.False(t, moved)
+		require.True(t, src.IsSymlink(), "the source is left in place")
+		require.True(t, dst.IsFile(), "the destination is not replaced")
+	})
+
+	t.Run("source that cannot be removed leaves no new name", func(t *testing.T) {
+		t.Parallel()
+
+		if runningOnWindows || os.Geteuid() == 0 {
+			t.Skip("directory permissions are not enforced")
+		}
+
+		root := setupTempDir(t)
+		dir := createTempDir(t, root, "src")
+		src := writeTempFile(t, dir, "file.txt", "content")
+		dst := root.JoinStrings("dst.txt")
+		info, err := os.Lstat(src.String())
+		require.NoError(t, err)
+
+		// The directory can be searched but not written, so the source can be
+		// linked but not removed.
+		require.NoError(t, os.Chmod(dir.String(), 0o555))       //nolint:gosec // The test needs a read-only directory.
+		t.Cleanup(func() { _ = os.Chmod(dir.String(), 0o755) }) //nolint:gosec // Fixtures use common permissions.
+
+		moved, err := moveEntry(src, dst, info)
+		require.ErrorIs(t, err, ErrPermissionDenied)
+		require.False(t, moved)
+		requireLExists(t, false, dst, "the new name is removed again")
+		require.True(t, src.IsFile(), "the source is left in place")
 	})
 }
