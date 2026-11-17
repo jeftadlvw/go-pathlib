@@ -12,10 +12,10 @@ import (
 // OpenModeError is the cause of the errors of [ErrInvalidOpenMode]. It holds
 // the rejected [OpenMode] and the paths the error concerns.
 //
-// Read it with [errors.As]:
+// Read it with [errors.AsType]:
 //
-//	var openModeErr *OpenModeError
-//	if errors.As(err, &openModeErr) { use(openModeErr.OpenMode()) }
+//	openModeErr, ok := errors.AsType[*OpenModeError](err)
+//	if ok { use(openModeErr.OpenMode()) }
 //
 // An OpenModeError is immutable.
 type OpenModeError struct {

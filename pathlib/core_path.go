@@ -5,7 +5,7 @@
 // Every error the package returns has an error kind and a cause. An error kind
 // is a *[ErrorKind] below [ErrPathlib], such as [ErrNotAbsolute], and is
 // matched with [errors.Is]. A cause holds the data of the error, such as its
-// paths, and is read with [errors.As]. It is a *[PathError], unless the doc
+// paths, and is read with [errors.AsType]. It is a *[PathError], unless the doc
 // comment of the error kind names another.
 //
 // The error kinds form a tree. Each line shows the last name of the code and

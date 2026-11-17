@@ -135,11 +135,11 @@ Each error prints a stable code in parentheses, so logs and metrics can rely on 
 path does not exist (pathlib.not_exist): a/b: open: no such file or directory
 ```
 
-The text names every path once. The error of the `os` package below keeps its operation and its reason, and `errors.As` still returns it with its path.
+The text names every path once. The error of the `os` package below keeps its operation and its reason, and `errors.AsType` still returns it with its path.
 
-`errors.As` with a `*pathlib.ErrorKind` target returns the error kind of an error, and its `Code` method returns the code, such as for a metric.
+`errors.AsType[*pathlib.ErrorKind]` returns the error kind of an error, and its `Code` method returns the code, such as for a metric.
 
-All errors with their codes. Most carry their paths in a `*pathlib.PathError`, which `errors.As` reads. The marked ones carry other details:
+All errors with their codes. Most carry their paths in a `*pathlib.PathError`, which `errors.AsType` reads. The marked ones carry other details:
 
 ```
 pathlib                          ErrPathlib

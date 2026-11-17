@@ -120,7 +120,7 @@ the error.
   path that the underlying `*fs.PathError` or `*os.LinkError` repeats and
   keeps its operation and its reason, trimmed and with runs of whitespace
   collapsed. `Unwrap` returns the error unchanged, so `errors.Is` and
-  `errors.As` see the original.
+  `errors.AsType` see the original.
 - **Paths in logs and JSON.** Error text shows paths in their native form.
   Logs and JSON show them in their Posix form, which is the form a `Path`
   serializes to.
@@ -150,8 +150,8 @@ the error.
   family groups `ErrInvalid` and `ErrOperation` live in the `core` group, so
   every group can declare error kinds below them. The package comment in
   `core_path.go` and the README show the whole tree.
-- **errors.As.** Callers read error kinds and causes with `errors.As`.
-  `errors.AsType` needs Go 1.26, above the baseline of the library.
+- **errors.AsType.** Callers read error kinds and causes with
+  `errors.AsType`, as the model describes.
 
 ### Adding an Error Kind
 

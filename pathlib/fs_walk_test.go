@@ -519,7 +519,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		t.Parallel()
 
 		dir := buildTree(t)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
 		var visited int
@@ -537,7 +537,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		t.Parallel()
 
 		dir := buildTree(t)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
 		err := dir.WalkRContext(ctx, func(_ *Path, _ error) error {
@@ -552,7 +552,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		t.Parallel()
 
 		dir := buildTree(t)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 
 		var visited int
 		err := dir.WalkRContext(ctx, func(_ *Path, _ error) error {
@@ -569,7 +569,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		t.Parallel()
 
 		dir := buildTree(t)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
 		matches, err := dir.GlobContext(ctx, "*.txt")
@@ -586,7 +586,7 @@ func TestPath_WalkContext_Cancellation(t *testing.T) {
 		plain, err := dir.Glob("*.txt")
 		require.NoError(t, err)
 
-		withCtx, err := dir.GlobContext(context.Background(), "*.txt")
+		withCtx, err := dir.GlobContext(t.Context(), "*.txt")
 		require.NoError(t, err)
 
 		require.ElementsMatch(t, plain, withCtx)

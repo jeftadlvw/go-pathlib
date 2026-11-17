@@ -17,10 +17,10 @@ import (
 // error concerns and the error that caused it, such as an error of the os
 // package.
 //
-// Read it with [errors.As]:
+// Read it with [errors.AsType]:
 //
-//	var pathErr *PathError
-//	if errors.As(err, &pathErr) { use(pathErr.Paths()) }
+//	pathErr, ok := errors.AsType[*PathError](err)
+//	if ok { use(pathErr.Paths()) }
 //
 // A PathError is immutable.
 type PathError struct {

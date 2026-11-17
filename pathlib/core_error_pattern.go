@@ -14,10 +14,10 @@ import (
 // holds the rejected pattern, the paths the error concerns, and the error
 // that caused it, such as [path.ErrBadPattern].
 //
-// Read it with [errors.As]:
+// Read it with [errors.AsType]:
 //
-//	var patternErr *PatternError
-//	if errors.As(err, &patternErr) { use(patternErr.Pattern()) }
+//	patternErr, ok := errors.AsType[*PatternError](err)
+//	if ok { use(patternErr.Pattern()) }
 //
 // A PatternError is immutable.
 type PatternError struct {

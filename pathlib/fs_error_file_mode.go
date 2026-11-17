@@ -15,10 +15,10 @@ import (
 // the value passed where the library accepts one, such as
 // FileOptions.CreateMode or the mode of [SetMode].
 //
-// Read it with [errors.As]:
+// Read it with [errors.AsType]:
 //
-//	var fileModeErr *FileModeError
-//	if errors.As(err, &fileModeErr) { use(fileModeErr.FileMode()) }
+//	fileModeErr, ok := errors.AsType[*FileModeError](err)
+//	if ok { use(fileModeErr.FileMode()) }
 //
 // A FileModeError is immutable.
 type FileModeError struct {

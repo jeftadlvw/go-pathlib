@@ -130,7 +130,7 @@ var (
 	// ErrWalkInterrupted is returned when an error of the walk callback or a
 	// done context interrupts a walk. Its cause is that error, unchanged, so
 	// [errors.Unwrap] returns it. An error of the callback can hold another
-	// error of the library. errors.Is and [errors.As] then search it as well
+	// error of the library. errors.Is and [errors.AsType] then search it as well
 	// and return the outermost match, ErrWalkInterrupted, first.
 	ErrWalkInterrupted = defineError(ErrPathlib, "walk_interrupted", "walk interrupted")
 )

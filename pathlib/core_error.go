@@ -24,8 +24,8 @@ var codePattern = regexp.MustCompile(`^[a-z]+(_[a-z]+)*$`)
 //
 // Every error the library returns has an error kind. [errors.Is] matches an
 // error kind and every one of its ancestors, so errors.Is(err, ErrPathlib)
-// catches every error of the library. [errors.As] with a *ErrorKind target
-// returns the error kind of an error. The data of an error, such as its paths,
+// catches every error of the library. [errors.AsType] with *ErrorKind returns
+// the error kind of an error. The data of an error, such as its paths,
 // lives in its cause, such as a [PathError].
 //
 // An error has the most specific error kind the library knows. An error kind

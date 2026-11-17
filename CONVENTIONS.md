@@ -55,8 +55,8 @@ commit messages.
 - Doc comments link the first mention of every other exported identifier
   with a [doc link](https://go.dev/doc/comment#doclinks), as in `[NewClient]`,
   `[Client.Do]`, or `[errors.Is]`. The documented identifier, later mentions,
-  and code expressions such as `errors.As(err, &kind)` stay plain. Field and
-  inline comments have no links.
+  and code expressions such as `errors.Is(err, ErrNotExist)` stay plain.
+  Field and inline comments have no links.
 - Inline comments explain why, never what. Delete comments that restate the
   code.
 - `TODO` comments reference an issue, as in `// TODO(#123): ...`. No bare
@@ -256,7 +256,7 @@ Types that are built once and only read afterwards.
   unexported code of the error model. Tests of public behavior call the
   public API alone. Examples use `package pathlib_test`, so they show the API
   as importers call it.
-- Use `t.TempDir()` for files and `context.Background()` for contexts.
+- Use `t.TempDir()` for files and `t.Context()` for contexts.
   Fixtures live in `testdata/`. Never synchronize with `time.Sleep`.
 - Test names are `Test<Type>_<Method>` or `Test<Function>`. A test of one
   scenario appends it, as in `TestCopy_BrokenSymlinks`. `Path` is the

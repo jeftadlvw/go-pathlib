@@ -25,13 +25,13 @@ func Example_errorHandling() {
 	fmt.Println(errors.Is(err, pathlib.ErrNotExist))
 	fmt.Println(errors.Is(err, fs.ErrNotExist))
 
-	var kind *pathlib.ErrorKind
-	if errors.As(err, &kind) {
+	kind, ok := errors.AsType[*pathlib.ErrorKind](err)
+	if ok {
 		fmt.Println(kind.Code())
 	}
 
-	var cause *pathlib.PathError
-	if errors.As(err, &cause) {
+	cause, ok := errors.AsType[*pathlib.PathError](err)
+	if ok {
 		fmt.Println(cause.Paths()[0].Base())
 	}
 
