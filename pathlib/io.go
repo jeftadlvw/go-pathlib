@@ -20,7 +20,8 @@ type OpenOptions struct {
 
 	// CreateMode is the mode of a created file. An existing file keeps its
 	// mode. It may only contain ModePerm and ModeSpecial bits. Zero selects
-	// 0o644.
+	// 0o644. On Unix, the umask of the process removes bits from it, as for
+	// [os.OpenFile]. [SetMode] sets an exact mode.
 	CreateMode FileMode
 
 	// OpenMode is the mode the file is opened in. The zero value is OpenRead.
@@ -53,7 +54,8 @@ func OpenFile(path *Path) (*os.File, error) {
 }
 
 // OpenFileWithOptions opens the file at path with options. The caller closes
-// the returned file.
+// the returned file. Closing does not write the content to the disk. Call
+// (*os.File).Sync before for that.
 //
 // An OpenOptions.CreateMode with bits outside [ModePerm] and [ModeSpecial]
 // returns [ErrInvalidFileMode], and an OpenOptions.OpenMode that is no
@@ -143,6 +145,10 @@ func WriteString(path *Path, data string) (int, error) {
 // FileOptions.ExistOk is set. Otherwise it returns [ErrFileExist] and is left
 // untouched, as in [CreateFileWithOptions].
 //
+// The file is closed without (*os.File).Sync, as in [os.WriteFile], so a crash
+// can lose its content. Write through [OpenFileWithOptions] and call Sync to
+// put it on the disk.
+//
 // A symlink to a file is written through. An existing path that is no file
 // returns [ErrNotFile]. This includes a broken symlink, whose target is never
 // created.
@@ -166,7 +172,8 @@ func WriteStringWithOptions(path *Path, data string, options FileOptions) (int, 
 
 // AppendBytes appends data to the file at path and returns the number of
 // written bytes. A missing file is created with [DefaultFileMode]. The
-// parent directory must exist.
+// parent directory must exist. The file is closed without (*os.File).Sync, as
+// in [WriteBytesWithOptions].
 //
 // A symlink to a file is written through. An existing path that is no file
 // returns [ErrNotFile]. This includes a broken symlink, whose target is never
@@ -229,7 +236,9 @@ func writeBytes(path *Path, data []byte, flag int, options FileOptions) (int, er
 		return n, osErr(ErrWrite, err, *path)
 	}
 
-	// Closing flushes the content, so its error means the write is incomplete.
+	// Closing reports a write error the operating system deferred, such as on a
+	// network filesystem, so its error means the write may be incomplete. It
+	// does not write the content to the disk. Only Sync does.
 	err = file.Close()
 	if err != nil {
 		return n, osErr(ErrWrite, err, *path)

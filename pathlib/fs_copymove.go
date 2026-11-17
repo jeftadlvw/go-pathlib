@@ -16,7 +16,8 @@ import (
 // rebased, so the copy points to the same path.
 //
 // The parent directory of destination must exist. A copied directory needs a
-// missing or empty destination directory.
+// missing or empty destination directory. A copied file is closed without
+// (*os.File).Sync, so a crash can lose its content.
 //
 // A missing source returns [ErrNotExist], and a missing parent directory of
 // destination returns [ErrParentNotExist]. An existing destination returns a
@@ -223,7 +224,9 @@ func copyFile(source, destination *Path) error {
 		return osErr(ErrCopy, err, *source, *destination)
 	}
 
-	// Closing flushes the content, so its error means the copy is incomplete.
+	// Closing reports a write error the operating system deferred, such as on a
+	// network filesystem, so its error means the copy may be incomplete. It
+	// does not write the content to the disk. Only Sync does.
 	err = destinationFile.Close()
 	if err != nil {
 		return osErr(ErrCopy, err, *source, *destination)
