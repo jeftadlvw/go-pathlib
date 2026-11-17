@@ -51,6 +51,22 @@ func TestPath_FS(t *testing.T) {
 		}
 	})
 
+	t.Run("reads a symlink without following it", func(t *testing.T) {
+		t.Parallel()
+
+		dir := setupTempDir(t)
+		writeTempFile(t, dir, "a.txt", "a")
+		createTempSymlinkRel(t, dir, "a.txt", "link")
+
+		target, err := fs.ReadLink(dir.FS(), "link")
+		require.NoError(t, err)
+		require.Equal(t, "a.txt", target)
+
+		info, err := fs.Lstat(dir.FS(), "link")
+		require.NoError(t, err)
+		require.Equal(t, fs.ModeSymlink, info.Mode().Type())
+	})
+
 	t.Run("reports a missing directory on use", func(t *testing.T) {
 		t.Parallel()
 

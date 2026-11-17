@@ -93,5 +93,6 @@ asked.
 - **Support of `os.Root`.** Operations relative to an open `os.Root` keep every
   path inside the root, also through symlinks and "..". Wrapping them changes
   the API below `Path` at its base, so it waits for a release of its own.
+  `Path.FS` wraps `os.DirFS`, which is no such boundary.
 - **Breaking changes.** go-pathlib is before v1. Breaking changes are
   acceptable and need no deprecation period.

@@ -214,7 +214,7 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | `os.Stat`, `os.Lstat` | `Path.Stat`, `Path.Lstat` | Return a `*pathlib.FileInfo`, which implements `fs.FileInfo`. `Size` is 0 for every entry that is no regular file, such as a directory. `os.SameFile` reports false for a `FileInfo`. Use `FileInfo.SameFile` or `EqualsFS` instead. |
 | `os.Rename` | `Move`, `Rename` | Never replace an existing destination, also not one created during the call. A file is hard linked and its old name removed, a symlink is created anew, and a directory replaces at most an empty directory. Across filesystems, the entry is copied and removed. |
 | `filepath.IsLocal` | `Path.IsLocal` | Applies the Windows rules on every platform, so a backslash separates names and Windows device names such as `NUL` are not local. A device name with an extension, such as `nul.txt`, is not local either. The empty string becomes `.`, which is local. |
-| `os.DirFS` | `Path.FS` | Takes names relative to the Path, such as `Path.RelativeTo(...).ToPosix()`. Like `os.DirFS`, it follows symlinks out of the tree. |
+| `os.DirFS` | `Path.FS` | Takes names relative to the Path, such as `Path.RelativeTo(...).ToPosix()`. Like `os.DirFS`, it follows symlinks out of the tree, and `fs.ReadLink` reads them. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. An error of the callback is returned as the cause of `ErrWalkInterrupted`, and `errors.Unwrap` returns it unchanged. Like `WalkDir`, symlinks inside the tree are not followed. |
 

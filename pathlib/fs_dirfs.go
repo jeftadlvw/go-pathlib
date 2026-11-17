@@ -9,7 +9,9 @@ import (
 
 // FS returns the directory tree at this Path as an [fs.FS]. It wraps
 // [os.DirFS], and the file system implements the interfaces os.DirFS
-// implements, such as [fs.ReadFileFS] and [fs.StatFS].
+// implements, such as [fs.ReadFileFS], [fs.StatFS], and [fs.ReadLinkFS]. So
+// [fs.ReadLink] reads the target of a symlink, and [fs.Lstat] describes the
+// symlink itself.
 //
 // The file system takes names in the form [fs.ValidPath] requires. A name is
 // slash-separated and relative to this Path, such as "a/b.txt". It has no
