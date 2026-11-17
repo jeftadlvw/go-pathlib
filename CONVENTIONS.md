@@ -92,9 +92,10 @@ A function that needs section comments is split instead.
   third party, then module-local.
 - `golangci-lint run` passes with the configuration in `.golangci.yml`.
 - `go test ./...` passes.
-- The Go version in `go.mod`, Go 1.22, is the language baseline. Use the
-  standard library of that version (`slices`, `maps`, `min`, `max`,
-  `for range n`) over hand-written equivalents.
+- The Go version in `go.mod`, Go 1.26, is the language baseline. Use the
+  standard library of that version (`slices`, `maps`, `iter`,
+  `errors.AsType`, `min`, `max`, `for range n`) over hand-written
+  equivalents.
 - CI rejects the forbidden characters from section 1 in Go and Markdown
   files. `just check-chars` runs the same check.
 

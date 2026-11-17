@@ -16,7 +16,7 @@ The API is inspired by Python's [pathlib](https://docs.python.org/3/library/path
 
 The library is developed and tested on Unix- and Windows-based operating systems.
 
-Minimum tested Go version: `1.22`
+Minimum Go version: `1.26`. Bundles need the same version.
 
 **Current State:** stabilizing API, tested across multiple platforms (Linux, macOS and Windows), API scope is not expected to be reduced. More see [Roadmap](#roadmap).
 

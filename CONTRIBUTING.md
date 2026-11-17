@@ -29,7 +29,7 @@ The library ships in two forms:
 - Behavior is strict by default and flexible on request, such as case
   sensitivity.
 - The library needs the standard library alone, so every bundle is a single
-  file that compiles anywhere Go 1.22 does.
+  file that compiles anywhere Go 1.26 does.
 - The API stabilizes toward a v1 release through use in real projects.
   Breaking changes are allowed until then.
 
@@ -46,7 +46,7 @@ The library ships in two forms:
   `just bundle`, which writes the bundles and compiles them.
 - A change to a doc comment is followed by `just docs`, which updates
   `docs/pathlib.md`.
-- CI runs the tests on Linux, macOS, and Windows with Go 1.22 and the latest
+- CI runs the tests on Linux, macOS, and Windows with Go 1.26 and the latest
   stable Go. A change passes on all of them.
 - Code converts a `Path` to a string only at the call that requires one. It
   passes `String()` to the operating system and `ToPosix()` to storage.

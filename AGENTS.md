@@ -38,6 +38,9 @@ Some rules of included files apply differently to agents:
   the groups defined in `bundle.json` into `dist/`, and the release workflow
   attaches them to each release. Section 5 of `CONVENTIONS.md` defines the rules
   that keep every bundle compiling.
+- `go.mod` names the oldest Go version the Go team supports. The library and
+  every bundle target that version alone. There are no bundles per Go version,
+  and source files carry no build constraints, which the bundler rejects.
 
 ## Planned Work
 
@@ -45,9 +48,9 @@ These items are kept for future versions. They are not part of a change unless
 asked.
 
 - **Per-platform code.** go-pathlib stays a library of one file per bundle, so
-  it has no code that differs by operating system for now. Bundles allow build
-  constraints of Go versions alone, and Go has no build constraints per function.
-  Features that wait for a way to keep both:
+  it has no code that differs by operating system for now. Bundles allow no
+  build constraints, and Go has no build constraints per function. Features
+  that wait for a way to keep both:
   - The size, free space, and type of a filesystem (`statfs` on Unix, other calls
   on Windows).
   - File locks (`flock` on Unix, `LockFileEx` on Windows).
@@ -83,9 +86,12 @@ asked.
   `OwnerOptions{NoFollow bool}`, and `FileInfo.Owner` would set and read the user
   and group IDs. `os.Chown` and `os.Lchown` compile on every platform, and
   `FileInfo.Owner` reads the fields `Uid` and `Gid` of `Sys()` by reflection, so
-  no per-platform code is needed. The kind for an unsupported platform cannot be
-  `UNSUPPORTED` below `ErrWrongType`, because `ErrUnsupportedType` uses that
-  code. Options of the creating functions could later take an owner, so a file
+  no per-platform code is needed. The error kind for an unsupported platform
+  cannot be named `unsupported` below `ErrWrongType`, because
+  `ErrUnsupportedType` has that code. Options of the creating functions could later take an owner, so a file
   never exists with the wrong owner.
+- **Support of `os.Root`.** Operations relative to an open `os.Root` keep every
+  path inside the root, also through symlinks and "..". Wrapping them changes
+  the API below `Path` at its base, so it waits for a release of its own.
 - **Breaking changes.** go-pathlib is before v1. Breaking changes are
   acceptable and need no deprecation period.
