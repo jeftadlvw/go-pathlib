@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"iter"
 	"os"
 	"slices"
 	"strings"
@@ -69,6 +70,8 @@ type walkEntryFunc func(p *Path, entry fs.DirEntry, localDirError error) error
 // failure to check the path returns [ErrStat], and any other failure to open
 // or read the directory returns [ErrOpen] or [ErrReadDir]. An error of walkFunc
 // is returned as the cause of [ErrWalkInterrupted].
+//
+// [Path.WalkSeq] returns the same entries as an iterator for a range loop.
 func (p *Path) Walk(walkFunc WalkFunc) error {
 	return p.WalkContext(context.Background(), walkFunc)
 }
@@ -77,35 +80,70 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 // does. It checks ctx before each entry, and a done ctx interrupts the walk,
 // which returns ctx.Err() as the cause of [ErrWalkInterrupted].
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
-	err := requireDir(p)
-	if err != nil {
-		return err
-	}
-
-	entries, err := readDirSorted(p)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		err := ctx.Err()
+	for entry, err := range p.WalkContextSeq(ctx) {
 		if err != nil {
-			return wrapError(ErrWalkInterrupted, err)
+			return err
 		}
 
-		entryPath := p.JoinStrings(entry.Name())
-
-		walkErr := walkFunc(entryPath)
-		if walkErr != nil {
-			// Walk does not descend, so SkipDir and SkipAll both end it.
-			if errors.Is(walkErr, SkipAll) || errors.Is(walkErr, SkipDir) {
-				break
-			}
-			return wrapError(ErrWalkInterrupted, walkErr)
+		walkErr := walkFunc(entry)
+		if walkErr == nil {
+			continue
 		}
+
+		// Walk does not descend, so SkipDir and SkipAll both end it.
+		if errors.Is(walkErr, SkipAll) || errors.Is(walkErr, SkipDir) {
+			return nil
+		}
+		return wrapError(ErrWalkInterrupted, walkErr)
 	}
 
 	return nil
+}
+
+// WalkSeq returns an iterator over the entries of this directory, as
+// [Path.WalkContextSeq] does without a context.
+func (p *Path) WalkSeq() iter.Seq2[*Path, error] {
+	return p.WalkContextSeq(context.Background())
+}
+
+// WalkContextSeq returns an iterator over the entries of this directory, in
+// lexical order by name. It does not descend into subdirectories. This Path
+// must be a directory, and a symlink to a directory is followed. [Path.Walk]
+// and [Path.WalkContext] iterate it.
+//
+// The iterator yields every entry with a nil error. A failure yields a nil Path
+// and the error, and ends the iteration. Breaking the loop ends it as well.
+// The directory is checked and read when the iteration starts, and all of its
+// entries are read at once, so an entry can be gone when it is yielded.
+//
+// The iterator checks ctx before each entry. A done ctx yields ctx.Err() as the
+// cause of [ErrWalkInterrupted]. The errors of [Path.Walk] apply.
+func (p *Path) WalkContextSeq(ctx context.Context) iter.Seq2[*Path, error] {
+	return func(yield func(*Path, error) bool) {
+		err := requireDir(p)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		entries, err := readDirSorted(p)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		for _, entry := range entries {
+			err := ctx.Err()
+			if err != nil {
+				yield(nil, wrapError(ErrWalkInterrupted, err))
+				return
+			}
+
+			if !yield(p.JoinStrings(entry.Name()), nil) {
+				return
+			}
+		}
+	}
 }
 
 // WalkR calls walkFunc for every entry below this directory, recursively and

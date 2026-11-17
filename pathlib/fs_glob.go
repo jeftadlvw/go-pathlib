@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"context"
 	"io/fs"
+	"iter"
 	"slices"
 	"strings"
 )
@@ -103,6 +104,9 @@ func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error)
 // [ErrStat], and any other failure to open or read a directory returns
 // [ErrOpen] or [ErrReadDir]. GlobOptions.SkipOnDirError skips a directory that
 // cannot be opened or read.
+//
+// [Path.GlobWithOptionsSeq] returns the same entries as an iterator for a range
+// loop.
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
 	return p.GlobWithOptionsContext(context.Background(), pattern, options)
 }
@@ -112,42 +116,58 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 // which returns the entries matched until then and ctx.Err() as the cause of
 // [ErrWalkInterrupted].
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
-	err := validateGlob(p, pattern, options)
-	if err != nil {
-		return nil, err
+	return collectPaths(p.GlobWithOptionsContextSeq(ctx, pattern, options))
+}
+
+// GlobSeq returns an iterator over the entries below this Path that match
+// pattern, as [Path.GlobWithOptionsContextSeq] does with DefaultGlobOptions and
+// without a context.
+func (p *Path) GlobSeq(pattern string) iter.Seq2[*Path, error] {
+	return p.GlobWithOptionsContextSeq(context.Background(), pattern, DefaultGlobOptions())
+}
+
+// GlobContextSeq returns an iterator over the entries below this Path that
+// match pattern, as [Path.GlobWithOptionsContextSeq] does with
+// DefaultGlobOptions.
+func (p *Path) GlobContextSeq(ctx context.Context, pattern string) iter.Seq2[*Path, error] {
+	return p.GlobWithOptionsContextSeq(ctx, pattern, DefaultGlobOptions())
+}
+
+// GlobWithOptionsSeq returns an iterator over the entries below this Path that
+// match pattern, as [Path.GlobWithOptionsContextSeq] does without a context.
+func (p *Path) GlobWithOptionsSeq(pattern string, options GlobOptions) iter.Seq2[*Path, error] {
+	return p.GlobWithOptionsContextSeq(context.Background(), pattern, options)
+}
+
+// GlobWithOptionsContextSeq returns an iterator over the entries below this
+// Path that match pattern. It finds the entries [Path.GlobWithOptionsContext]
+// returns, in the same order, and the glob functions that return a slice
+// collect it.
+//
+// The iterator yields every entry with a nil error. A failure yields a nil Path
+// and the error, and ends the iteration. Breaking the loop ends it as well, and
+// no directory is read after the break. The tree is walked while the loop runs,
+// so the iterator reads a directory only when the loop reaches it.
+//
+// The iterator checks ctx before each directory and each entry. A done ctx
+// yields ctx.Err() as the cause of [ErrWalkInterrupted]. It also stops the
+// iteration while no entry matches, which breaking the loop cannot. The errors
+// of [Path.GlobWithOptions] apply.
+func (p *Path) GlobWithOptionsContextSeq(
+	ctx context.Context, pattern string, options GlobOptions,
+) iter.Seq2[*Path, error] {
+	return func(yield func(*Path, error) bool) {
+		err := validateGlob(p, pattern, options)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		err = p.walkRContext(ctx, globWalkFunc(p, pattern, options, yield))
+		if err != nil {
+			yield(nil, err)
+		}
 	}
-
-	var entries []*Path
-
-	limit := max(0, options.Limit)
-	limitExists := limit != 0
-
-	// Directories at the deepest level the pattern can match are not entered.
-	// 0 means the pattern can match at any depth.
-	maxDepth := patternMaxDepth(pattern)
-
-	err = p.walkRContext(ctx, func(entry *Path, dirEntry fs.DirEntry, localDirError error) error {
-		if localDirError != nil {
-			if options.SkipOnDirError {
-				return SkipDir
-			}
-
-			return localDirError
-		}
-
-		matched, matchErr := matchGlobEntry(p, entry, dirEntry, pattern, options, maxDepth)
-		if matched {
-			entries = append(entries, entry)
-		}
-
-		if limitExists && len(entries) >= limit {
-			return SkipAll
-		}
-
-		return matchErr
-	})
-
-	return entries, err
 }
 
 // HasGlobMatchE reports whether an entry below this Path matches pattern. It
@@ -260,6 +280,45 @@ func validateGlob(p *Path, pattern string, options GlobOptions) error {
 	return nil
 }
 
+// globWalkFunc returns the walkEntryFunc of a glob below root. It passes every
+// entry that matches pattern to yield, and ends the walk with [SkipAll] when
+// yield returns false or the limit of options is reached. SkipAll ends the walk
+// without an error, so yield is never called again after either.
+func globWalkFunc(root *Path, pattern string, options GlobOptions, yield func(*Path, error) bool) walkEntryFunc {
+	limit := max(0, options.Limit)
+	yielded := 0
+
+	// Directories at the deepest level the pattern can match are not entered.
+	// 0 means the pattern can match at any depth.
+	maxDepth := patternMaxDepth(pattern)
+
+	return func(entry *Path, dirEntry fs.DirEntry, localDirError error) error {
+		if localDirError != nil {
+			if options.SkipOnDirError {
+				return SkipDir
+			}
+
+			return localDirError
+		}
+
+		matched, matchErr := matchGlobEntry(root, entry, dirEntry, pattern, options, maxDepth)
+		if !matched {
+			return matchErr
+		}
+
+		if !yield(entry, nil) {
+			return SkipAll
+		}
+
+		yielded++
+		if limit != 0 && yielded >= limit {
+			return SkipAll
+		}
+
+		return matchErr
+	}
+}
+
 // matchGlobEntry reports whether entry, found while globbing root, passes the
 // filter of options and matches pattern. It returns [SkipDir] next to the
 // result when nothing below entry can match, because entry lies at maxDepth.
@@ -312,4 +371,19 @@ func globIncludes(entry *Path, options GlobOptions) (bool, error) {
 	default:
 		return false, pathErr(ErrInvalidFilter, *entry)
 	}
+}
+
+// collectPaths returns the paths seq yields, in their order. An error ends the
+// collection and is returned with the paths yielded until then.
+func collectPaths(seq iter.Seq2[*Path, error]) ([]*Path, error) {
+	var paths []*Path
+	for entry, err := range seq {
+		if err != nil {
+			return paths, err
+		}
+
+		paths = append(paths, entry)
+	}
+
+	return paths, nil
 }

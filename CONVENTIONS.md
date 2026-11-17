@@ -128,6 +128,10 @@ Variants of a function share its name and add suffixes in this order:
   without the suffix passes `context.Background()`.
 - `E` returns an error next to a boolean result, as in `MatchesPatternE`. The
   variant without the suffix returns false on an error.
+- `Seq` returns an `iter.Seq2[*Path, error]` in place of a slice or a
+  callback, as in `GlobSeq`. It comes last, as in `strings.SplitAfterSeq` of
+  the standard library. The iterator holds the implementation, and the
+  variant without the suffix collects or iterates it, so both share one.
 
 ## 5. Files and Packages
 

@@ -1,6 +1,7 @@
 package pathlib
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -909,4 +910,81 @@ func TestPatternMaxDepth(t *testing.T) {
 	for pattern, expect := range cases {
 		require.Equal(t, expect, patternMaxDepth(pattern), "pattern %q", pattern)
 	}
+}
+
+func TestPath_GlobWithOptionsContextSeq(t *testing.T) {
+	t.Parallel()
+
+	root := setupTempDir(t)
+	writeTempFile(t, root, "a.txt", "")
+	writeTempFile(t, root, "b.log", "")
+	writeTempFile(t, root, "sub/c.txt", "")
+	writeTempFile(t, root, "sub/deep/d.txt", "")
+
+	t.Run("yields the entries Glob returns in their order", func(t *testing.T) {
+		t.Parallel()
+
+		globbed, err := root.Glob("**/*.txt")
+		require.NoError(t, err)
+
+		paths, errs := collectYields(root.GlobSeq("**/*.txt"))
+		require.Equal(t, []string{"a.txt", "c.txt", "d.txt"}, basesOf(paths))
+		require.Equal(t, basesOf(globbed), basesOf(paths))
+		require.Equal(t, []error{nil, nil, nil}, errs)
+	})
+
+	t.Run("stops when the loop breaks", func(t *testing.T) {
+		t.Parallel()
+
+		var yielded []*Path
+		for p, err := range root.GlobSeq("**/*.txt") {
+			require.NoError(t, err)
+			yielded = append(yielded, p)
+			if len(yielded) == 2 {
+				break
+			}
+		}
+
+		require.Equal(t, []string{"a.txt", "c.txt"}, basesOf(yielded))
+	})
+
+	t.Run("stops at the limit", func(t *testing.T) {
+		t.Parallel()
+
+		paths, errs := collectYields(root.GlobWithOptionsSeq("**/*.txt", GlobOptions{Limit: 2}))
+		require.Equal(t, []string{"a.txt", "c.txt"}, basesOf(paths))
+		require.Equal(t, []error{nil, nil}, errs)
+	})
+
+	t.Run("yields a done context and ends", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		paths, errs := collectYields(root.GlobContextSeq(ctx, "**"))
+		require.Equal(t, []*Path{nil}, paths)
+		require.ErrorIs(t, errs[0], ErrWalkInterrupted)
+		require.ErrorIs(t, errs[0], context.Canceled)
+	})
+
+	type Input struct {
+		Rel     string
+		Pattern string
+	}
+
+	cases := []TestCase[Input, error]{
+		{Name: "missing path", Input: Input{Rel: "missing", Pattern: "*"}, Expect: ErrNotExist},
+		{Name: "file", Input: Input{Rel: "a.txt", Pattern: "*"}, Expect: ErrNotDir},
+		{Name: "empty pattern", Input: Input{Rel: ".", Pattern: ""}, Expect: ErrEmptyPattern},
+		{Name: "malformed pattern", Input: Input{Rel: ".", Pattern: "["}, Expect: ErrBadPattern},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input Input, expect error) {
+		t.Helper()
+
+		paths, errs := collectYields(root.JoinStrings(input.Rel).GlobSeq(input.Pattern))
+		require.Equal(t, []*Path{nil}, paths)
+		require.ErrorIs(t, errs[0], expect)
+	})
 }

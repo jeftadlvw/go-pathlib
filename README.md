@@ -63,7 +63,6 @@ The only thing the library needs now is real-world usage in projects to catch mi
 
 **Future**
 - [ ] parallelize recursive filesystem walking and globbing
-- [ ] implement "range over function" for globbing (requires newer go versions)
 
 **Planned extensions**
 - [ ] integration into [go-validator](https://github.com/go-playground/validator) (custom field types and validators)
@@ -216,7 +215,8 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 | `filepath.IsLocal` | `Path.IsLocal` | Applies the Windows rules on every platform, so a backslash separates names and Windows device names such as `NUL` are not local. A device name with an extension, such as `nul.txt`, is not local either. The empty string becomes `.`, which is local. |
 | `os.DirFS` | `Path.FS` | Takes names relative to the Path, such as `Path.RelativeTo(...).ToPosix()`. Like `os.DirFS`, it follows symlinks out of the tree, and `fs.ReadLink` reads them. |
 | `os.CopyFS` | `CopyFromFS` | Needs a missing or empty destination directory whose parent exists, as `Copy` does for a directory. |
-| `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
+| `filepath.Glob` | `Glob`, `GlobSeq` | The pattern is relative to the globbed directory. Supports `**`. `GlobSeq` returns an iterator for a range loop, which walks the tree while the loop runs. |
+| `os.ReadDir` | `Walk`, `WalkSeq` | Pass or yield `*Path` values joined to the directory, in lexical order. `WalkSeq` returns an iterator for a range loop. |
 | `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. An error of the callback is returned as the cause of `ErrWalkInterrupted`, and `errors.Unwrap` returns it unchanged. Like `WalkDir`, symlinks inside the tree are not followed. |
 
 **Creating files and directories**

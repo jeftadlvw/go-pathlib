@@ -807,3 +807,68 @@ func TestWalkR_UnreadableRootIsPassedOnce(t *testing.T) {
 	require.ErrorIs(t, err, ErrPermissionDenied)
 	require.Equal(t, 1, calls, "the root is only passed with its directory error")
 }
+
+func TestPath_WalkSeq(t *testing.T) {
+	t.Parallel()
+
+	root := setupTempDir(t)
+	writeTempFile(t, root, "b.txt", "")
+	writeTempFile(t, root, "a.txt", "")
+	writeTempFile(t, root, "sub/c.txt", "")
+
+	t.Run("yields the entries Walk passes in their order", func(t *testing.T) {
+		t.Parallel()
+
+		var walked []*Path
+		err := root.Walk(func(p *Path) error {
+			walked = append(walked, p)
+			return nil
+		})
+		require.NoError(t, err)
+
+		paths, errs := collectYields(root.WalkSeq())
+		require.Equal(t, []string{"a.txt", "b.txt", "sub"}, basesOf(paths))
+		require.Equal(t, basesOf(walked), basesOf(paths))
+		require.Equal(t, []error{nil, nil, nil}, errs)
+	})
+
+	t.Run("stops when the loop breaks", func(t *testing.T) {
+		t.Parallel()
+
+		var yielded []*Path
+		for p, err := range root.WalkSeq() {
+			require.NoError(t, err)
+			yielded = append(yielded, p)
+			if len(yielded) == 2 {
+				break
+			}
+		}
+
+		require.Equal(t, []string{"a.txt", "b.txt"}, basesOf(yielded))
+	})
+
+	t.Run("yields a done context and ends", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		paths, errs := collectYields(root.WalkContextSeq(ctx))
+		require.Equal(t, []*Path{nil}, paths)
+		require.ErrorIs(t, errs[0], ErrWalkInterrupted)
+		require.ErrorIs(t, errs[0], context.Canceled)
+	})
+
+	cases := []TestCase[string, error]{
+		{Name: "missing path", Input: "missing", Expect: ErrNotExist},
+		{Name: "file", Input: "a.txt", Expect: ErrNotDir},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input string, expect error) {
+		t.Helper()
+
+		paths, errs := collectYields(root.JoinStrings(input).WalkSeq())
+		require.Equal(t, []*Path{nil}, paths)
+		require.ErrorIs(t, errs[0], expect)
+	})
+}

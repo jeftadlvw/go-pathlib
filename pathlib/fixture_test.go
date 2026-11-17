@@ -3,6 +3,7 @@ package pathlib
 import (
 	"errors"
 	"io/fs"
+	"iter"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -196,4 +197,29 @@ func generateRandomString(minLength, maxLength int) string {
 	}
 
 	return string(result)
+}
+
+// collectYields returns every pair seq yields, in their order, so a test sees
+// whether an error ends the iteration.
+func collectYields(seq iter.Seq2[*Path, error]) ([]*Path, []error) {
+	var (
+		paths []*Path
+		errs  []error
+	)
+	for path, err := range seq {
+		paths = append(paths, path)
+		errs = append(errs, err)
+	}
+
+	return paths, errs
+}
+
+// basesOf returns the base names of paths, in their order.
+func basesOf(paths []*Path) []string {
+	bases := make([]string, len(paths))
+	for i, path := range paths {
+		bases[i] = path.Base()
+	}
+
+	return bases
 }
