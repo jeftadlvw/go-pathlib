@@ -113,6 +113,49 @@ func Rename(source *Path, name string) error {
 	return Move(source, source.Parent().JoinStrings(name))
 }
 
+// CopyFromFS copies the file system fsys into the directory destination. It
+// wraps [os.CopyFS]. fsys can be any [fs.FS], such as an [embed.FS], the
+// [zip.Reader] of an archive, or the file system of [Path.FS].
+//
+// The parent directory of destination must exist. destination must be missing
+// or an empty directory, as for a directory copied by [Copy], and a symlink to
+// a directory is followed. Each name of fsys becomes a path below destination
+// with [filepath.Localize], so a name that cannot be represented on the
+// platform fails the copy.
+//
+// Files are created with mode 0o666 and the execute bits of their source, and
+// directories with mode 0o777, before the umask. Modification times are not
+// kept. A symlink is copied as a symlink with its target unchanged, also a
+// target that leads outside destination, if fsys implements [fs.ReadLinkFS].
+// Otherwise a symlink fails the copy. The copy stops at the first error and
+// leaves the entries copied until then. A copied file is closed without
+// (*os.File).Sync, so a crash can lose its content.
+//
+// A missing parent directory of destination returns [ErrParentNotExist]. An
+// existing non-directory returns [ErrNotDir], a directory with entries returns
+// [ErrNotEmptyDir], and any other existing entry returns [ErrExist]. Denied
+// access returns [ErrPermissionDenied]. Any other failure to check destination
+// returns [ErrStat], [ErrOpen], or [ErrReadDir], and any other failure of the
+// copy returns [ErrNotExist], [ErrExist], or [ErrCopy]. The underlying error
+// of a failed copy names the entry it concerns.
+func CopyFromFS(fsys fs.FS, destination *Path) error {
+	if !destination.Parent().Exists() {
+		return wrapErr(ErrParentNotExist, fs.ErrNotExist, *destination)
+	}
+
+	err := requireCopyFromFSDestination(destination)
+	if err != nil {
+		return err
+	}
+
+	err = os.CopyFS(destination.String(), fsys)
+	if err != nil {
+		return osErr(ErrCopy, err, *destination)
+	}
+
+	return nil
+}
+
 // moveInPlace gives the entry at source the name destination without copying
 // it. A directory is renamed, and every other entry is moved by moveEntry. It
 // reports false with a nil error where the entry has to be copied, such as
@@ -378,6 +421,29 @@ func requireCopyFileDestinationFree(source, destination *Path) error {
 		return wrapErr(ErrFileExist, fs.ErrExist, *destination)
 	case destination.IsDir():
 		return pathErr(ErrTypeMismatch, *source, *destination)
+	default:
+		return wrapErr(ErrExist, fs.ErrExist, *destination)
+	}
+}
+
+// requireCopyFromFSDestination returns an error unless destination is missing
+// or an empty directory, which [CopyFromFS] can copy into. A symlink to a
+// directory is followed, as [os.CopyFS] follows it. An existing non-directory
+// returns [ErrNotDir], a directory with entries returns [ErrNotEmptyDir], and
+// any other entry, such as a broken symlink, returns [ErrExist].
+func requireCopyFromFSDestination(destination *Path) error {
+	exists, err := lexists(destination)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case !exists:
+		return nil
+	case destination.IsDir():
+		return requireEmptyDir(destination)
+	case destination.IsFile():
+		return pathErr(ErrNotDir, *destination)
 	default:
 		return wrapErr(ErrExist, fs.ErrExist, *destination)
 	}

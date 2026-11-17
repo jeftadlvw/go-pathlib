@@ -1,9 +1,11 @@
 package pathlib
 
 import (
+	"io/fs"
 	"os"
 	"slices"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/require"
 )
@@ -362,6 +364,133 @@ func TestCopy_RelativeSymlinkTarget(t *testing.T) {
 			require.Equal(t, "content", content, "the copied symlink resolves to the original target")
 		})
 	}
+}
+
+func TestCopyFromFS(t *testing.T) {
+	t.Parallel()
+
+	source := fstest.MapFS{
+		"a.txt":      {Data: []byte("a")},
+		"dir/b.txt":  {Data: []byte("b")},
+		"dir/empty":  {Mode: fs.ModeDir},
+		"dir/link":   {Data: []byte("b.txt"), Mode: fs.ModeSymlink},
+		"nested/x/y": {Data: []byte("y")},
+		"nested/x/z": {Mode: fs.ModeDir},
+	}
+	copied := []string{
+		"a.txt", "dir", "dir/b.txt", "dir/empty", "dir/link",
+		"nested", "nested/x", "nested/x/y", "nested/x/z",
+	}
+
+	t.Run("copies into a missing directory", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		destination := root.JoinStrings("copy")
+
+		require.NoError(t, CopyFromFS(source, destination))
+		require.Equal(t, copied, readDirEntries(t, destination, destination))
+
+		content, err := ReadFileToString(destination.JoinStrings("dir", "b.txt"))
+		require.NoError(t, err)
+		require.Equal(t, "b", content)
+	})
+
+	t.Run("copies into an empty directory", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		destination := createTempDir(t, root, "copy")
+
+		require.NoError(t, CopyFromFS(source, destination))
+		require.Equal(t, copied, readDirEntries(t, destination, destination))
+	})
+
+	t.Run("copies a symlink as a symlink", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		destination := root.JoinStrings("copy")
+
+		require.NoError(t, CopyFromFS(source, destination))
+		link := destination.JoinStrings("dir", "link")
+		require.True(t, link.IsSymlink())
+
+		target, err := link.ReadSymlinkTarget()
+		require.NoError(t, err)
+		require.True(t, target.EqualsString("b.txt"))
+	})
+
+	t.Run("copies the file system of a Path", func(t *testing.T) {
+		t.Parallel()
+
+		root := setupTempDir(t)
+		writeTempFile(t, root, "src/a.txt", "a")
+		writeTempFile(t, root, "src/dir/b.txt", "b")
+		destination := root.JoinStrings("copy")
+
+		require.NoError(t, CopyFromFS(root.JoinStrings("src").FS(), destination))
+		require.Equal(t, []string{"a.txt", "dir", "dir/b.txt"}, readDirEntries(t, destination, destination))
+	})
+
+	type Input struct {
+		DestinationRel string
+		Setup          func(*testing.T, *Path)
+	}
+
+	cases := []TestCase[Input, error]{
+		{
+			Name:   "missing parent directory",
+			Input:  Input{DestinationRel: "missing/copy"},
+			Expect: ErrParentNotExist,
+		},
+		{
+			Name: "directory with entries",
+			Input: Input{
+				DestinationRel: "copy",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+					writeTempFile(t, root, "copy/other.txt", "")
+				},
+			},
+			Expect: ErrNotEmptyDir,
+		},
+		{
+			Name: "existing file",
+			Input: Input{
+				DestinationRel: "copy",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+					writeTempFile(t, root, "copy", "")
+				},
+			},
+			Expect: ErrNotDir,
+		},
+		{
+			Name: "broken symlink",
+			Input: Input{
+				DestinationRel: "copy",
+				Setup: func(t *testing.T, root *Path) {
+					t.Helper()
+					createTempSymlinkAbs(t, root, "missing", "copy")
+				},
+			},
+			Expect: ErrExist,
+		},
+	}
+
+	runForResults(t, cases, func(t *testing.T, input Input, expect error) {
+		t.Helper()
+
+		root := setupTempDir(t)
+		if input.Setup != nil {
+			input.Setup(t, root)
+		}
+
+		err := CopyFromFS(source, root.JoinStrings(input.DestinationRel))
+		require.ErrorIs(t, err, expect)
+		requireLExists(t, false, root.JoinStrings(input.DestinationRel, "a.txt"), "nothing is copied")
+	})
 }
 
 func TestMove(t *testing.T) {
