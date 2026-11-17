@@ -180,7 +180,7 @@ pathlib                          ErrPathlib
 │  ├─ remove                     ErrRemove
 │  ├─ set_mode                   ErrSetMode
 │  └─ set_times                  ErrSetTimes
-└─ walk                          ErrWalk
+└─ walk_interrupted              ErrWalkInterrupted
 ```
 
 The `core` bundle contains `ErrPathlib`, `ErrInvalid`, `ErrInvalidPattern` with its members, `ErrNotAbsolute`, `ErrRelImpossible`, `ErrAnchorMismatch`, `ErrOperation`, and `ErrLookup`.
@@ -206,14 +206,16 @@ Most code ported from `os` and `filepath` keeps compiling after switching to `*P
 
 | `os` | `pathlib` | Difference |
 | --- | --- | --- |
-| `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. `OpenFile` creates or truncates like `os.Create`. |
+| `os.Create` | `CreateFile` | Returns `ErrFileExist` for an existing file instead of truncating it. |
+| `os.Create` | `OpenFile` | Keeps the content of an existing file instead of truncating it. Use `OpenFileWithOptions` with `OpenReadWriteTruncate` to empty it, or `WriteBytes` to replace it. |
 | `os.WriteFile` | `WriteBytes`, `WriteString` | Creates the file with `DefaultFileMode`. Use `WriteBytesWithOptions` for another mode, or to refuse an existing file. A broken symlink returns `ErrNotFile` instead of creating its target. |
 | `os.OpenFile`, `os.Mkdir`, `os.Chmod` | `OpenFileWithOptions`, `MkDirWithOptions`, `SetMode`, ... | A mode passed to the library may only contain `ModePerm` (`0o777`) and `ModeSpecial` (`ModeSetuid`, `ModeSetgid` and `ModeSticky`) bits. Other bits return `ErrInvalidFileMode`, including the Unix octal form `0o4755`, which `os` silently drops. Write `ModeSetuid\|0o755` instead. Mask a mode from `Stat` with `ModePerm\|ModeSpecial` before passing it on. |
 | `os.OpenFile` flags | `OpenOptions.OpenMode` | An `OpenMode` constant replaces the flags, such as `OpenReadWrite` for `os.O_RDWR`. A mode that empties the file says so in its name, such as `OpenReadWriteTruncate` for `os.O_RDWR\|os.O_TRUNC`. |
 | `os.Stat`, `os.Lstat` | `Path.Stat`, `Path.Lstat` | Return a `*pathlib.FileInfo`, which implements `fs.FileInfo`. `Size` is 0 for every entry that is no regular file, such as a directory. `os.SameFile` reports false for a `FileInfo`. Use `FileInfo.SameFile` or `EqualsFS` instead. |
+| `os.Rename` | `Move`, `Rename` | Never replace an existing destination, also not one created during the call. A file is hard linked and its old name removed, a symlink is created anew, and a directory replaces at most an empty directory. Across filesystems, the entry is copied and removed. |
 | `filepath.IsLocal` | `Path.IsLocal` | Applies the Windows rules on every platform, so a backslash separates names and Windows device names such as `NUL` are not local. A device name with an extension, such as `nul.txt`, is not local either. The empty string becomes `.`, which is local. |
 | `filepath.Glob` | `Glob` | The pattern is relative to the globbed directory. Supports `**`. |
-| `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. Like `WalkDir`, symlinks inside the tree are not followed. |
+| `filepath.WalkDir` | `WalkR` | The callback is not called for the root directory itself. Directory errors are passed to the callback as a separate argument. An error of the callback is returned as the cause of `ErrWalkInterrupted`, and `errors.Unwrap` returns it unchanged. Like `WalkDir`, symlinks inside the tree are not followed. |
 
 **Creating files and directories**
 
@@ -225,7 +227,8 @@ The creation functions differ in what they do with an existing entry:
 | `CreateFileWithOptions`, `MkDirWithOptions` with `ExistOk` | Leaves it untouched. |
 | `CreateFileWithOptions`, `MkDirWithOptions` with `ExistOk` and `UpdateTimes` | Sets its access and modification times to the current time, as the `touch` command does. |
 | `WriteBytes`, `WriteString` | Truncates the file and writes it. |
-| `OpenFile` | Truncates the file, as `os.Create` does. |
+| `OpenFile` | Opens the file for reading and writing and keeps its content, unlike `os.Create`. |
+| `OpenFileWithOptions` with `OpenReadWriteTruncate` | Truncates the file, as `os.Create` does. |
 | `OpenFileWithOptions` with the zero `OpenOptions` | Opens the file for reading alone, as `os.Open` does. |
 
 `SetTimes` sets the times of any existing path, as `os.Chtimes` does.
@@ -246,7 +249,7 @@ Feel free to open issues and pull requests. Any help or feedback is highly appre
 ## Third Party Notices
 See [NOTICE.md](NOTICE.md) for a complete list of used third party projects and source code.
 
-# Artwork and Attributions
+## Artwork and Attributions
 
 The artwork visible in the banner is generated using Gemini Banana. The composition and text are added manually. Used font: _Afacad_ by Kristian Möller and Dicotype, available on [Github](https://github.com/Dicotype/Afacad) and [Google Fonts](https://fonts.google.com/specimen/Afacad), licensed under [SIL OPEN FONT LICENSE. Version 1.1](https://openfontlicense.org/open-font-license-official-text/). Background color: `#A3D9E3`.
 
