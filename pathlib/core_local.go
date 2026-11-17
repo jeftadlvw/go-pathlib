@@ -15,9 +15,10 @@ import (
 // A local Path is relative and has no Windows anchor. It does not start with
 // a backslash, and its ".." names never lead above its start. A backslash in a
 // name separates names, as on Windows, so `a\..\..` is not local. No name
-// contains a colon, and no name is a device name Windows reserves, such as
-// "NUL", "com1", or "CONIN$". A reserved name with an extension, such as
-// "nul.txt", counts as reserved, because Windows 10 and older reserve it.
+// contains a colon, and no name contains a NUL byte, which no operating system
+// accepts in a name. No name is a device name Windows reserves, such as "NUL",
+// "com1", or "CONIN$". A reserved name with an extension, such as "nul.txt",
+// counts as reserved, because Windows 10 and older reserve it.
 //
 // The check is lexical. A symlink inside the path can still lead outside the
 // directory.
@@ -41,12 +42,12 @@ func (p *Path) IsLocal() bool {
 
 // areLocalNames reports whether names, the names of a relative path, stay
 // inside the directory the path is relative to. No name may contain a colon
-// or be a device name Windows reserves, and the ".." names may never lead
-// above the start.
+// or a NUL byte or be a device name Windows reserves, and the ".." names may
+// never lead above the start.
 func areLocalNames(names []string) bool {
 	depth := 0
 	for _, name := range names {
-		if strings.Contains(name, ":") || isWindowsReservedName(name) {
+		if strings.ContainsAny(name, ":\x00") || isWindowsReservedName(name) {
 			return false
 		}
 

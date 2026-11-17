@@ -39,6 +39,8 @@ func TestPath_IsLocal(t *testing.T) {
 		{Name: "Windows parent", Input: NewPathFromWindows(`a\..\..`), Expect: false},
 		{Name: "Volume string parsed as Posix", Input: NewPathFromPosix("C:/a"), Expect: false},
 		{Name: "Colon in a name", Input: NewPathFromPosix("a/b:c"), Expect: false},
+		{Name: "NUL byte in a name", Input: NewPathFromPosix("a/b\x00c"), Expect: false},
+		{Name: "NUL byte as a name", Input: NewPathFromPosix("a/\x00/b"), Expect: false},
 
 		{Name: "Reserved name", Input: NewPathFromPosix("NUL"), Expect: false},
 		{Name: "Reserved name in lower case", Input: NewPathFromPosix("a/con"), Expect: false},
