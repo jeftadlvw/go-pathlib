@@ -105,7 +105,7 @@ func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error)
 // [ErrOpen] or [ErrReadDir]. GlobOptions.SkipOnDirError skips a directory that
 // cannot be opened or read.
 //
-// [Path.GlobWithOptionsSeq] returns the same entries as an iterator for a range
+// [Path.GlobSeqWithOptions] returns the same entries as an iterator for a range
 // loop.
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error) {
 	return p.GlobWithOptionsContext(context.Background(), pattern, options)
@@ -116,30 +116,30 @@ func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, er
 // which returns the entries matched until then and ctx.Err() as the cause of
 // [ErrWalkInterrupted].
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error) {
-	return collectPaths(p.GlobWithOptionsContextSeq(ctx, pattern, options))
+	return collectPaths(p.GlobSeqWithOptionsContext(ctx, pattern, options))
 }
 
 // GlobSeq returns an iterator over the entries below this Path that match
-// pattern, as [Path.GlobWithOptionsContextSeq] does with DefaultGlobOptions and
+// pattern, as [Path.GlobSeqWithOptionsContext] does with DefaultGlobOptions and
 // without a context.
 func (p *Path) GlobSeq(pattern string) iter.Seq2[*Path, error] {
-	return p.GlobWithOptionsContextSeq(context.Background(), pattern, DefaultGlobOptions())
+	return p.GlobSeqWithOptionsContext(context.Background(), pattern, DefaultGlobOptions())
 }
 
-// GlobContextSeq returns an iterator over the entries below this Path that
-// match pattern, as [Path.GlobWithOptionsContextSeq] does with
+// GlobSeqContext returns an iterator over the entries below this Path that
+// match pattern, as [Path.GlobSeqWithOptionsContext] does with
 // DefaultGlobOptions.
-func (p *Path) GlobContextSeq(ctx context.Context, pattern string) iter.Seq2[*Path, error] {
-	return p.GlobWithOptionsContextSeq(ctx, pattern, DefaultGlobOptions())
+func (p *Path) GlobSeqContext(ctx context.Context, pattern string) iter.Seq2[*Path, error] {
+	return p.GlobSeqWithOptionsContext(ctx, pattern, DefaultGlobOptions())
 }
 
-// GlobWithOptionsSeq returns an iterator over the entries below this Path that
-// match pattern, as [Path.GlobWithOptionsContextSeq] does without a context.
-func (p *Path) GlobWithOptionsSeq(pattern string, options GlobOptions) iter.Seq2[*Path, error] {
-	return p.GlobWithOptionsContextSeq(context.Background(), pattern, options)
+// GlobSeqWithOptions returns an iterator over the entries below this Path that
+// match pattern, as [Path.GlobSeqWithOptionsContext] does without a context.
+func (p *Path) GlobSeqWithOptions(pattern string, options GlobOptions) iter.Seq2[*Path, error] {
+	return p.GlobSeqWithOptionsContext(context.Background(), pattern, options)
 }
 
-// GlobWithOptionsContextSeq returns an iterator over the entries below this
+// GlobSeqWithOptionsContext returns an iterator over the entries below this
 // Path that match pattern. It finds the entries [Path.GlobWithOptionsContext]
 // returns, in the same order, and the glob functions that return a slice
 // collect it.
@@ -153,7 +153,7 @@ func (p *Path) GlobWithOptionsSeq(pattern string, options GlobOptions) iter.Seq2
 // yields ctx.Err() as the cause of [ErrWalkInterrupted]. It also stops the
 // iteration while no entry matches, which breaking the loop cannot. The errors
 // of [Path.GlobWithOptions] apply.
-func (p *Path) GlobWithOptionsContextSeq(
+func (p *Path) GlobSeqWithOptionsContext(
 	ctx context.Context, pattern string, options GlobOptions,
 ) iter.Seq2[*Path, error] {
 	return func(yield func(*Path, error) bool) {

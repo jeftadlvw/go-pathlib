@@ -121,6 +121,13 @@ version, and just and golangci-lint are installed once.
 
 Variants of a function share its name and add suffixes in this order:
 
+- `Seq` returns an `iter.Seq2[*Path, error]` in place of a slice or a
+  callback, as in `GlobSeq`. It joins the operation, because it changes how
+  the operation delivers its results, as `Seq` does in `strings.SplitAfterSeq`
+  of the standard library. The suffixes below derive variants of that
+  operation, as in `GlobSeqWithOptionsContext`. The iterator holds the
+  implementation, and the variant without the suffix collects or iterates
+  it, so both share one.
 - `WithOptions` takes a configuration struct, as in `CreateFileWithOptions`.
   `Default<Options>()` returns the configuration the variant without the
   suffix uses, as in `DefaultFileOptions()`.
@@ -128,10 +135,6 @@ Variants of a function share its name and add suffixes in this order:
   without the suffix passes `context.Background()`.
 - `E` returns an error next to a boolean result, as in `MatchesPatternE`. The
   variant without the suffix returns false on an error.
-- `Seq` returns an `iter.Seq2[*Path, error]` in place of a slice or a
-  callback, as in `GlobSeq`. It comes last, as in `strings.SplitAfterSeq` of
-  the standard library. The iterator holds the implementation, and the
-  variant without the suffix collects or iterates it, so both share one.
 
 ## 5. Files and Packages
 

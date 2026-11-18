@@ -912,7 +912,7 @@ func TestPatternMaxDepth(t *testing.T) {
 	}
 }
 
-func TestPath_GlobWithOptionsContextSeq(t *testing.T) {
+func TestPath_GlobSeqWithOptionsContext(t *testing.T) {
 	t.Parallel()
 
 	root := setupTempDir(t)
@@ -951,7 +951,7 @@ func TestPath_GlobWithOptionsContextSeq(t *testing.T) {
 	t.Run("stops at the limit", func(t *testing.T) {
 		t.Parallel()
 
-		paths, errs := collectYields(root.GlobWithOptionsSeq("**/*.txt", GlobOptions{Limit: 2}))
+		paths, errs := collectYields(root.GlobSeqWithOptions("**/*.txt", GlobOptions{Limit: 2}))
 		require.Equal(t, []string{"a.txt", "c.txt"}, basesOf(paths))
 		require.Equal(t, []error{nil, nil}, errs)
 	})
@@ -962,7 +962,7 @@ func TestPath_GlobWithOptionsContextSeq(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
-		paths, errs := collectYields(root.GlobContextSeq(ctx, "**"))
+		paths, errs := collectYields(root.GlobSeqContext(ctx, "**"))
 		require.Equal(t, []*Path{nil}, paths)
 		require.ErrorIs(t, errs[0], ErrWalkInterrupted)
 		require.ErrorIs(t, errs[0], context.Canceled)

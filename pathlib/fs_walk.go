@@ -80,7 +80,7 @@ func (p *Path) Walk(walkFunc WalkFunc) error {
 // does. It checks ctx before each entry, and a done ctx interrupts the walk,
 // which returns ctx.Err() as the cause of [ErrWalkInterrupted].
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
-	for entry, err := range p.WalkContextSeq(ctx) {
+	for entry, err := range p.WalkSeqContext(ctx) {
 		if err != nil {
 			return err
 		}
@@ -101,12 +101,12 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error {
 }
 
 // WalkSeq returns an iterator over the entries of this directory, as
-// [Path.WalkContextSeq] does without a context.
+// [Path.WalkSeqContext] does without a context.
 func (p *Path) WalkSeq() iter.Seq2[*Path, error] {
-	return p.WalkContextSeq(context.Background())
+	return p.WalkSeqContext(context.Background())
 }
 
-// WalkContextSeq returns an iterator over the entries of this directory, in
+// WalkSeqContext returns an iterator over the entries of this directory, in
 // lexical order by name. It does not descend into subdirectories. This Path
 // must be a directory, and a symlink to a directory is followed. [Path.Walk]
 // and [Path.WalkContext] iterate it.
@@ -118,7 +118,7 @@ func (p *Path) WalkSeq() iter.Seq2[*Path, error] {
 //
 // The iterator checks ctx before each entry. A done ctx yields ctx.Err() as the
 // cause of [ErrWalkInterrupted]. The errors of [Path.Walk] apply.
-func (p *Path) WalkContextSeq(ctx context.Context) iter.Seq2[*Path, error] {
+func (p *Path) WalkSeqContext(ctx context.Context) iter.Seq2[*Path, error] {
 	return func(yield func(*Path, error) bool) {
 		err := requireDir(p)
 		if err != nil {

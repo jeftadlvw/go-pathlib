@@ -853,7 +853,7 @@ func TestPath_WalkSeq(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
-		paths, errs := collectYields(root.WalkContextSeq(ctx))
+		paths, errs := collectYields(root.WalkSeqContext(ctx))
 		require.Equal(t, []*Path{nil}, paths)
 		require.ErrorIs(t, errs[0], ErrWalkInterrupted)
 		require.ErrorIs(t, errs[0], context.Canceled)
