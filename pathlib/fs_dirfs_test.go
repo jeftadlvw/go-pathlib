@@ -15,6 +15,7 @@ func TestPath_FS(t *testing.T) {
 	writeTempFile(t, root, "a.txt", "a")
 	writeTempFile(t, root, "dir/b.txt", "b")
 	createTempDir(t, root, "dir/empty")
+	syncListedModTimes(t, root)
 
 	t.Run("passes the checks of fstest", func(t *testing.T) {
 		t.Parallel()

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -222,4 +223,44 @@ func basesOf(paths []*Path) []string {
 	}
 
 	return bases
+}
+
+// syncListedModTimes sets the modification time of every entry below root
+// that its directory listing reports differently, so the listing and a stat
+// of the entry agree. NTFS updates the copy in the listing lazily, so on
+// Windows a directory that gained an entry can be listed with its former
+// time, and fstest.TestFS reports the mismatch. Setting the time updates both
+// copies, as the tests of os.DirFS do (golang.org/issue/42637). The walk and
+// the updates go through an os.Root, so they stay below root. Symlinks are
+// skipped, because Chtimes follows them.
+func syncListedModTimes(t *testing.T, root *Path) {
+	t.Helper()
+
+	dir, err := os.OpenRoot(root.String())
+	require.NoError(t, err)
+	defer func() { _ = dir.Close() }()
+
+	err = fs.WalkDir(dir.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.Type()&fs.ModeSymlink != 0 {
+			return err
+		}
+
+		listed, err := entry.Info()
+		if err != nil {
+			return err
+		}
+
+		actual, err := dir.Lstat(name)
+		if err != nil {
+			return err
+		}
+
+		if listed.ModTime().Equal(actual.ModTime()) {
+			return nil
+		}
+
+		// A zero access time leaves the access time unchanged.
+		return dir.Chtimes(name, time.Time{}, actual.ModTime())
+	})
+	require.NoError(t, err)
 }
