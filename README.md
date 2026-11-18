@@ -51,7 +51,7 @@ The file is updated regularly and gives a good general overview on the API. Up-t
 
 ## Roadmap
 
-🔖 Current version: **0.0.5**
+🔖 Current version: **0.0.6**
 
 The API stabilized and is covered by many test cases. Tests are run on Linux, macOS and Windows. The current API scope is not expected to be modified or reduced.
 The only thing the library needs now is real-world usage in projects to catch missed cross-platform errors and refine the look-and-feel of the APIs. When the library has been tested and evaluated in other projects over a longer time, a v1 release is more likely.
