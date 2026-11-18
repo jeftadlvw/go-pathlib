@@ -61,8 +61,7 @@ func matchPattern(pattern, name string) (bool, error) {
 // validatePattern returns the error of [path.Match] for a malformed segment of
 // pattern. The segments are the parts between "**".
 func validatePattern(pattern string) error {
-	segments := strings.Split(pattern, "**")
-	for _, seg := range segments {
+	for seg := range strings.SplitSeq(pattern, "**") {
 		seg = strings.Trim(seg, "/")
 		if seg == "" {
 			continue

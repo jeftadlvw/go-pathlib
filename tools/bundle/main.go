@@ -15,6 +15,7 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -175,9 +176,7 @@ func merge(files []*pathlib.Path, m *Manifest) (string, error) {
 			return "", err
 		}
 
-		for path, alias := range src.imports {
-			imports[path] = alias
-		}
+		maps.Copy(imports, src.imports)
 
 		// The package doc lives above the package clause in exactly one file.
 		if pkgDoc == "" {
@@ -291,7 +290,7 @@ func preamble(m *Manifest) string {
 		text, err := pathlib.ReadFileToString(pathlib.NewPath(m.LicenseFile))
 		if err == nil && strings.TrimSpace(text) != "" {
 			b.WriteString("//\n")
-			for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+			for line := range strings.SplitSeq(strings.TrimRight(text, "\n"), "\n") {
 				if line == "" {
 					b.WriteString("//\n")
 				} else {
