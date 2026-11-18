@@ -15,7 +15,7 @@ import "github.com/jeftadlvw/go-pathlib/pathlib"
 
 Package pathlib handles filesystem paths through the immutable type [Path](<#Path>). A Path holds a path in a canonical Posix form and converts it to the native form of the platform at the boundary to the operating system.
 
-Every error the package returns has an error kind and a cause. An error kind is a \*[ErrorKind](<#ErrorKind>) below [ErrPathlib](<#ErrPathlib>), such as [ErrNotAbsolute](<#ErrPathlib>), and is matched with [errors.Is](<https://pkg.go.dev/errors/#Is>). A cause holds the data of the error, such as its paths, and is read with [errors.As](<https://pkg.go.dev/errors/#As>). It is a \*[PathError](<#PathError>), unless the doc comment of the error kind names another.
+Every error the package returns has an error kind and a cause. An error kind is a \*[ErrorKind](<#ErrorKind>) below [ErrPathlib](<#ErrPathlib>), such as [ErrNotAbsolute](<#ErrPathlib>), and is matched with [errors.Is](<https://pkg.go.dev/errors/#Is>). A cause holds the data of the error, such as its paths, and is read with [errors.AsType](<https://pkg.go.dev/errors/#AsType>). It is a \*[PathError](<#PathError>), unless the doc comment of the error kind names another.
 
 The error kinds form a tree. Each line shows the last name of the code and the error kind, and the marked ones carry another cause. The codes join the names from the root, such as "pathlib.exist.file". A bundle holds the error kinds of its groups alone.
 
@@ -64,7 +64,7 @@ pathlib                          ErrPathlib
 <details><summary>Example (Error Handling)</summary>
 <p>
 
-Every error pairs a kind with a cause. errors.Is matches the kind and its groups, and errors.As reads the kind and the cause.
+Every error pairs a kind with a cause. errors.Is matches the kind and its groups, and errors.AsType reads the kind and the cause.
 
 ```go
 package main
@@ -91,13 +91,13 @@ func main() {
 	fmt.Println(errors.Is(err, pathlib.ErrNotExist))
 	fmt.Println(errors.Is(err, fs.ErrNotExist))
 
-	var kind *pathlib.ErrorKind
-	if errors.As(err, &kind) {
+	kind, ok := errors.AsType[*pathlib.ErrorKind](err)
+	if ok {
 		fmt.Println(kind.Code())
 	}
 
-	var cause *pathlib.PathError
-	if errors.As(err, &cause) {
+	cause, ok := errors.AsType[*pathlib.PathError](err)
+	if ok {
 		fmt.Println(cause.Paths()[0].Base())
 	}
 
@@ -124,6 +124,7 @@ missing.txt
 - [func AppendBytes\(path \*Path, data \[\]byte\) \(int, error\)](<#AppendBytes>)
 - [func AppendString\(path \*Path, data string\) \(int, error\)](<#AppendString>)
 - [func Copy\(source, destination \*Path\) error](<#Copy>)
+- [func CopyFromFS\(fsys fs.FS, destination \*Path\) error](<#CopyFromFS>)
 - [func CreateFile\(path \*Path\) error](<#CreateFile>)
 - [func CreateFileWithOptions\(path \*Path, options FileOptions\) \(bool, error\)](<#CreateFileWithOptions>)
 - [func CreateSymlink\(symlinkTarget, symlinkPath \*Path\) error](<#CreateSymlink>)
@@ -221,6 +222,10 @@ missing.txt
   - [func \(p \*Path\) FS\(\) fs.FS](<#Path.FS>)
   - [func \(p \*Path\) Glob\(pattern string\) \(\[\]\*Path, error\)](<#Path.Glob>)
   - [func \(p \*Path\) GlobContext\(ctx context.Context, pattern string\) \(\[\]\*Path, error\)](<#Path.GlobContext>)
+  - [func \(p \*Path\) GlobSeq\(pattern string\) iter.Seq2\[\*Path, error\]](<#Path.GlobSeq>)
+  - [func \(p \*Path\) GlobSeqContext\(ctx context.Context, pattern string\) iter.Seq2\[\*Path, error\]](<#Path.GlobSeqContext>)
+  - [func \(p \*Path\) GlobSeqWithOptions\(pattern string, options GlobOptions\) iter.Seq2\[\*Path, error\]](<#Path.GlobSeqWithOptions>)
+  - [func \(p \*Path\) GlobSeqWithOptionsContext\(ctx context.Context, pattern string, options GlobOptions\) iter.Seq2\[\*Path, error\]](<#Path.GlobSeqWithOptionsContext>)
   - [func \(p \*Path\) GlobWithOptions\(pattern string, options GlobOptions\) \(\[\]\*Path, error\)](<#Path.GlobWithOptions>)
   - [func \(p \*Path\) GlobWithOptionsContext\(ctx context.Context, pattern string, options GlobOptions\) \(\[\]\*Path, error\)](<#Path.GlobWithOptionsContext>)
   - [func \(p \*Path\) HasBackslash\(\) bool](<#Path.HasBackslash>)
@@ -270,6 +275,8 @@ missing.txt
   - [func \(p \*Path\) WalkContext\(ctx context.Context, walkFunc WalkFunc\) error](<#Path.WalkContext>)
   - [func \(p \*Path\) WalkR\(walkFunc WalkRFunc\) error](<#Path.WalkR>)
   - [func \(p \*Path\) WalkRContext\(ctx context.Context, walkFunc WalkRFunc\) error](<#Path.WalkRContext>)
+  - [func \(p \*Path\) WalkSeq\(\) iter.Seq2\[\*Path, error\]](<#Path.WalkSeq>)
+  - [func \(p \*Path\) WalkSeqContext\(ctx context.Context\) iter.Seq2\[\*Path, error\]](<#Path.WalkSeqContext>)
   - [func \(p \*Path\) WindowsUNCRoot\(\) string](<#Path.WindowsUNCRoot>)
   - [func \(p \*Path\) WindowsVolume\(\) string](<#Path.WindowsVolume>)
   - [func \(p \*Path\) WithName\(name string\) \*Path](<#Path.WithName>)
@@ -533,7 +540,7 @@ var (
     // ErrWalkInterrupted is returned when an error of the walk callback or a
     // done context interrupts a walk. Its cause is that error, unchanged, so
     // [errors.Unwrap] returns it. An error of the callback can hold another
-    // error of the library. errors.Is and [errors.As] then search it as well
+    // error of the library. errors.Is and [errors.AsType] then search it as well
     // and return the outermost match, ErrWalkInterrupted, first.
     ErrWalkInterrupted = defineError(ErrPathlib, "walk_interrupted", "walk interrupted")
 )
@@ -610,6 +617,21 @@ The parent directory of destination must exist. A copied directory needs a missi
 A missing source returns [ErrNotExist](<#ErrInvalidFilter>), and a missing parent directory of destination returns [ErrParentNotExist](<#ErrInvalidFilter>). An existing destination returns a kind below [ErrExist](<#ErrInvalidFilter>), or [ErrNotEmptyDir](<#ErrInvalidFilter>) for a directory with entries. A destination of an incompatible type returns [ErrTypeMismatch](<#ErrInvalidFilter>), and a source of a type that cannot be copied returns [ErrUnsupportedType](<#ErrInvalidFilter>). Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure of the operating system returns [ErrStat](<#ErrInvalidFilter>), [ErrOpen](<#ErrInvalidFilter>), [ErrReadDir](<#ErrInvalidFilter>), [ErrCreate](<#ErrInvalidFilter>), [ErrCopy](<#ErrInvalidFilter>), or [ErrReadSymlink](<#ErrInvalidFilter>).
 
 Rebasing a symlink target resolves relative paths against the working directory and returns [ErrLookup](<#ErrPathlib>) if it cannot be determined. On Windows, a source and destination on different volumes return [ErrAnchorMismatch](<#ErrPathlib>).
+
+<a name="CopyFromFS"></a>
+## func [CopyFromFS](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_copymove.go#L141>)
+
+```go
+func CopyFromFS(fsys fs.FS, destination *Path) error
+```
+
+CopyFromFS copies the file system fsys into the directory destination. It wraps [os.CopyFS](<https://pkg.go.dev/os/#CopyFS>). fsys can be any \[fs.FS\], such as an [embed.FS](<https://pkg.go.dev/embed/#FS>), the \[zip.Reader\] of an archive, or the file system of [Path.FS](<#Path.FS>).
+
+The parent directory of destination must exist. destination must be missing or an empty directory, as for a directory copied by [Copy](<#Copy>), and a symlink to a directory is followed. Each name of fsys becomes a path below destination with \[filepath.Localize\], so a name that cannot be represented on the platform fails the copy.
+
+Files are created with mode 0o666 and the execute bits of their source, and directories with mode 0o777, before the umask. Modification times are not kept. A symlink is copied as a symlink with its target unchanged, also a target that leads outside destination, if fsys implements \[fs.ReadLinkFS\]. Otherwise a symlink fails the copy. The copy stops at the first error and leaves the entries copied until then. A copied file is closed without \(\*os.File\).Sync, so a crash can lose its content.
+
+A missing parent directory of destination returns [ErrParentNotExist](<#ErrInvalidFilter>). An existing non\-directory returns [ErrNotDir](<#ErrInvalidFilter>), a directory with entries returns [ErrNotEmptyDir](<#ErrInvalidFilter>), and any other existing entry returns [ErrExist](<#ErrInvalidFilter>). Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check destination returns [ErrStat](<#ErrInvalidFilter>), [ErrOpen](<#ErrInvalidFilter>), or [ErrReadDir](<#ErrInvalidFilter>), and any other failure of the copy returns [ErrNotExist](<#ErrInvalidFilter>), [ErrExist](<#ErrInvalidFilter>), or [ErrCopy](<#ErrInvalidFilter>). The underlying error of a failed copy names the entry it concerns.
 
 <a name="CreateFile"></a>
 ## func [CreateFile](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_create.go#L89>)
@@ -1076,7 +1098,7 @@ type DisposeFunc func() error
 
 ErrorKind classifies an error. Its values are error kinds, such as [ErrNotAbsolute](<#ErrPathlib>), and error kinds form a tree rooted at [ErrPathlib](<#ErrPathlib>).
 
-Every error the library returns has an error kind. [errors.Is](<https://pkg.go.dev/errors/#Is>) matches an error kind and every one of its ancestors, so errors.Is\(err, ErrPathlib\) catches every error of the library. [errors.As](<https://pkg.go.dev/errors/#As>) with a \*ErrorKind target returns the error kind of an error. The data of an error, such as its paths, lives in its cause, such as a [PathError](<#PathError>).
+Every error the library returns has an error kind. [errors.Is](<https://pkg.go.dev/errors/#Is>) matches an error kind and every one of its ancestors, so errors.Is\(err, ErrPathlib\) catches every error of the library. [errors.AsType](<https://pkg.go.dev/errors/#AsType>) with \*ErrorKind returns the error kind of an error. The data of an error, such as its paths, lives in its cause, such as a [PathError](<#PathError>).
 
 An error has the most specific error kind the library knows. An error kind that names a condition, such as a missing path, wins over the error kind of the failed operation. The error of the operating system stays in the cause, so errors.Is also matches standard library sentinels such as \[fs.ErrNotExist\].
 
@@ -1246,11 +1268,11 @@ DefaultFileMode returns the default mode of a file. It is 0o644 \(rw\-r\-\-r\-\-
 
 FileModeError is the cause of the errors of [ErrInvalidFileMode](<#ErrInvalidFilter>). It holds the rejected [FileMode](<#FileMode>) and the paths the error concerns. The file mode is the value passed where the library accepts one, such as FileOptions.CreateMode or the mode of [SetMode](<#SetMode>).
 
-Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
+Read it with [errors.AsType](<https://pkg.go.dev/errors/#AsType>):
 
 ```
-var fileModeErr *FileModeError
-if errors.As(err, &fileModeErr) { use(fileModeErr.FileMode()) }
+fileModeErr, ok := errors.AsType[*FileModeError](err)
+if ok { use(fileModeErr.FileMode()) }
 ```
 
 A FileModeError is immutable.
@@ -1343,7 +1365,7 @@ func DefaultFileOptions() FileOptions
 DefaultFileOptions returns the options [CreateFile](<#CreateFile>) uses. They create a new file with [DefaultFileMode](<#DefaultFileMode>).
 
 <a name="FilterFunc"></a>
-## type [FilterFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L15>)
+## type [FilterFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L16>)
 
 FilterFunc reports whether a glob includes the entry at path.
 
@@ -1394,7 +1416,7 @@ func (f GlobOptionFilterType) Valid() bool
 Valid reports whether the filter is one of the defined GlobOptionFilterType constants.
 
 <a name="GlobOptions"></a>
-## type [GlobOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L20-L40>)
+## type [GlobOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L21-L41>)
 
 GlobOptions configures a glob. The zero value matches case\-sensitively, includes files and directories, stops at a directory that cannot be read, and has no limit.
 
@@ -1423,7 +1445,7 @@ type GlobOptions struct {
 ```
 
 <a name="DefaultGlobOptions"></a>
-### func [DefaultGlobOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L54>)
+### func [DefaultGlobOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L55>)
 
 ```go
 func DefaultGlobOptions() GlobOptions
@@ -1432,7 +1454,7 @@ func DefaultGlobOptions() GlobOptions
 DefaultGlobOptions returns the options [Path.Glob](<#Path.Glob>) uses, which equal the zero value of [GlobOptions](<#GlobOptions>).
 
 <a name="ListOptions"></a>
-## type [ListOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L44-L50>)
+## type [ListOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L45-L51>)
 
 ListOptions configures a listing. It embeds the options of the glob that finds the entries.
 
@@ -1447,7 +1469,7 @@ type ListOptions struct {
 ```
 
 <a name="DefaultListOptions"></a>
-### func [DefaultListOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L66>)
+### func [DefaultListOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L67>)
 
 ```go
 func DefaultListOptions() ListOptions
@@ -1519,11 +1541,11 @@ Valid reports whether the open mode is one of the OpenMode constants.
 
 OpenModeError is the cause of the errors of [ErrInvalidOpenMode](<#ErrInvalidOpenMode>). It holds the rejected [OpenMode](<#OpenMode>) and the paths the error concerns.
 
-Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
+Read it with [errors.AsType](<https://pkg.go.dev/errors/#AsType>):
 
 ```
-var openModeErr *OpenModeError
-if errors.As(err, &openModeErr) { use(openModeErr.OpenMode()) }
+openModeErr, ok := errors.AsType[*OpenModeError](err)
+if ok { use(openModeErr.OpenMode()) }
 ```
 
 An OpenModeError is immutable.
@@ -1831,22 +1853,85 @@ func (p *Path) ExtensionParts() []string
 ExtensionParts returns the extensions of this Path without their dots, such as "tar" and "gz". See [Path.Extension](<#Path.Extension>).
 
 <a name="Path.FS"></a>
-### func \(\*Path\) [FS](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_dirfs.go#L25>)
+### func \(\*Path\) [FS](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_dirfs.go#L18>)
 
 ```go
 func (p *Path) FS() fs.FS
 ```
 
-FS returns the directory tree at this Path as an \[fs.FS\]. It wraps [os.DirFS](<https://pkg.go.dev/os/#DirFS>), and the file system implements the interfaces os.DirFS implements, such as \[fs.ReadFileFS\] and \[fs.StatFS\].
+FS returns [os.DirFS](<https://pkg.go.dev/os/#DirFS>) of this Path, for APIs that take an \[fs.FS\]. The file system belongs to the standard library, not to pathlib. It takes slash\-separated names relative to this Path, and its errors are those of [io/fs](<https://pkg.go.dev/io/fs/>) without error kinds, matched with sentinels such as \[fs.ErrNotExist\]. [NewPathFromPosix](<#NewPathFromPosix>) turns a name back into a Path below this Path.
 
-The file system takes names in the form \[fs.ValidPath\] requires. A name is slash\-separated and relative to this Path, such as "a/b.txt". It has no leading slash and no ".." names. [Path.RelativeTo](<#Path.RelativeTo>) and [Path.ToPosix](<#Path.ToPosix>) turn a Path below this Path into such a name.
+FS does not check this Path. The file system follows symlinks out of it, so it is no boundary for untrusted names.
 
-FS does not check this Path. A missing path or a non\-directory is reported when the file system is used. A relative Path is resolved against the working directory at every access.
+<details><summary>Example</summary>
+<p>
 
-The file system follows symlinks, including those that lead outside this Path. It is no boundary for untrusted names.
+fs.WalkDir passes the slash\-separated names of the file system of Path.FS, and NewPathFromPosix joined to the Path turns a name back into a Path.
+
+```go
+package main
+
+import (
+	"fmt"
+	"io/fs"
+
+	"github.com/jeftadlvw/go-pathlib/pathlib"
+)
+
+func main() {
+	root, dispose, err := pathlib.CreateTempDir()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() { _ = dispose() }()
+
+	err = pathlib.MkDir(root.JoinStrings("dir"))
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	for name, content := range map[string]string{"a.txt": "a", "dir/b.txt": "b"} {
+		_, err = pathlib.WriteString(root.Join(pathlib.NewPathFromPosix(name)), content)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+
+	err = fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+
+		content, err := pathlib.ReadFileToString(root.Join(pathlib.NewPathFromPosix(name)))
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(name, content)
+		return nil
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+
+}
+```
+
+#### Output
+
+```
+a.txt a
+dir/b.txt b
+```
+
+</p>
+</details>
 
 <a name="Path.Glob"></a>
-### func \(\*Path\) [Glob](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L72>)
+### func \(\*Path\) [Glob](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L73>)
 
 ```go
 func (p *Path) Glob(pattern string) ([]*Path, error)
@@ -1855,7 +1940,7 @@ func (p *Path) Glob(pattern string) ([]*Path, error)
 Glob returns the entries below this Path that match pattern, as [Path.GlobWithOptions](<#Path.GlobWithOptions>) does with [DefaultGlobOptions](<#DefaultGlobOptions>).
 
 <a name="Path.GlobContext"></a>
-### func \(\*Path\) [GlobContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L78>)
+### func \(\*Path\) [GlobContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L79>)
 
 ```go
 func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error)
@@ -1863,8 +1948,48 @@ func (p *Path) GlobContext(ctx context.Context, pattern string) ([]*Path, error)
 
 GlobContext returns the entries below this Path that match pattern, as [Path.GlobWithOptionsContext](<#Path.GlobWithOptionsContext>) does with DefaultGlobOptions.
 
+<a name="Path.GlobSeq"></a>
+### func \(\*Path\) [GlobSeq](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L125>)
+
+```go
+func (p *Path) GlobSeq(pattern string) iter.Seq2[*Path, error]
+```
+
+GlobSeq returns an iterator over the entries below this Path that match pattern, as [Path.GlobSeqWithOptionsContext](<#Path.GlobSeqWithOptionsContext>) does with DefaultGlobOptions and without a context.
+
+<a name="Path.GlobSeqContext"></a>
+### func \(\*Path\) [GlobSeqContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L132>)
+
+```go
+func (p *Path) GlobSeqContext(ctx context.Context, pattern string) iter.Seq2[*Path, error]
+```
+
+GlobSeqContext returns an iterator over the entries below this Path that match pattern, as [Path.GlobSeqWithOptionsContext](<#Path.GlobSeqWithOptionsContext>) does with DefaultGlobOptions.
+
+<a name="Path.GlobSeqWithOptions"></a>
+### func \(\*Path\) [GlobSeqWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L138>)
+
+```go
+func (p *Path) GlobSeqWithOptions(pattern string, options GlobOptions) iter.Seq2[*Path, error]
+```
+
+GlobSeqWithOptions returns an iterator over the entries below this Path that match pattern, as [Path.GlobSeqWithOptionsContext](<#Path.GlobSeqWithOptionsContext>) does without a context.
+
+<a name="Path.GlobSeqWithOptionsContext"></a>
+### func \(\*Path\) [GlobSeqWithOptionsContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L156-L158>)
+
+```go
+func (p *Path) GlobSeqWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) iter.Seq2[*Path, error]
+```
+
+GlobSeqWithOptionsContext returns an iterator over the entries below this Path that match pattern. It finds the entries [Path.GlobWithOptionsContext](<#Path.GlobWithOptionsContext>) returns, in the same order, and the glob functions that return a slice collect it.
+
+The iterator yields every entry with a nil error. A failure yields a nil Path and the error, and ends the iteration. Breaking the loop ends it as well, and no directory is read after the break. The tree is walked while the loop runs, so the iterator reads a directory only when the loop reaches it.
+
+The iterator checks ctx before each directory and each entry. A done ctx yields ctx.Err\(\) as the cause of [ErrWalkInterrupted](<#ErrInvalidFilter>). It also stops the iteration while no entry matches, which breaking the loop cannot. The errors of [Path.GlobWithOptions](<#Path.GlobWithOptions>) apply.
+
 <a name="Path.GlobWithOptions"></a>
-### func \(\*Path\) [GlobWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L106>)
+### func \(\*Path\) [GlobWithOptions](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L110>)
 
 ```go
 func (p *Path) GlobWithOptions(pattern string, options GlobOptions) ([]*Path, error)
@@ -1878,8 +2003,10 @@ Directories below the deepest level pattern can match are not read. "\*" and "?"
 
 A missing path returns [ErrNotExist](<#ErrInvalidFilter>), and an existing non\-directory returns [ErrNotDir](<#ErrInvalidFilter>). An empty pattern returns [ErrEmptyPattern](<#ErrPathlib>), a malformed pattern returns [ErrBadPattern](<#ErrPathlib>), and an unknown GlobOptions.Filter returns [ErrInvalidFilter](<#ErrInvalidFilter>). Denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>), also for a directory inside the tree. Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failure to open or read a directory returns [ErrOpen](<#ErrInvalidFilter>) or [ErrReadDir](<#ErrInvalidFilter>). GlobOptions.SkipOnDirError skips a directory that cannot be opened or read.
 
+[Path.GlobSeqWithOptions](<#Path.GlobSeqWithOptions>) returns the same entries as an iterator for a range loop.
+
 <a name="Path.GlobWithOptionsContext"></a>
-### func \(\*Path\) [GlobWithOptionsContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L114>)
+### func \(\*Path\) [GlobWithOptionsContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L118>)
 
 ```go
 func (p *Path) GlobWithOptionsContext(ctx context.Context, pattern string, options GlobOptions) ([]*Path, error)
@@ -1919,7 +2046,7 @@ func (p *Path) HasExtensions() bool
 HasExtensions reports whether this Path has an extension. See [Path.Extension](<#Path.Extension>).
 
 <a name="Path.HasGlobMatch"></a>
-### func \(\*Path\) [HasGlobMatch](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L167>)
+### func \(\*Path\) [HasGlobMatch](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L187>)
 
 ```go
 func (p *Path) HasGlobMatch(pattern string) bool
@@ -1928,7 +2055,7 @@ func (p *Path) HasGlobMatch(pattern string) bool
 HasGlobMatch reports whether an entry below this Path matches pattern, as [Path.HasGlobMatchE](<#Path.HasGlobMatchE>) does. It returns false on an error.
 
 <a name="Path.HasGlobMatchE"></a>
-### func \(\*Path\) [HasGlobMatchE](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L156>)
+### func \(\*Path\) [HasGlobMatchE](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L176>)
 
 ```go
 func (p *Path) HasGlobMatchE(pattern string) (bool, error)
@@ -2000,7 +2127,7 @@ func (p *Path) IsFile() bool
 IsFile reports whether this Path exists and is no directory, such as a regular file or a device. A symlink is judged by its target, and [Path.IsSymlink](<#Path.IsSymlink>) reports the symlink itself.
 
 <a name="Path.IsLocal"></a>
-### func \(\*Path\) [IsLocal](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_local.go#L24>)
+### func \(\*Path\) [IsLocal](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_local.go#L25>)
 
 ```go
 func (p *Path) IsLocal() bool
@@ -2008,7 +2135,7 @@ func (p *Path) IsLocal() bool
 
 IsLocal reports whether this Path stays inside the directory it is relative to. It applies the rules \[filepath.IsLocal\] applies on Windows, on every platform, so a path from an untrusted source, such as the name of an entry in an archive, can be checked once for every platform. "." is local.
 
-A local Path is relative and has no Windows anchor. It does not start with a backslash, and its ".." names never lead above its start. A backslash in a name separates names, as on Windows, so \`a\\..\\..\` is not local. No name contains a colon, and no name is a device name Windows reserves, such as "NUL", "com1", or "CONIN$". A reserved name with an extension, such as "nul.txt", counts as reserved, because Windows 10 and older reserve it.
+A local Path is relative and has no Windows anchor. It does not start with a backslash, and its ".." names never lead above its start. A backslash in a name separates names, as on Windows, so \`a\\..\\..\` is not local. No name contains a colon, and no name contains a NUL byte, which no operating system accepts in a name. No name is a device name Windows reserves, such as "NUL", "com1", or "CONIN$". A reserved name with an extension, such as "nul.txt", counts as reserved, because Windows 10 and older reserve it.
 
 The check is lexical. A symlink inside the path can still lead outside the directory.
 
@@ -2080,7 +2207,7 @@ func (p *Path) LExists() bool
 LExists reports whether this Path exists, without following symlinks. A symlink exists, whether its target exists or not. A path that cannot be checked, such as for missing permissions, does not exist.
 
 <a name="Path.List"></a>
-### func \(\*Path\) [List](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L181>)
+### func \(\*Path\) [List](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L201>)
 
 ```go
 func (p *Path) List(options ListOptions) ([]*Path, error)
@@ -2091,7 +2218,7 @@ List returns the entries of this directory, sorted by their Posix form. It globs
 An error returns no entries. The errors of [Path.GlobWithOptions](<#Path.GlobWithOptions>) apply.
 
 <a name="Path.ListDirs"></a>
-### func \(\*Path\) [ListDirs](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L209>)
+### func \(\*Path\) [ListDirs](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L229>)
 
 ```go
 func (p *Path) ListDirs(recursive bool) ([]*Path, error)
@@ -2100,7 +2227,7 @@ func (p *Path) ListDirs(recursive bool) ([]*Path, error)
 ListDirs returns the directories of this directory, sorted by their Posix form, as [Path.List](<#Path.List>) does. If recursive is set, the directories of subdirectories are included.
 
 <a name="Path.ListFiles"></a>
-### func \(\*Path\) [ListFiles](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L198>)
+### func \(\*Path\) [ListFiles](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_glob.go#L218>)
 
 ```go
 func (p *Path) ListFiles(recursive bool) ([]*Path, error)
@@ -2330,7 +2457,7 @@ The Windows interpretation keeps the anchors [Path.MarshalText](<#Path.MarshalTe
 UnmarshalText changes this Path in place for decoders such as [encoding/json](<https://pkg.go.dev/encoding/json/>), which fill a field they own. The library never shares a \*Path with its caller, so only Paths the caller owns change.
 
 <a name="Path.Walk"></a>
-### func \(\*Path\) [Walk](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L72>)
+### func \(\*Path\) [Walk](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L75>)
 
 ```go
 func (p *Path) Walk(walkFunc WalkFunc) error
@@ -2340,8 +2467,10 @@ Walk calls walkFunc for every entry of this directory, in lexical order by name.
 
 A missing path returns [ErrNotExist](<#ErrInvalidFilter>), an existing non\-directory returns [ErrNotDir](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>), and any other failure to open or read the directory returns [ErrOpen](<#ErrInvalidFilter>) or [ErrReadDir](<#ErrInvalidFilter>). An error of walkFunc is returned as the cause of [ErrWalkInterrupted](<#ErrInvalidFilter>).
 
+[Path.WalkSeq](<#Path.WalkSeq>) returns the same entries as an iterator for a range loop.
+
 <a name="Path.WalkContext"></a>
-### func \(\*Path\) [WalkContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L79>)
+### func \(\*Path\) [WalkContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L82>)
 
 ```go
 func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error
@@ -2350,7 +2479,7 @@ func (p *Path) WalkContext(ctx context.Context, walkFunc WalkFunc) error
 WalkContext calls walkFunc for every entry of this directory, as [Path.Walk](<#Path.Walk>) does. It checks ctx before each entry, and a done ctx interrupts the walk, which returns ctx.Err\(\) as the cause of [ErrWalkInterrupted](<#ErrInvalidFilter>).
 
 <a name="Path.WalkR"></a>
-### func \(\*Path\) [WalkR](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L125>)
+### func \(\*Path\) [WalkR](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L163>)
 
 ```go
 func (p *Path) WalkR(walkFunc WalkRFunc) error
@@ -2363,13 +2492,35 @@ Symlinks inside the tree are not followed. A symlink to a directory is a single 
 A missing path returns [ErrNotExist](<#ErrInvalidFilter>), an existing non\-directory returns [ErrNotDir](<#ErrInvalidFilter>), and denied access returns [ErrPermissionDenied](<#ErrInvalidFilter>). Any other failure to check the path returns [ErrStat](<#ErrInvalidFilter>). An error of walkFunc is returned as the cause of [ErrWalkInterrupted](<#ErrInvalidFilter>), and an unchanged localDirError is returned as is.
 
 <a name="Path.WalkRContext"></a>
-### func \(\*Path\) [WalkRContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L133>)
+### func \(\*Path\) [WalkRContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L171>)
 
 ```go
 func (p *Path) WalkRContext(ctx context.Context, walkFunc WalkRFunc) error
 ```
 
 WalkRContext calls walkFunc for every entry below this directory, as [Path.WalkR](<#Path.WalkR>) does. It checks ctx before each directory and each entry, and a done ctx interrupts the walk, which returns ctx.Err\(\) as the cause of [ErrWalkInterrupted](<#ErrInvalidFilter>).
+
+<a name="Path.WalkSeq"></a>
+### func \(\*Path\) [WalkSeq](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L105>)
+
+```go
+func (p *Path) WalkSeq() iter.Seq2[*Path, error]
+```
+
+WalkSeq returns an iterator over the entries of this directory, as [Path.WalkSeqContext](<#Path.WalkSeqContext>) does without a context.
+
+<a name="Path.WalkSeqContext"></a>
+### func \(\*Path\) [WalkSeqContext](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L121>)
+
+```go
+func (p *Path) WalkSeqContext(ctx context.Context) iter.Seq2[*Path, error]
+```
+
+WalkSeqContext returns an iterator over the entries of this directory, in lexical order by name. It does not descend into subdirectories. This Path must be a directory, and a symlink to a directory is followed. [Path.Walk](<#Path.Walk>) and [Path.WalkContext](<#Path.WalkContext>) iterate it.
+
+The iterator yields every entry with a nil error. A failure yields a nil Path and the error, and ends the iteration. Breaking the loop ends it as well. The directory is checked and read when the iteration starts, and all of its entries are read at once, so an entry can be gone when it is yielded.
+
+The iterator checks ctx before each entry. A done ctx yields ctx.Err\(\) as the cause of [ErrWalkInterrupted](<#ErrInvalidFilter>). The errors of [Path.Walk](<#Path.Walk>) apply.
 
 <a name="Path.WindowsUNCRoot"></a>
 ### func \(\*Path\) [WindowsUNCRoot](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/core_components.go#L167>)
@@ -2403,11 +2554,11 @@ WithName returns this Path with its base name replaced by name. The name is inte
 
 PathError is the cause of every error below [ErrPathlib](<#ErrPathlib>), unless the documentation of its error kind names another cause. It holds the paths the error concerns and the error that caused it, such as an error of the os package.
 
-Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
+Read it with [errors.AsType](<https://pkg.go.dev/errors/#AsType>):
 
 ```
-var pathErr *PathError
-if errors.As(err, &pathErr) { use(pathErr.Paths()) }
+pathErr, ok := errors.AsType[*PathError](err)
+if ok { use(pathErr.Paths()) }
 ```
 
 A PathError is immutable.
@@ -2468,11 +2619,11 @@ Unwrap returns the underlying error, or nil.
 
 PatternError is the cause of every error below [ErrInvalidPattern](<#ErrPathlib>). It holds the rejected pattern, the paths the error concerns, and the error that caused it, such as [path.ErrBadPattern](<https://pkg.go.dev/path/#ErrBadPattern>).
 
-Read it with [errors.As](<https://pkg.go.dev/errors/#As>):
+Read it with [errors.AsType](<https://pkg.go.dev/errors/#AsType>):
 
 ```
-var patternErr *PatternError
-if errors.As(err, &patternErr) { use(patternErr.Pattern()) }
+patternErr, ok := errors.AsType[*PatternError](err)
+if ok { use(patternErr.Pattern()) }
 ```
 
 A PatternError is immutable.
@@ -2578,7 +2729,7 @@ type TempPathOptions struct {
 ```
 
 <a name="WalkFunc"></a>
-## type [WalkFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L35>)
+## type [WalkFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L36>)
 
 WalkFunc is called by [Path.Walk](<#Path.Walk>) for every entry, with the path of the entry joined to the walked directory.
 
@@ -2589,7 +2740,7 @@ type WalkFunc func(p *Path) error
 ```
 
 <a name="WalkRFunc"></a>
-## type [WalkRFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L55>)
+## type [WalkRFunc](<https://github.com/jeftadlvw/go-pathlib/blob/main/pathlib/fs_walk.go#L56>)
 
 WalkRFunc is called by [Path.WalkR](<#Path.WalkR>) for every entry, with the path of the entry joined to the walked directory.
 
